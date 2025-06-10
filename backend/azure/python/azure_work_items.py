@@ -3,11 +3,18 @@ from requests.auth import HTTPBasicAuth
 from dotenv import load_dotenv
 import os
 from pydantic import BaseModel
+import sys
 
-load_dotenv(".env")
+if os.path.exists("../../../.env"):
+    print("✅ .env file found. Loading environment variables.")
+    load_dotenv("../../../.env")
+else:
+    print("❌ .env file not found. Please ensure it exists in the correct directory.")
+    sys.exit()
 
 
 organization = os.getenv("ORGANIZATION")
+print(f"Organization: {organization}")
 # project = os.getenv("PROJECT")
 selected_project = ""
 pat = os.getenv("AZURE_API_KEY")
@@ -40,7 +47,7 @@ if response.status_code == 200:
         print(f"{i+1} - {project['name']} (ID: {project['id']})")
         project_list.append(project['name'])
 else:
-    print("❌ Failed to retrieve projects:", response.status_code, response.text)
+    print("❌ Failed to retrieve projects:", response.status_code)
 
 
 ch = int(input("Enter a Project index: "))
