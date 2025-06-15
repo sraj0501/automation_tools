@@ -7,9 +7,9 @@ import pandas as pd
 from datetime import datetime, timedelta
 
 # === LOAD ENVIRONMENT VARIABLES ===
-if os.path.exists("../../../.env"):
+if os.path.exists(".env"):
     print("✅ .env file found. Loading environment variables.")
-    load_dotenv("../../../.env")
+    load_dotenv(".env")
 else:
     print("❌ .env file not found. Please ensure it exists in the correct directory.")
     sys.exit()
@@ -19,7 +19,7 @@ org = os.getenv("ORGANIZATION")
 project = os.getenv("PROJECT")
 pat = os.getenv("AZURE_API_KEY")
 assigned_to = os.getenv("EMAIL")
-excel_file = "tasks.xlsx"
+excel_file = "../data/tasks.xlsx"
 sheet_name = "my_tasks"
 api_version = os.getenv("API_VERSION", "7.1")
 selected_parent_id = "9759"
