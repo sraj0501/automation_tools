@@ -19,7 +19,7 @@ class GitHubBranchAnalyzer:
         load_dotenv()
 
         # Retrieve GitHub token
-        self.token = token or os.getenv("GH_ACC_TOKEN")
+        self.token = token or os.getenv("GITHUB_TOKEN")
         if not self.token:
             raise ValueError("GitHub Personal Access Token is required")
 
