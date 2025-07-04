@@ -5,9 +5,9 @@ import os
 from pydantic import BaseModel
 import sys
 
-if os.path.exists("../../../.env"):
+if os.path.exists("../../.env"):
     print("✅ .env file found. Loading environment variables.")
-    load_dotenv("../../../.env")
+    load_dotenv("../../.env")
 else:
     print("❌ .env file not found. Please ensure it exists in the correct directory.")
     sys.exit()
@@ -15,7 +15,7 @@ else:
 
 organization = os.getenv("ORGANIZATION")
 print(f"Organization: {organization}")
-# project = os.getenv("PROJECT")
+
 selected_project = ""
 pat = os.getenv("AZURE_API_KEY")
 user_email = os.getenv("EMAIL")
@@ -23,11 +23,6 @@ work_item_id=""
 BASE_URI=f"https://dev.azure.com/{organization}/_apis/projects?api-version=7.1"
 PROJECT_URI=f"https://dev.azure.com/{organization}/{selected_project}/_apis/wit/wiql?api-version=7.1"
 ADD_COMMENT=f"https://dev.azure.com/{organization}/{selected_project}/_apis/wit/workItems/{work_item_id}/comments?api-version=7.1"
-
-
-class AzureDevOps(BaseModel):
-    pass
-
 
 # List Projects
 # ==========================================================================

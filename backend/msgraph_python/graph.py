@@ -3,6 +3,8 @@
 
 # <UserAuthConfigSnippet>
 from configparser import SectionProxy
+from datetime import datetime
+
 from azure.identity import DeviceCodeCredential
 from msgraph import GraphServiceClient
 from msgraph.generated.users.item.user_item_request_builder import UserItemRequestBuilder

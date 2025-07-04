@@ -7,9 +7,9 @@ from dotenv import load_dotenv
 from requests.auth import HTTPBasicAuth
 
 # === LOAD ENVIRONMENT VARIABLES ===
-if os.path.exists("../../../.env"):
+if os.path.exists("../../.env"):
     print("✅ .env file found. Loading environment variables.")
-    load_dotenv("../../../.env")
+    load_dotenv("../../.env")
 else:
     print("❌ .env file not found. Please ensure it exists in the correct directory.")
     sys.exit()
