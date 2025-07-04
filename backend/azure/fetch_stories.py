@@ -1,10 +1,10 @@
-import requests
-from requests.auth import HTTPBasicAuth
-from dotenv import load_dotenv
 import os
 import sys
+
 import pandas as pd
-from datetime import datetime
+import requests
+from dotenv import load_dotenv
+from requests.auth import HTTPBasicAuth
 
 # === LOAD ENVIRONMENT VARIABLES ===
 if os.path.exists("../../../.env"):

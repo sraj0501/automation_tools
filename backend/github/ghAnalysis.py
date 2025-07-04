@@ -1,12 +1,12 @@
+import json
+import logging
 import os
 import sys
-import time
-from datetime import datetime
+
 import pytz
-from github import Github, Auth, GithubException
 from dotenv import load_dotenv
-import logging
-import json
+from github import Github, Auth, GithubException
+
 
 class GitHubBranchAnalyzer:
     def __init__(self, token=None):
