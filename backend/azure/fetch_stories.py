@@ -33,9 +33,10 @@ wiql_query = {
     FROM WorkItems
     WHERE [System.TeamProject] = '{project}'
     AND [System.AssignedTo] = '{assigned_to}'
-    AND [System.WorkItemType] = 'Product Backlog Item'
     ORDER BY [System.ChangedDate] DESC"""
 }
+
+# AND [System.WorkItemType] = 'Product Backlog Item'
 
 # === EXECUTE QUERY ===
 response = requests.post(query_url, json=wiql_query, headers=headers, auth=auth)
@@ -63,10 +64,13 @@ if work_item_ids:
             "State": item["fields"].get("System.State", ""),
             "Assigned To": item["fields"].get("System.AssignedTo", {}).get("displayName", "Unassigned")
         } for item in items]
-
-        df = pd.DataFrame(data)
-        print(df)
     else:
         print(f"❌ Failed to fetch item details: {details_response.status_code} - {details_response.text}")
 else:
     print("⚠️ No user stories found.")
+
+if data:
+    for val in data:
+        print(f"[{val['ID']}]:\t{val['Title']}")
+    # df = pd.DataFrame(data)
+    # print(df)

@@ -1,9 +1,9 @@
-import requests
-from requests.auth import HTTPBasicAuth
-from dotenv import load_dotenv
 import os
-from pydantic import BaseModel
 import sys
+
+import requests
+from dotenv import load_dotenv
+from requests.auth import HTTPBasicAuth
 
 if os.path.exists("../../.env"):
     print("✅ .env file found. Loading environment variables.")
@@ -71,12 +71,12 @@ response = requests.post(
     auth=HTTPBasicAuth('', pat)
 )
 
-# print(response.json())
+print(response.json())
 
 if response.status_code == 200:
     work_items = response.json()["workItems"]
     print(f"Found {len(work_items)} work items assigned to you.")
     for item in work_items:
-        print(f"- ID: {item['id']}")
+        print(f"- ID [{item['id']}] ")
 else:
     print("Error:", response.status_code)
