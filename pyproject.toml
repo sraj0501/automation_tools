@@ -1,13 +1,18 @@
 [project]
-name = "task-automation"
-version = "0.1.0"
+name = "ai-powered-task-automation"
+version = "1.0.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
+    "aiohttp>=3.12.13",
+    "azure-identity>=1.23.0",
+    "duckdb>=1.3.1",
     "fastapi[standard]>=0.115.12",
+    "msgraph-sdk>=1.35.0",
     "openpyxl>=3.1.5",
     "pandas>=2.3.0",
+    "pygithub>=2.6.1",
     "python-dotenv>=1.1.0",
     "requests>=2.32.3",
 ]
