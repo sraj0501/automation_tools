@@ -1,9 +1,9 @@
-import os
-import sys
-
 import requests
-from dotenv import load_dotenv
 from requests.auth import HTTPBasicAuth
+from dotenv import load_dotenv
+import os
+from pydantic import BaseModel
+import sys
 
 if os.path.exists("../../.env"):
     print("✅ .env file found. Loading environment variables.")
@@ -15,7 +15,7 @@ else:
 
 organization = os.getenv("ORGANIZATION")
 print(f"Organization: {organization}")
-
+# project = os.getenv("PROJECT")
 selected_project = ""
 pat = os.getenv("AZURE_API_KEY")
 user_email = os.getenv("EMAIL")
@@ -23,6 +23,11 @@ work_item_id=""
 BASE_URI=f"https://dev.azure.com/{organization}/_apis/projects?api-version=7.1"
 PROJECT_URI=f"https://dev.azure.com/{organization}/{selected_project}/_apis/wit/wiql?api-version=7.1"
 ADD_COMMENT=f"https://dev.azure.com/{organization}/{selected_project}/_apis/wit/workItems/{work_item_id}/comments?api-version=7.1"
+
+
+class AzureDevOps(BaseModel):
+    pass
+
 
 # List Projects
 # ==========================================================================
@@ -71,12 +76,12 @@ response = requests.post(
     auth=HTTPBasicAuth('', pat)
 )
 
-print(response.json())
+# print(response.json())
 
 if response.status_code == 200:
     work_items = response.json()["workItems"]
     print(f"Found {len(work_items)} work items assigned to you.")
     for item in work_items:
-        print(f"- ID [{item['id']}] ")
+        print(f"- ID: {item['id']}")
 else:
     print("Error:", response.status_code)
