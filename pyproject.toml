@@ -15,4 +15,16 @@ dependencies = [
     "pygithub>=2.6.1",
     "python-dotenv>=1.1.0",
     "requests>=2.32.3",
+    # NLP & AI Dependencies (Critical for Phase 3)
+    "spacy>=3.7.0",
+    "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
+    "sentence-transformers>=2.2.0",
+    "ollama>=0.1.0",
+    # Task Matching & Parsing
+    "fuzzywuzzy>=0.18.0",
+    "python-Levenshtein>=0.21.0",
+    "dateparser>=1.2.0",
+    # Testing Framework
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
 ]
