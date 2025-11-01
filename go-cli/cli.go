@@ -76,6 +76,12 @@ func (cli *CLI) Execute() error {
 		return cli.handleResume()
 	case "logs":
 		return cli.handleLogs()
+	case "force-trigger":
+		return cli.handleForceTrigger()
+	case "send-summary":
+		return cli.handleSendSummary()
+	case "skip-next":
+		return cli.handleSkipNext()
 	case "version":
 		return cli.handleVersion()
 	case "help":
@@ -246,10 +252,14 @@ func (cli *CLI) handleStatus() error {
 
 		fmt.Println()
 		fmt.Println("Commands:")
-		fmt.Println("  devtrack stop     - Stop the daemon")
-		fmt.Println("  devtrack restart  - Restart the daemon")
-		fmt.Println("  devtrack pause    - Pause scheduler")
-		fmt.Println("  devtrack logs     - View recent logs")
+		fmt.Println("  devtrack stop          - Stop the daemon")
+		fmt.Println("  devtrack restart       - Restart the daemon")
+		fmt.Println("  devtrack pause         - Pause scheduler")
+		fmt.Println("  devtrack resume        - Resume scheduler")
+		fmt.Println("  devtrack force-trigger - Force immediate trigger")
+		fmt.Println("  devtrack skip-next     - Skip next trigger")
+		fmt.Println("  devtrack send-summary  - Generate summary now")
+		fmt.Println("  devtrack logs          - View recent logs")
 	} else {
 		fmt.Println("Commands:")
 		fmt.Println("  devtrack start  - Start the daemon")
@@ -289,6 +299,108 @@ func (cli *CLI) handleResume() error {
 	}
 
 	fmt.Println("✓ Scheduler resumed")
+	return nil
+}
+
+// handleForceTrigger forces an immediate trigger
+func (cli *CLI) handleForceTrigger() error {
+	if !cli.daemon.IsRunning() {
+		fmt.Println("❌ Daemon is not running")
+		fmt.Println("\nStart the daemon first:")
+		fmt.Println("  devtrack start")
+		return nil
+	}
+
+	if cli.daemon.monitor == nil || cli.daemon.monitor.scheduler == nil {
+		fmt.Println("❌ Scheduler not initialized")
+		return fmt.Errorf("scheduler not available")
+	}
+
+	fmt.Println("⚡ Forcing immediate trigger...")
+
+	cli.daemon.monitor.scheduler.ForceImmediate()
+
+	// Give it a moment to execute
+	time.Sleep(500 * time.Millisecond)
+
+	fmt.Println("✓ Trigger initiated successfully")
+	fmt.Println("\nThe trigger is executing in the background.")
+	fmt.Println("Check logs for details:")
+	fmt.Println("  devtrack logs")
+	return nil
+}
+
+// handleSendSummary generates and sends the daily summary
+func (cli *CLI) handleSendSummary() error {
+	if !cli.daemon.IsRunning() {
+		fmt.Println("❌ Daemon is not running")
+		fmt.Println("\nStart the daemon first:")
+		fmt.Println("  devtrack start")
+		return nil
+	}
+
+	fmt.Println("📊 Generating daily summary...")
+	fmt.Println()
+
+	// Get today's statistics
+	stats := map[string]interface{}{
+		"date":     time.Now().Format("January 2, 2006"),
+		"triggers": 0,
+	}
+
+	if cli.daemon.monitor != nil && cli.daemon.monitor.scheduler != nil {
+		schedulerStats := cli.daemon.monitor.scheduler.GetStats()
+		stats["triggers"] = schedulerStats["trigger_count"]
+	}
+
+	fmt.Printf("📅 Summary for %s\n", stats["date"])
+	fmt.Println("═══════════════════════════════")
+	fmt.Printf("Triggers today:    %v\n", stats["triggers"])
+	fmt.Println()
+
+	// TODO: When database is implemented, query actual data
+	fmt.Println("⚠️  Full summary generation not yet implemented")
+	fmt.Println()
+	fmt.Println("Coming soon:")
+	fmt.Println("  • Query SQLite database for today's activities")
+	fmt.Println("  • Aggregate commits and work items")
+	fmt.Println("  • Format as email/Teams message")
+	fmt.Println("  • Send to configured recipients")
+	fmt.Println()
+	fmt.Println("For now, this shows current trigger count.")
+
+	return nil
+}
+
+// handleSkipNext skips the next scheduled trigger
+func (cli *CLI) handleSkipNext() error {
+	if !cli.daemon.IsRunning() {
+		fmt.Println("❌ Daemon is not running")
+		fmt.Println("\nStart the daemon first:")
+		fmt.Println("  devtrack start")
+		return nil
+	}
+
+	if cli.daemon.monitor == nil || cli.daemon.monitor.scheduler == nil {
+		fmt.Println("❌ Scheduler not initialized")
+		return fmt.Errorf("scheduler not available")
+	}
+
+	// Get current stats to show what's being skipped
+	stats := cli.daemon.monitor.scheduler.GetStats()
+	nextTrigger := stats["time_until_next"]
+
+	fmt.Printf("⏭️  Skipping next trigger (was due in %v)\n", nextTrigger)
+
+	cli.daemon.monitor.scheduler.SkipNext()
+
+	// Get updated stats
+	stats = cli.daemon.monitor.scheduler.GetStats()
+	newNextTrigger := stats["time_until_next"]
+
+	fmt.Println("✓ Next trigger skipped")
+	fmt.Printf("\nNew next trigger: %v\n", newNextTrigger)
+
 	return nil
 }
 
@@ -355,9 +467,18 @@ func (cli *CLI) printUsage() {
 	fmt.Println("  devtrack stop          Stop the daemon")
 	fmt.Println("  devtrack restart       Restart the daemon")
 	fmt.Println("  devtrack status        Show daemon status")
+	fmt.Println()
+	fmt.Println("SCHEDULER COMMANDS:")
 	fmt.Println("  devtrack pause         Pause scheduler (keep git monitoring)")
 	fmt.Println("  devtrack resume        Resume scheduler")
+	fmt.Println("  devtrack force-trigger Force immediate trigger")
+	fmt.Println("  devtrack skip-next     Skip the next scheduled trigger")
+	fmt.Println("  devtrack send-summary  Generate daily summary now")
+	fmt.Println()
+	fmt.Println("INFO COMMANDS:")
 	fmt.Println("  devtrack logs          Show recent log entries")
+	fmt.Println("  devtrack version       Show version information")
+	fmt.Println("  devtrack help          Show this help message")
 	fmt.Println()
 	fmt.Println("TEST COMMANDS:")
 	fmt.Println("  go run . test-git         Test Git commit detection")

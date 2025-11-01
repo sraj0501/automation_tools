@@ -169,7 +169,8 @@ func (s *Scheduler) GetTimeUntilNextTrigger() time.Duration {
 // ForceImmediate forces an immediate trigger
 func (s *Scheduler) ForceImmediate() {
 	log.Println("Forcing immediate trigger")
-	s.triggerPrompt()
+	// Run asynchronously to avoid blocking
+	go s.triggerPrompt()
 }
 
 // SkipNext skips the next scheduled trigger
