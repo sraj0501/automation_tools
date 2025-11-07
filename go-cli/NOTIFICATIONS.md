@@ -45,6 +45,8 @@ settings:
 - `subject`: Email subject line (supports templates)
 - `manager_email`: Manager's email for reports
 
+---
+
 ### Teams Configuration
 
 ```yaml
@@ -68,7 +70,6 @@ settings:
       
       mention_user: false  # @mention user in messages
 ```
----
 
 **Teams Settings:**
 - `enabled`: Turn Teams notifications on/off
