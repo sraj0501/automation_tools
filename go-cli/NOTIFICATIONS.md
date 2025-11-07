@@ -68,6 +68,7 @@ settings:
       
       mention_user: false  # @mention user in messages
 ```
+---
 
 **Teams Settings:**
 - `enabled`: Turn Teams notifications on/off
