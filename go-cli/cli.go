@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -76,6 +77,24 @@ func (cli *CLI) Execute() error {
 		return cli.handleResume()
 	case "logs":
 		return cli.handleLogs()
+	case "db-stats":
+		return cli.handleDBStats()
+	case "enable-learning":
+		return cli.handleEnableLearning()
+	case "show-profile":
+		return cli.handleShowProfile()
+	case "test-response":
+		return cli.handleTestResponse()
+	case "revoke-consent":
+		return cli.handleRevokeConsent()
+	case "learning-status":
+		return cli.handleLearningStatus()
+	case "preview-report":
+		return cli.handlePreviewReport()
+	case "send-report":
+		return cli.handleSendReport()
+	case "save-report":
+		return cli.handleSaveReport()
 	case "force-trigger":
 		return cli.handleForceTrigger()
 	case "send-summary":
@@ -457,6 +476,218 @@ func (cli *CLI) handleVersion() error {
 	return nil
 }
 
+// handleDBStats shows database statistics
+func (cli *CLI) handleDBStats() error {
+	fmt.Println("📊 Database Statistics")
+	fmt.Println("=" + strings.Repeat("=", 50))
+	fmt.Println()
+
+	// Open database
+	db, err := NewDatabase()
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+	defer db.Close()
+
+	// Get statistics
+	stats, err := db.GetStats()
+	if err != nil {
+		return fmt.Errorf("failed to get database stats: %w", err)
+	}
+
+	// Display stats
+	fmt.Printf("Database Path:    %s\n", stats["database_path"])
+	fmt.Println()
+	fmt.Printf("Total Triggers:   %d\n", stats["triggers"])
+	fmt.Printf("Total Responses:  %d\n", stats["responses"])
+	fmt.Printf("Task Updates:     %d\n", stats["task_updates"])
+	fmt.Printf("Unsynced Updates: %d\n", stats["unsynced_updates"])
+	fmt.Printf("Log Entries:      %d\n", stats["logs"])
+	fmt.Println()
+
+	// Get recent triggers
+	triggers, err := db.GetRecentTriggers(5)
+	if err == nil && len(triggers) > 0 {
+		fmt.Println("Recent Triggers (last 5):")
+		fmt.Println("─" + strings.Repeat("─", 50))
+		for i, t := range triggers {
+			fmt.Printf("%d. [%s] %s at %s\n",
+				i+1,
+				t.TriggerType,
+				t.Source,
+				t.Timestamp.Format("2006-01-02 15:04:05"))
+			if t.CommitMessage != "" {
+				fmt.Printf("   %s\n", t.CommitMessage)
+			}
+		}
+		fmt.Println()
+	}
+
+	// Get unsynced updates
+	unsynced, err := db.GetUnsyncedTaskUpdates()
+	if err == nil && len(unsynced) > 0 {
+		fmt.Println("Unsynced Task Updates:")
+		fmt.Println("─" + strings.Repeat("─", 50))
+		for i, u := range unsynced {
+			fmt.Printf("%d. [%s] %s - %s\n",
+				i+1,
+				u.Project,
+				u.TicketID,
+				u.Status)
+			if u.UpdateText != "" {
+				fmt.Printf("   %s\n", u.UpdateText)
+			}
+		}
+		fmt.Println()
+	}
+
+	return nil
+}
+
+// handleEnableLearning enables personalized AI learning
+func (cli *CLI) handleEnableLearning() error {
+	days := 30
+	if len(os.Args) > 2 {
+		fmt.Sscanf(os.Args[2], "%d", &days)
+	}
+
+	learning := NewLearningCommands()
+	return learning.EnableLearning(days)
+}
+
+// handleShowProfile shows the learning profile
+func (cli *CLI) handleShowProfile() error {
+	learning := NewLearningCommands()
+	return learning.ShowProfile()
+}
+
+// handleTestResponse tests generating a response
+func (cli *CLI) handleTestResponse() error {
+	if len(os.Args) < 3 {
+		fmt.Println("❌ Usage: devtrack test-response <text>")
+		return fmt.Errorf("missing text argument")
+	}
+
+	text := strings.Join(os.Args[2:], " ")
+	learning := NewLearningCommands()
+	return learning.TestResponse(text)
+}
+
+// handleRevokeConsent revokes learning consent
+func (cli *CLI) handleRevokeConsent() error {
+	learning := NewLearningCommands()
+	return learning.RevokeConsent()
+}
+
+// handleLearningStatus shows learning status
+func (cli *CLI) handleLearningStatus() error {
+	learning := NewLearningCommands()
+	status, err := learning.GetLearningStatus()
+	if err != nil {
+		fmt.Printf("❌ Failed to get learning status: %v\n", err)
+		return err
+	}
+
+	status.PrintStatus()
+	return nil
+}
+
+// handlePreviewReport previews today's email report
+func (cli *CLI) handlePreviewReport() error {
+	date := ""
+	if len(os.Args) > 2 {
+		date = os.Args[2]
+	}
+
+	fmt.Println("📊 Generating daily report preview...")
+	fmt.Println()
+
+	homeDir, _ := os.UserHomeDir()
+	scriptPath := filepath.Join(homeDir, "git_apps/personal/automation_tools/backend/email_reporter.py")
+
+	args := []string{scriptPath, "preview"}
+	if date != "" {
+		args = append(args, date)
+	}
+
+	cmd := exec.Command("python3", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("❌ Failed to generate report: %v\n", err)
+		return err
+	}
+
+	return nil
+}
+
+// handleSendReport sends email report
+func (cli *CLI) handleSendReport() error {
+	if len(os.Args) < 3 {
+		fmt.Println("❌ Usage: devtrack send-report <email> [date]")
+		return fmt.Errorf("missing email argument")
+	}
+
+	email := os.Args[2]
+	date := ""
+	if len(os.Args) > 3 {
+		date = os.Args[3]
+	}
+
+	fmt.Printf("📧 Sending report to %s...\n", email)
+	fmt.Println()
+
+	homeDir, _ := os.UserHomeDir()
+	scriptPath := filepath.Join(homeDir, "git_apps/personal/automation_tools/backend/email_reporter.py")
+
+	args := []string{scriptPath, "send", email}
+	if date != "" {
+		args = append(args, date)
+	}
+
+	cmd := exec.Command("python3", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("❌ Failed to send report: %v\n", err)
+		return err
+	}
+
+	return nil
+}
+
+// handleSaveReport saves report to file
+func (cli *CLI) handleSaveReport() error {
+	date := ""
+	if len(os.Args) > 2 {
+		date = os.Args[2]
+	}
+
+	fmt.Println("💾 Saving report to file...")
+	fmt.Println()
+
+	homeDir, _ := os.UserHomeDir()
+	scriptPath := filepath.Join(homeDir, "git_apps/personal/automation_tools/backend/email_reporter.py")
+
+	args := []string{scriptPath, "save"}
+	if date != "" {
+		args = append(args, date)
+	}
+
+	cmd := exec.Command("python3", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("❌ Failed to save report: %v\n", err)
+		return err
+	}
+
+	return nil
+}
+
 // printUsage prints CLI usage information
 func (cli *CLI) printUsage() {
 	fmt.Println("DevTrack - Developer Automation Tools")
@@ -477,8 +708,21 @@ func (cli *CLI) printUsage() {
 	fmt.Println()
 	fmt.Println("INFO COMMANDS:")
 	fmt.Println("  devtrack logs          Show recent log entries")
+	fmt.Println("  devtrack db-stats      Show database statistics")
 	fmt.Println("  devtrack version       Show version information")
 	fmt.Println("  devtrack help          Show this help message")
+	fmt.Println()
+	fmt.Println("PERSONALIZED AI LEARNING:")
+	fmt.Println("  devtrack enable-learning [days]  Enable learning from communications (default 30 days)")
+	fmt.Println("  devtrack learning-status         Show learning status and statistics")
+	fmt.Println("  devtrack show-profile            Show learned communication profile")
+	fmt.Println("  devtrack test-response <text>    Test generating personalized response")
+	fmt.Println("  devtrack revoke-consent          Revoke learning consent and delete data")
+	fmt.Println()
+	fmt.Println("EMAIL REPORTS:")
+	fmt.Println("  devtrack preview-report [date]   Preview today's report (or YYYY-MM-DD)")
+	fmt.Println("  devtrack send-report <email>     Send daily report to email address")
+	fmt.Println("  devtrack save-report [date]      Save report to file")
 	fmt.Println()
 	fmt.Println("TEST COMMANDS:")
 	fmt.Println("  go run . test-git         Test Git commit detection")

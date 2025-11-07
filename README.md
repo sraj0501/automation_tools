@@ -1,12 +1,14 @@
 # Developer Automation Tools
 
-> An intelligent system that automates developer timesheet tracking, task management, and progress reporting through Git monitoring and AI-powered natural language processing.
+> An intelligent system that automates developer timesheet tracking, task management, and progress reporting through Git monitoring and AI-powered natural language processing. Now with **Personalized AI Learning** to match your communication style!
 
 ## 🎯 Project Overview
 
 This system combines background process automation with AI intelligence to:
 - **Monitor your Git activity** and trigger smart prompts at key moments
 - **Parse natural language updates** into structured task data
+- **Learn your communication style** from Teams, Azure DevOps, and Outlook (NEW!)
+- **Generate responses in YOUR voice** using privacy-first local AI (NEW!)
 - **Integrate with project management tools** (Azure DevOps, GitHub, Jira)
 - **Update tasks automatically** in Microsoft Lists and project tracking systems
 - **Generate professional reports** for managers and stakeholders
@@ -74,14 +76,23 @@ AI: "📊 Daily Summary Ready:
 - **Confidence Scoring**: Ask clarifying questions when uncertain
 - **Learning System**: Improves suggestions based on your patterns
 
-### 3. Multi-Platform Integration
+### 3. 🌟 Personalized AI Learning (NEW!)
+- **Privacy-First Design**: All data stored locally, no cloud AI services
+- **Communication Analysis**: Learns from Teams, Azure DevOps, and Outlook
+- **Writing Style Matching**: Generates responses that sound like YOU
+- **Explicit Consent**: User permission required before any data collection
+- **Local Ollama AI**: Complete AI processing on your machine
+- **Response Generation**: Creates personalized task updates, emails, and messages
+- **See**: `PERSONALIZED_AI_QUICKSTART.md` for setup guide
+
+### 4. Multi-Platform Integration
 - **Azure DevOps**: Work items, boards, and sprint tracking
 - **GitHub**: Issues, pull requests, and project boards
 - **Microsoft Lists**: SharePoint-based task management
 - **Microsoft Graph**: Email, calendar, and Teams integration
 - **Jira**: Issue tracking and project management (planned)
 
-### 4. Intelligent Task Management
+### 5. Intelligent Task Management
 - **Subtask Generation**: Automatically break down complex tasks
 - **Status Tracking**: Update task states across platforms
 - **Time Logging**: Track time spent without manual entry
@@ -480,9 +491,8 @@ automation_tools/
 - ✅ **Notification System**: Email and Teams output configuration with daily reports
 
 ## 📚 Additional Resources
-```
 
-## � Project Structure
+## Project Structure
 
 ```
 automation_tools/
