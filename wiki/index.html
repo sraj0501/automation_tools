@@ -3,32 +3,72 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DevTrack - Developer Automation Tools Wiki</title>
+    <title>DevTrack - Containerized Developer Automation Platform</title>
     <link rel="stylesheet" href="assets/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="sidebar">
         <div class="logo">
+            <div class="logo-icon">🚀</div>
             <h1>DevTrack</h1>
-            <p class="tagline">Developer Automation Tools</p>
+            <p class="tagline">Containerized Automation Platform</p>
+            <div class="version-badge">v2.0 Docker</div>
         </div>
         <nav class="nav-menu">
-            <a href="#overview" class="nav-item active" data-tab="overview">Overview</a>
-            <a href="#getting-started" class="nav-item" data-tab="getting-started">Getting Started</a>
-            <a href="#architecture" class="nav-item" data-tab="architecture">Architecture</a>
-            <a href="#features" class="nav-item" data-tab="features">Features</a>
-            <a href="#daemon" class="nav-item" data-tab="daemon">Background Daemon</a>
-            <a href="#git-integration" class="nav-item" data-tab="git-integration">Git Integration</a>
-            <a href="#scheduler" class="nav-item" data-tab="scheduler">Scheduler</a>
-            <a href="#ipc" class="nav-item" data-tab="ipc">IPC Communication</a>
-            <a href="#personalized-ai" class="nav-item" data-tab="personalized-ai">Personalized AI</a>
-            <a href="#integrations" class="nav-item" data-tab="integrations">Integrations</a>
-            <a href="#notifications" class="nav-item" data-tab="notifications">Notifications</a>
-            <a href="#commands" class="nav-item" data-tab="commands">Commands Reference</a>
-            <a href="#configuration" class="nav-item" data-tab="configuration">Configuration</a>
-            <a href="#roadmap" class="nav-item" data-tab="roadmap">Roadmap</a>
-            <a href="privacy.html" class="nav-item privacy-link">Privacy Policy</a>
+            <div class="nav-section">
+                <div class="nav-section-title">Documentation</div>
+                <a href="#overview" class="nav-item active" data-tab="overview">
+                    <span class="nav-icon">📖</span> Overview
+                </a>
+                <a href="#getting-started" class="nav-item" data-tab="getting-started">
+                    <span class="nav-icon">🚀</span> Getting Started
+                </a>
+                <a href="#architecture" class="nav-item" data-tab="architecture">
+                    <span class="nav-icon">🏗️</span> Architecture
+                </a>
+            </div>
+            
+            <div class="nav-section">
+                <div class="nav-section-title">Features</div>
+                <a href="#docker" class="nav-item" data-tab="docker">
+                    <span class="nav-icon">🐋</span> Docker Setup
+                </a>
+                <a href="#cli" class="nav-item" data-tab="cli">
+                    <span class="nav-icon">⌨️</span> CLI Commands
+                </a>
+                <a href="#git-integration" class="nav-item" data-tab="git-integration">
+                    <span class="nav-icon">🔀</span> Git Integration
+                </a>
+                <a href="#ai-features" class="nav-item" data-tab="ai-features">
+                    <span class="nav-icon">🤖</span> AI Features
+                </a>
+            </div>
+            
+            <div class="nav-section">
+                <div class="nav-section-title">Reference</div>
+                <a href="#configuration" class="nav-item" data-tab="configuration">
+                    <span class="nav-icon">⚙️</span> Configuration
+                </a>
+                <a href="#troubleshooting" class="nav-item" data-tab="troubleshooting">
+                    <span class="nav-icon">🔧</span> Troubleshooting
+                </a>
+            </div>
+            
+            <a href="privacy.html" class="nav-item privacy-link">
+                <span class="nav-icon">🔒</span> Privacy Policy
+            </a>
         </nav>
+        
+        <div class="sidebar-footer">
+            <div class="platform-badges">
+                <span class="platform-badge">🐧 Linux</span>
+                <span class="platform-badge">🍎 macOS</span>
+                <span class="platform-badge">🪟 Windows</span>
+            </div>
+        </div>
     </div>
 
     <div class="main-content">
@@ -36,1087 +76,1479 @@
             
             <!-- Overview Tab -->
             <section id="overview" class="tab-content active">
-                <h1>DevTrack - Developer Automation Tools</h1>
-                <p class="lead">An intelligent system that automates developer timesheet tracking, task management, and progress reporting through Git monitoring and AI-powered natural language processing.</p>
-                
-                <div class="info-box">
-                    <h3>Welcome to the DevTrack Wiki</h3>
-                    <p>All project documentation has been consolidated into this comprehensive wiki. Use the sidebar navigation to explore different topics, or continue reading below for an overview.</p>
-                    <p><strong>Quick Links:</strong> <a href="#getting-started">Getting Started</a> | <a href="#commands">Commands Reference</a> | <a href="privacy.html">Privacy Policy</a></p>
+                <div class="page-header">
+                    <h1>DevTrack</h1>
+                    <p class="lead">Intelligent work tracking for developers who'd rather write code than write reports</p>
                 </div>
 
-                <div class="info-grid">
-                    <div class="info-card">
-                        <h3>Git Monitoring</h3>
-                        <p>Automatically detect commits and trigger smart prompts at key moments</p>
+                <div class="intro-section">
+                    <div class="intro-card problem-card">
+                        <div class="intro-label">The Problem</div>
+                        <h2>Context Switching Kills Memory</h2>
+                        <p>It's end-of-day standup. Your manager asks, "What did you work on today?" Your mind goes blank.</p>
+                        
+                        <p>You definitely made 15 commits, reviewed some PRs, and fixed that production bug... but the details are gone. Lost in context switches and coffee breaks.</p>
+                        
+                        <p>Then comes the weekly report. You open Azure DevOps and try to reconstruct your week. How long did that authentication bug take? Was it 2 hours or 4? What was that cryptic commit message from 2 AM?</p>
                     </div>
-                    <div class="info-card">
-                        <h3>AI Processing</h3>
-                        <p>Parse natural language updates into structured task data</p>
-                    </div>
-                    <div class="info-card">
-                        <h3>Personalized Learning</h3>
-                        <p>Learn your communication style from Teams, Azure DevOps, and Outlook</p>
-                    </div>
-                    <div class="info-card">
-                        <h3>Multi-Platform</h3>
-                        <p>Integrate with Azure DevOps, GitHub, Jira, and Microsoft Lists</p>
+
+                    <div class="intro-card solution-card">
+                        <div class="intro-label">The Solution</div>
+                        <h2>Capture Context When It's Fresh</h2>
+                        <p><strong>DevTrack watches your Git commits</strong> and prompts you to log work <em>right when you commit</em> - while the context is still fresh.</p>
+
+                        <p>It uses AI to parse your natural language updates, automatically matches them to Azure DevOps tasks, and generates detailed daily reports.</p>
+
+                        <div class="solution-benefits">
+                            <div class="benefit-item">
+                                <span class="benefit-check">✓</span>
+                                <span>No more memory reconstruction</span>
+                            </div>
+                            <div class="benefit-item">
+                                <span class="benefit-check">✓</span>
+                                <span>No more manual time tracking</span>
+                            </div>
+                            <div class="benefit-item">
+                                <span class="benefit-check">✓</span>
+                                <span>Just commit like normal, DevTrack handles the rest</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <h2>System Architecture</h2>
-                <div class="architecture-diagram">
-                    <pre>
-Git Activity/Timer → Go Daemon → Python AI Layer → Project Management APIs
-                        ↓              ↓
-                   SQLite Cache    NLP Processing
-                        ↓              ↓
-                   Local Storage   Task Matching → Email Reports
-                    </pre>
+                <h2>Core Capabilities</h2>
+                <div class="capabilities-grid">
+                    <div class="capability-card">
+                        <div class="capability-header">
+                            <div class="capability-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <polyline points="12 6 12 12 16 14"/>
+                                </svg>
+                            </div>
+                            <h3>Real-Time Git Monitoring</h3>
+                        </div>
+                        <p>Detects commits instantly and prompts for work logs while context is fresh</p>
+                    </div>
+                    <div class="capability-card">
+                        <div class="capability-header">
+                            <div class="capability-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                                </svg>
+                            </div>
+                            <h3>Natural Language Processing</h3>
+                        </div>
+                        <p>Understands "fixed bug #234 in 2h" and extracts task IDs, time, and status</p>
+                    </div>
+                    <div class="capability-card">
+                        <div class="capability-header">
+                            <div class="capability-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                                </svg>
+                            </div>
+                            <h3>Smart Task Matching</h3>
+                        </div>
+                        <p>Fuzzy and semantic search automatically links updates to Azure DevOps work items</p>
+                    </div>
+                    <div class="capability-card">
+                        <div class="capability-header">
+                            <div class="capability-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                    <line x1="3" y1="9" x2="21" y2="9"/>
+                                </svg>
+                            </div>
+                            <h3>Automated Reports</h3>
+                        </div>
+                        <p>AI-generated daily and weekly summaries with zero manual effort</p>
+                    </div>
                 </div>
 
-                <h2>Core Components</h2>
-                <ul class="component-list">
-                    <li><strong>Go Background Engine:</strong> Lightweight daemon for Git monitoring and scheduling</li>
-                    <li><strong>Python Intelligence Layer:</strong> NLP processing, API integrations, and user interactions</li>
-                    <li><strong>Local Storage:</strong> SQLite for offline support and caching</li>
-                    <li><strong>Multiple Integrations:</strong> Azure DevOps, GitHub, Microsoft Graph, Jira</li>
-                </ul>
-
-                <h2>Workflow</h2>
-                <div class="workflow-box">
-                    <p><strong>Automatic Trigger Flow:</strong></p>
-                    <p>Git Commit / 3-Hour Timer → Context-Aware Prompt → AI Processing → Task Update → Manager Report → Subtask Generation</p>
-                </div>
-
-                <div style="margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.875rem;">
-                    <p><strong>Documentation Status:</strong> All markdown files have been consolidated into this wiki as of November 8, 2025.</p>
-                    <p>For the concise overview, see the <a href="../README.md">project README</a>.</p>
+                <h2>What's New in v2.0</h2>
+                <div class="info-banner">
+                    <ul>
+                        <li><strong>Full Docker support</strong> - One-command install, runs anywhere</li>
+                        <li><strong>Ollama integration</strong> - Local AI, no API costs or privacy concerns</li>
+                        <li><strong>Cross-platform</strong> - Windows, macOS, Linux all supported</li>
+                        <li><strong>Smart task matching</strong> - Fuzzy + semantic search finds the right work items</li>
+                    </ul>
                 </div>
             </section>
 
             <!-- Getting Started Tab -->
             <section id="getting-started" class="tab-content">
-                <h1>Getting Started</h1>
-                
-                <div class="info-box">
-                    <p><strong>New to DevTrack?</strong> This guide will walk you through installation and basic usage. All commands and features are documented in their respective sections in the sidebar.</p>
+                <div class="page-header">
+                    <h1>Getting Started</h1>
+                    <p class="lead">Get DevTrack up and running in minutes with Docker</p>
+                </div>
+
+                <h2>Prerequisites</h2>
+                <div class="prereq-grid">
+                    <div class="prereq-card">
+                        <h3>🐋 Docker Desktop</h3>
+                        <p>Required for all platforms</p>
+                        <a href="https://www.docker.com/products/docker-desktop" target="_blank" class="btn btn-sm">Download</a>
+                    </div>
+                    <div class="prereq-card">
+                        <h3>💾 Disk Space</h3>
+                        <p>~2-5GB for images and models</p>
+                    </div>
+                    <div class="prereq-card">
+                        <h3>🌐 Internet</h3>
+                        <p>For initial setup only</p>
+                    </div>
                 </div>
 
                 <h2>Installation</h2>
-                <div class="code-block">
-                    <pre><code># 1. Install all dependencies
-./install_phase3_deps.sh          # NLP parsing
-./install_learning_deps.sh        # Personalized AI
-./install_advanced_features.sh    # Reports & Matching
-
-# 2. Build CLI
-cd go-cli && go build -o devtrack
-
-# 3. Configure MS Graph (optional, for email/Teams)
-cd ../backend/msgraph_python
-# Edit config.cfg with your Azure app credentials
-python main.py  # Follow device code flow</code></pre>
-                </div>
-
-                <h2>Quick Start Commands</h2>
                 
-                <h3>Daemon Control</h3>
-                <div class="code-block">
-                    <pre><code>devtrack start          # Start background daemon
-devtrack stop           # Stop daemon
-devtrack restart        # Restart daemon
-devtrack status         # Show current status
-devtrack logs           # View recent logs</code></pre>
+                <div class="platform-tabs">
+                    <button class="platform-tab active" onclick="showPlatform('linux')">🐧 Linux / macOS</button>
+                    <button class="platform-tab" onclick="showPlatform('windows')">🪟 Windows</button>
                 </div>
 
-                <h3>Reports</h3>
-                <div class="code-block">
-                    <pre><code>devtrack preview-report                    # Preview today's report
-devtrack send-report manager@company.com   # Email report
-devtrack save-report                       # Save to file</code></pre>
+                <div id="platform-linux" class="platform-content active">
+                    <h3>Linux / macOS Installation</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Terminal</span>
+                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                        </div>
+                        <pre><code># Clone the repository
+git clone https://github.com/yourusername/automation_tools.git
+cd automation_tools
+
+# Make installer executable
+chmod +x install_dependencies.sh
+
+# Run installer
+./install_dependencies.sh</code></pre>
+                    </div>
+                    
+                    <div class="note-box info">
+                        <strong>📝 Note:</strong> The installer will:
+                        <ul>
+                            <li>Check Docker and Docker Compose</li>
+                            <li>Build DevTrack and Ollama containers</li>
+                            <li>Deploy CLI wrapper to <code>~/.local/bin/devtrack</code></li>
+                            <li>Start all services automatically</li>
+                        </ul>
+                    </div>
                 </div>
 
-                <h3>AI Learning</h3>
-                <div class="code-block">
-                    <pre><code>devtrack enable-learning              # Enable & collect data (30 days)
-devtrack learning-status              # Check status
-devtrack show-profile                 # View learned patterns
-devtrack test-response "some text"    # Test generation</code></pre>
+                <div id="platform-windows" class="platform-content">
+                    <h3>Windows Installation</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>PowerShell</span>
+                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                        </div>
+                        <pre><code># Clone the repository
+git clone https://github.com/yourusername/automation_tools.git
+cd automation_tools
+
+# Run PowerShell installer
+.\install_dependencies.ps1</code></pre>
+                    </div>
+                    
+                    <div class="note-box info">
+                        <strong>📝 Note:</strong> The installer will:
+                        <ul>
+                            <li>Check Docker Desktop is running</li>
+                            <li>Build DevTrack and Ollama containers</li>
+                            <li>Deploy CLI wrapper to <code>%USERPROFILE%\.local\bin\devtrack.bat</code></li>
+                            <li>Start all services automatically</li>
+                        </ul>
+                    </div>
                 </div>
 
-                <h2>File Locations</h2>
+                <h2>First Run</h2>
+                <div class="steps-container">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h3>Verify Installation</h3>
+                            <div class="code-block">
+                                <pre><code>devtrack --version</code></pre>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h3>Launch Interactive TUI</h3>
+                            <div class="code-block">
+                                <pre><code>devtrack</code></pre>
+                            </div>
+                            <p>This opens the Terminal UI where you can manage tasks, view logs, and configure settings.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h3>Check Services</h3>
+                            <div class="code-block">
+                                <pre><code>docker compose ps</code></pre>
+                            </div>
+                            <p>Should show <code>devtrack-app</code> and <code>devtrack-ollama</code> running.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <h2>Uninstallation</h2>
+                <p>To completely remove DevTrack from your system:</p>
+                
                 <div class="code-block">
-                    <pre><code>~/.devtrack/
-├── daemon.pid          # Daemon process ID
-├── daemon.log          # Activity logs
-├── daemon.db           # SQLite database
-├── config.yaml         # Configuration
-├── learning/           # AI learning data
-│   ├── consent.json
-│   ├── samples.json
-│   └── profile.json
-└── reports/            # Saved reports
-    └── report-YYYY-MM-DD.txt</code></pre>
+                    <div class="code-header">
+                        <span>Linux / macOS</span>
+                    </div>
+                    <pre><code>./uninstall.sh</code></pre>
+                </div>
+                
+                <div class="code-block">
+                    <div class="code-header">
+                        <span>Windows</span>
+                    </div>
+                    <pre><code>.\uninstall.ps1</code></pre>
+                </div>
+
+                <div class="note-box warning">
+                    <strong>⚠️ Warning:</strong> Uninstaller will remove containers, images, and optionally data volumes. This action cannot be undone.
                 </div>
             </section>
 
             <!-- Architecture Tab -->
             <section id="architecture" class="tab-content">
-                <h1>System Architecture</h1>
-                
-                <h2>Hybrid Go + Python Design</h2>
-                <p>DevTrack uses a hybrid architecture combining Go for performance-critical monitoring with Python for AI and integrations.</p>
-
-                <div class="architecture-diagram">
-                    <pre>
-┌──────────────────┐         IPC          ┌──────────────────┐
-│   Go Daemon      │◄──────────────────►│  Python Bridge   │
-│                  │  Unix Socket /      │                  │
-│  - Git Monitor   │  Named Pipe         │  - NLP Parser    │
-│  - Scheduler     │                     │  - Task Matching │
-│  - IPC Server    │                     │  - Ollama AI     │
-└──────────────────┘                     └──────────────────┘
-        │                                         │
-        ▼                                         ▼
-   Triggers Events                        Process & Update
-   - Commits                              - Azure DevOps
-   - Timers                               - GitHub
-                                          - Email Reports
-                    </pre>
+                <div class="page-header">
+                    <h1>Architecture</h1>
+                    <p class="lead">Understanding DevTrack's containerized microservices architecture</p>
                 </div>
 
-                <h2>Component Breakdown</h2>
+                <h2>System Overview</h2>
+                <div class="architecture-modern">
+                    <div class="arch-layer">
+                        <div class="arch-title">User Layer</div>
+                        <div class="arch-components">
+                            <span class="arch-component cli">devtrack CLI</span>
+                            <span class="arch-component">Bash/PowerShell Wrapper</span>
+                        </div>
+                    </div>
+                    <div class="arch-arrow">↓</div>
+                    <div class="arch-layer docker">
+                        <div class="arch-title">Container Layer</div>
+                        <div class="arch-components">
+                            <span class="arch-component">DevTrack Container</span>
+                            <span class="arch-component">Ollama Container</span>
+                        </div>
+                    </div>
+                    <div class="arch-arrow">↓</div>
+                    <div class="arch-layer">
+                        <div class="arch-title">Application Layer</div>
+                        <div class="arch-components">
+                            <span class="arch-component">Go Daemon</span>
+                            <span class="arch-component">Python Backend</span>
+                            <span class="arch-component">NLP Engine</span>
+                        </div>
+                    </div>
+                    <div class="arch-arrow">↓</div>
+                    <div class="arch-layer">
+                        <div class="arch-title">Storage & Integration</div>
+                        <div class="arch-components">
+                            <span class="arch-component">SQLite DB</span>
+                            <span class="arch-component">Azure DevOps</span>
+                            <span class="arch-component">MS Graph</span>
+                        </div>
+                    </div>
+                </div>
+
+                <h2>Component Details</h2>
                 
-                <h3>Go Background Engine</h3>
-                <ul>
-                    <li><strong>daemon.go:</strong> Process management, PID files, signal handling</li>
-                    <li><strong>git_monitor.go:</strong> Real-time Git commit detection using fsnotify</li>
-                    <li><strong>scheduler.go:</strong> Cron-based time triggers</li>
-                    <li><strong>ipc.go:</strong> Unix socket communication with Python</li>
-                    <li><strong>database.go:</strong> SQLite caching layer</li>
-                </ul>
+                <div class="component-detail">
+                    <h3>🐋 Container Layer</h3>
+                    <p><strong>DevTrack Container:</strong> Main application container running Debian-based image with:</p>
+                    <ul>
+                        <li>Go daemon (compiled binary as <code>devtrack-cli</code>)</li>
+                        <li>Python 3.11 runtime</li>
+                        <li>NLP libraries (spaCy, sentence-transformers)</li>
+                        <li>SQLite database</li>
+                        <li>All Python dependencies pre-installed</li>
+                    </ul>
+                    
+                    <p><strong>Ollama Container:</strong> Separate AI model server for local LLM processing</p>
+                    <ul>
+                        <li>Runs llama3.1, llama2, mistral, or phi3 models</li>
+                        <li>Isolated from main application</li>
+                        <li>Accessible via internal Docker network</li>
+                        <li>Persistent model storage in volume</li>
+                    </ul>
+                </div>
 
-                <h3>Python Intelligence Layer</h3>
-                <ul>
-                    <li><strong>nlp_parser.py:</strong> Natural language processing with spaCy</li>
-                    <li><strong>task_matcher.py:</strong> Fuzzy matching of activities to tasks</li>
-                    <li><strong>personalized_ai.py:</strong> Local AI learning system</li>
-                    <li><strong>data_collectors.py:</strong> MS Graph data collection</li>
-                    <li><strong>email_reporter.py:</strong> Report generation and formatting</li>
-                </ul>
+                <div class="component-detail">
+                    <h3>⚙️ Application Layer</h3>
+                    <p><strong>Go Daemon (devtrack-cli):</strong> Core orchestration engine</p>
+                    <ul>
+                        <li>Git repository monitoring with fsnotify</li>
+                        <li>Cron-based scheduling</li>
+                        <li>Terminal UI powered by Bubble Tea</li>
+                        <li>IPC communication with Python backend</li>
+                        <li>SQLite data management</li>
+                    </ul>
+                    
+                    <p><strong>Python Backend:</strong> AI and integration layer</p>
+                    <ul>
+                        <li>NLP processing with spaCy</li>
+                        <li>Semantic task matching</li>
+                        <li>Azure DevOps integration</li>
+                        <li>MS Graph API communication</li>
+                        <li>Email report generation</li>
+                    </ul>
+                </div>
 
-                <h2>Data Flow</h2>
-                <div class="workflow-box">
-                    <ol>
-                        <li>Go daemon detects Git commit or timer event</li>
-                        <li>Event sent to Python via IPC (JSON over Unix socket)</li>
-                        <li>Python processes with NLP and AI</li>
-                        <li>Updates Azure DevOps, GitHub, or other platforms</li>
-                        <li>Results cached in SQLite database</li>
-                        <li>Reports generated and sent via email/Teams</li>
-                    </ol>
+                <div class="component-detail">
+                    <h3>💾 Data Persistence</h3>
+                    <p>Docker volumes ensure data survives container restarts:</p>
+                    <ul>
+                        <li><strong>devtrack-data:</strong> SQLite database, task cache, logs</li>
+                        <li><strong>devtrack-config:</strong> Configuration files, credentials</li>
+                        <li><strong>ollama-data:</strong> AI models (can be several GB)</li>
+                        <li><strong>workspace:</strong> Mounted from host for Git monitoring</li>
+                    </ul>
+                </div>
+
+                <div class="note-box success">
+                    <strong>✨ Benefits of This Architecture:</strong>
+                    <ul>
+                        <li><strong>Platform Independent:</strong> Same containers run on Linux, macOS, Windows</li>
+                        <li><strong>Isolated Environment:</strong> No conflicts with host system</li>
+                        <li><strong>Easy Updates:</strong> Rebuild image to update all dependencies</li>
+                        <li><strong>Resource Efficient:</strong> Go provides low overhead, Python handles complex AI tasks</li>
+                        <li><strong>Scalable:</strong> Can add more containers for additional services</li>
+                    </ul>
                 </div>
             </section>
 
-            <!-- Features Tab -->
-            <section id="features" class="tab-content">
-                <h1>Key Features</h1>
-
-                <h2>Non-Intrusive Monitoring</h2>
-                <ul>
-                    <li><strong>Go Daemon:</strong> Lightweight background process (&lt;10 MB RAM, &lt;1% CPU)</li>
-                    <li><strong>Git Integration:</strong> Detects commits via hooks or polling</li>
-                    <li><strong>Smart Scheduling:</strong> Configurable prompts (default: every 3 hours)</li>
-                    <li><strong>Context Awareness:</strong> Infers project details from repo, branch, and files</li>
-                </ul>
-
-                <h2>AI-Powered Intelligence</h2>
-                <ul>
-                    <li><strong>Natural Language Parsing:</strong> Extract tasks, tickets, and time from free text</li>
-                    <li><strong>Entity Recognition:</strong> Identify project names, ticket numbers, status changes</li>
-                    <li><strong>Semantic Matching:</strong> Fuzzy match activities to existing tasks</li>
-                    <li><strong>Confidence Scoring:</strong> Ask clarifying questions when uncertain</li>
-                    <li><strong>Learning System:</strong> Improves suggestions based on your patterns</li>
-                </ul>
-
-                <h2>Personalized AI Learning</h2>
-                <ul>
-                    <li><strong>Privacy-First Design:</strong> All data stored locally, no cloud AI services</li>
-                    <li><strong>Communication Analysis:</strong> Learns from Teams, Azure DevOps, and Outlook</li>
-                    <li><strong>Writing Style Matching:</strong> Generates responses that sound like YOU</li>
-                    <li><strong>Explicit Consent:</strong> User permission required before any data collection</li>
-                    <li><strong>Local Ollama AI:</strong> Complete AI processing on your machine</li>
-                </ul>
-
-                <h2>Multi-Platform Integration</h2>
-                <ul>
-                    <li><strong>Azure DevOps:</strong> Work items, boards, and sprint tracking</li>
-                    <li><strong>GitHub:</strong> Issues, pull requests, and project boards</li>
-                    <li><strong>Microsoft Lists:</strong> SharePoint-based task management</li>
-                    <li><strong>Microsoft Graph:</strong> Email, calendar, and Teams integration</li>
-                    <li><strong>Jira:</strong> Issue tracking and project management (planned)</li>
-                </ul>
-
-                <h2>Intelligent Task Management</h2>
-                <ul>
-                    <li><strong>Subtask Generation:</strong> Automatically break down complex tasks</li>
-                    <li><strong>Status Tracking:</strong> Update task states across platforms</li>
-                    <li><strong>Time Logging:</strong> Track time spent without manual entry</li>
-                    <li><strong>Dependency Detection:</strong> Identify and track task relationships</li>
-                    <li><strong>Priority Management:</strong> Adjust task priorities based on deadlines</li>
-                </ul>
-            </section>
-
-            <!-- Daemon Tab -->
-            <section id="daemon" class="tab-content">
-                <h1>Background Daemon</h1>
-                
-                <p>The DevTrack daemon runs in the background, monitoring Git activity and triggering scheduled events.</p>
-
-                <h2>Features</h2>
-                <ul>
-                    <li><strong>Process Management:</strong> Start, stop, restart daemon</li>
-                    <li><strong>PID File Management:</strong> Track running daemon process</li>
-                    <li><strong>Graceful Shutdown:</strong> Clean shutdown on SIGTERM/SIGINT</li>
-                    <li><strong>Signal Handling:</strong> Reload config on SIGHUP</li>
-                    <li><strong>Status Reporting:</strong> Detailed daemon status information</li>
-                    <li><strong>Log Management:</strong> File-based logging with rotation support</li>
-                    <li><strong>Pause/Resume:</strong> Control scheduler without stopping daemon</li>
-                </ul>
-
-                <h2>Commands</h2>
-                <div class="code-block">
-                    <pre><code># Start the daemon
-./devtrack start
-
-# Check status
-./devtrack status
-
-# Pause scheduler (keeps git monitoring active)
-./devtrack pause
-
-# Resume scheduler
-./devtrack resume
-
-# View logs
-./devtrack logs
-
-# Stop the daemon
-./devtrack stop
-
-# Restart the daemon
-./devtrack restart</code></pre>
+            <!-- Docker Tab -->
+            <section id="docker" class="tab-content">
+                <div class="page-header">
+                    <h1>Docker Setup</h1>
+                    <p class="lead">Understanding and managing DevTrack's containerized deployment</p>
                 </div>
 
-                <h2>Status Output</h2>
-                <div class="code-block">
-                    <pre><code>DevTrack Daemon Status
+                <h2>Docker Compose Services</h2>
+                
+                <div class="service-card">
+                    <h3>🚀 devtrack-app</h3>
+                    <p><strong>Main application container</strong></p>
+                    <div class="service-details">
+                        <div class="detail-row">
+                            <strong>Image:</strong>
+                            <code>devtrack:latest</code>
+                        </div>
+                        <div class="detail-row">
+                            <strong>Volumes:</strong>
+                            <ul>
+                                <li><code>devtrack-data</code> → <code>/home/devtrack/.local/share/devtrack</code></li>
+                                <li><code>devtrack-config</code> → <code>/home/devtrack/.config/devtrack</code></li>
+                                <li><code>$HOME/workspace</code> → <code>/workspace</code> (host mount)</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
 
-Status:     RUNNING
+                <div class="service-card">
+                    <h3>🤖 devtrack-ollama</h3>
+                    <p><strong>AI model server</strong></p>
+                    <div class="service-details">
+                        <div class="detail-row">
+                            <strong>Image:</strong>
+                            <code>ollama/ollama:latest</code>
+                        </div>
+                        <div class="detail-row">
+                            <strong>Ports:</strong>
+                            <code>11434:11434</code>
+                        </div>
+                    </div>
+                </div>
+
+                <h2>Common Docker Commands</h2>
+                
+                <div class="command-section">
+                    <h3>Service Management</h3>
+                    <div class="code-block">
+                        <pre><code># Start all services
+docker compose up -d
+
+# Stop all services
+docker compose stop
+
+# Restart services
+docker compose restart
+
+# View service status
+docker compose ps</code></pre>
+                    </div>
+                </div>
+
+                <div class="command-section">
+                    <h3>Logs and Debugging</h3>
+                    <div class="code-block">
+                        <pre><code># View all logs
+docker compose logs
+
+# Follow logs in real-time
+docker compose logs -f
+
+# View specific service logs
+docker compose logs devtrack-app</code></pre>
+                    </div>
+                </div>
+
+                <div class="command-section">
+                    <h3>Ollama Model Management</h3>
+                    <div class="code-block">
+                        <pre><code># List installed models
+docker exec devtrack-ollama ollama list
+
+# Pull a new model
+docker exec devtrack-ollama ollama pull llama3.1
+
+# Remove a model
+docker exec devtrack-ollama ollama rm llama2</code></pre>
+                    </div>
+                </div>
+
+                <h2>Updating DevTrack</h2>
+                <div class="steps-container">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h3>Pull Latest Code</h3>
+                            <div class="code-block">
+                                <pre><code>git pull origin main</code></pre>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h3>Rebuild Images</h3>
+                            <div class="code-block">
+                                <pre><code>docker compose build --no-cache</code></pre>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h3>Restart Services</h3>
+                            <div class="code-block">
+                                <pre><code>docker compose down
+docker compose up -d</code></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- CLI Commands Tab -->
+            <section id="cli" class="tab-content">
+                <div class="page-header">
+                    <h1>CLI Commands</h1>
+                    <p class="lead">Complete command reference for DevTrack CLI</p>
+                </div>
+
+                <h2>Daemon Management</h2>
+                <div class="command-reference">
+                    <div class="cmd-item">
+                        <div class="cmd-syntax"><code>devtrack start</code></div>
+                        <div class="cmd-desc">Start the Git monitoring daemon</div>
+                    </div>
+                    <div class="cmd-item">
+                        <div class="cmd-syntax"><code>devtrack stop</code></div>
+                        <div class="cmd-desc">Stop the daemon gracefully</div>
+                    </div>
+                    <div class="cmd-item">
+                        <div class="cmd-syntax"><code>devtrack restart</code></div>
+                        <div class="cmd-desc">Restart the daemon (stop + start)</div>
+                    </div>
+                    <div class="cmd-item">
+                        <div class="cmd-syntax"><code>devtrack status</code></div>
+                        <div class="cmd-desc">Show daemon status, PID, uptime, and configuration</div>
+                    </div>
+                    <div class="cmd-item">
+                        <div class="cmd-syntax"><code>devtrack pause</code></div>
+                        <div class="cmd-desc">Temporarily pause Git monitoring</div>
+                    </div>
+                    <div class="cmd-item">
+                        <div class="cmd-syntax"><code>devtrack resume</code></div>
+                        <div class="cmd-desc">Resume paused monitoring</div>
+                    </div>
+                </div>
+
+                <h3>Example: Starting the Daemon</h3>
+                <div class="code-block">
+                    <pre><code># Start daemon in your project directory
+cd ~/workspace/my-project
+devtrack start
+
+# Output:
+# 🚀 Starting DevTrack daemon...
+# ✓ Daemon started successfully (PID: 12345)
+# Monitoring: /Users/you/workspace/my-project</code></pre>
+                </div>
+
+                <h2>Logging & Reporting</h2>
+                <div class="command-reference">
+                    <div class="cmd-item">
+                        <div class="cmd-syntax"><code>devtrack logs</code></div>
+                        <div class="cmd-desc">View daemon logs (last 50 lines)</div>
+                    </div>
+                    <div class="cmd-item">
+                        <div class="cmd-syntax"><code>devtrack db-stats</code></div>
+                        <div class="cmd-desc">Show database statistics and task counts</div>
+                    </div>
+                    <div class="cmd-item">
+                        <div class="cmd-syntax"><code>devtrack preview-report</code></div>
+                        <div class="cmd-desc">Preview daily work report without sending</div>
+                    </div>
+                    <div class="cmd-item">
+                        <div class="cmd-syntax"><code>devtrack send-report</code></div>
+                        <div class="cmd-desc">Send daily report via email (MS Graph)</div>
+                    </div>
+                    <div class="cmd-item">
+                        <div class="cmd-syntax"><code>devtrack save-report <file></code></div>
+                        <div class="cmd-desc">Save report to specified file</div>
+                    </div>
+                    <div class="cmd-item">
+                        <div class="cmd-syntax"><code>devtrack send-summary</code></div>
+                        <div class="cmd-desc">Send weekly work summary</div>
+                    </div>
+                </div>
+
+                <h3>Example: Daily Report</h3>
+                <div class="code-block">
+                    <pre><code># Preview today's work report
+devtrack preview-report
+
+# Output shows:
+# - Tasks completed
+# - Time spent per task
+# - Commits made
+# - AI-generated summary
+
+# Send the report via email
+devtrack send-report</code></pre>
+                </div>
+
+                <h2>AI Learning Commands</h2>
+                <div class="command-reference">
+                    <div class="cmd-item">
+                        <div class="cmd-syntax"><code>devtrack enable-learning [days]</code></div>
+                        <div class="cmd-desc">Enable AI learning from your communications (requires consent)</div>
+                    </div>
+                    <div class="cmd-item">
+                        <div class="cmd-syntax"><code>devtrack show-profile</code></div>
+                        <div class="cmd-desc">Display your learned communication profile</div>
+                    </div>
+                    <div class="cmd-item">
+                        <div class="cmd-syntax"><code>devtrack test-response "text"</code></div>
+                        <div class="cmd-desc">Test AI-generated response for given text</div>
+                    </div>
+                    <div class="cmd-item">
+                        <div class="cmd-syntax"><code>devtrack learning-status</code></div>
+                        <div class="cmd-desc">Show learning status and data collected</div>
+                    </div>
+                    <div class="cmd-item">
+                        <div class="cmd-syntax"><code>devtrack revoke-consent</code></div>
+                        <div class="cmd-desc">Revoke learning consent and delete all collected data</div>
+                    </div>
+                </div>
+
+                <h3>Example: AI Learning Setup</h3>
+                <div class="code-block">
+                    <pre><code># Enable learning from last 30 days of communications
+devtrack enable-learning 30
+
+# Output:
+# 📚 Personalized AI Learning
+# This will analyze your communication history to learn your style.
+# 
+# Data sources:
+#   - MS Teams messages
+#   - Azure DevOps comments
+#   - Outlook emails
+# 
+# Privacy: All data stays on your machine. Nothing is uploaded.
+# 
+# Proceed? (yes/no): yes
+# ✓ Learning enabled. Collecting samples...
+
+# Check your learned profile
+devtrack show-profile
+
+# Output:
+# 📊 Your Communication Profile
+# Total samples: 245
+# Writing style: Technical, concise
+# Avg response length: 87 words
+# Common phrases: "sounds good", "let me know", "I'll take a look"</code></pre>
+                </div>
+
+                <h2>Manual Triggers</h2>
+                <div class="command-reference">
+                    <div class="cmd-item">
+                        <div class="cmd-syntax"><code>devtrack force-trigger</code></div>
+                        <div class="cmd-desc">Manually trigger Git commit detection</div>
+                    </div>
+                    <div class="cmd-item">
+                        <div class="cmd-syntax"><code>devtrack skip-next</code></div>
+                        <div class="cmd-desc">Skip next scheduled report</div>
+                    </div>
+                </div>
+
+                <h2>Utility Commands</h2>
+                <div class="command-reference">
+                    <div class="cmd-item">
+                        <div class="cmd-syntax"><code>devtrack version</code></div>
+                        <div class="cmd-desc">Show DevTrack version</div>
+                    </div>
+                    <div class="cmd-item">
+                        <div class="cmd-syntax"><code>devtrack help</code></div>
+                        <div class="cmd-desc">Display help message with all commands</div>
+                    </div>
+                </div>
+
+                <div class="note-box success">
+                    <strong>✅ Container Transparency:</strong> All <code>devtrack</code> commands automatically execute inside the Docker container via the wrapper script. You don't need to use <code>docker exec</code> manually!
+                </div>
+
+                <h2>Status Output Details</h2>
+                <div class="code-block">
+                    <pre><code>$ devtrack status
+
+📊 DevTrack Daemon Status
+═════════════════════════
+
+Status:     ✓ RUNNING
 PID:        12345
-Uptime:     2h 15m
-Started:    Fri, 01 Nov 2025 10:30:00 IST
-Triggers:   8
-Last:       Fri, 01 Nov 2025 12:45:00 IST
+Uptime:     2h 34m
+Repository: /Users/you/workspace/my-project
+
+Monitoring:
+  Git events: ✓ Active
+  Scheduler:  ✓ Running
+  Commits:    15 detected today
+
+Database:
+  Tasks:      42 total
+  Updates:    127 today
+  Size:       2.4 MB
 
 Configuration:
-  Config:   ~/.devtrack/config.yaml
-  Logs:     ~/.devtrack/daemon.log
-  PID file: ~/.devtrack/daemon.pid
-
-Scheduler:
-  Paused:       false
-  Interval:     180 minutes
-  Next trigger: 45 minutes
-
-Work Hours:
-  Enabled:      true
-  Hours:        9:00 - 18:00
-  In hours:     true</code></pre>
-                </div>
-
-                <h2>Daemon Lifecycle</h2>
-                <div class="workflow-box">
-                    <ol>
-                        <li>User runs <code>devtrack start</code></li>
-                        <li>Daemon checks for existing PID file</li>
-                        <li>Forks background process</li>
-                        <li>Writes PID to <code>~/.devtrack/daemon.pid</code></li>
-                        <li>Initializes Git monitor and scheduler</li>
-                        <li>Listens for signals (SIGTERM, SIGINT, SIGHUP)</li>
-                        <li>Logs activity to <code>~/.devtrack/daemon.log</code></li>
-                    </ol>
+  Config:   /home/devtrack/.config/devtrack/config.yaml
+  Logs:     /home/devtrack/.local/share/devtrack/daemon.log
+  Database: /home/devtrack/.local/share/devtrack/devtrack.db</code></pre>
                 </div>
             </section>
 
             <!-- Git Integration Tab -->
             <section id="git-integration" class="tab-content">
-                <h1>Git Integration</h1>
-                
-                <p>Real-time Git repository monitoring and commit detection using file system events.</p>
-
-                <h2>Features</h2>
-                <ul>
-                    <li><strong>Git Repository Monitoring:</strong> Real-time detection of commits using fsnotify</li>
-                    <li><strong>Commit Information Extraction:</strong> Hash, message, author, timestamp, and changed files</li>
-                    <li><strong>Post-Commit Hook Installation:</strong> Automatic hook generation for repository setup</li>
-                    <li><strong>Configuration Management:</strong> YAML-based config for repositories and settings</li>
-                    <li><strong>Multi-Repository Support:</strong> Monitor multiple repositories simultaneously</li>
-                </ul>
-
-                <h2>How It Works</h2>
-                <p>The Git monitor watches the <code>.git</code> directory for changes using file system events. When a commit is detected:</p>
-                <ol>
-                    <li>Extract commit hash using <code>git log</code></li>
-                    <li>Parse commit message, author, and timestamp</li>
-                    <li>Get list of changed files using <code>git diff-tree</code></li>
-                    <li>Create structured <code>CommitInfo</code> object</li>
-                    <li>Send to Python via IPC for processing</li>
-                </ol>
-
-                <h2>Configuration</h2>
-                <div class="code-block">
-                    <pre><code>repositories:
-  - name: automation_tools
-    path: /Users/sraj/git_apps/personal/automation_tools
-    enabled: true
-    project: DevTrack
-    ignore: []</code></pre>
+                <div class="page-header">
+                    <h1>Git Integration</h1>
+                    <p class="lead">Automatic Git repository monitoring and intelligent commit detection</p>
                 </div>
 
-                <h2>Testing</h2>
-                <div class="code-block">
-                    <pre><code># Test Git monitoring
-cd go-cli
-go run . test-git
-
-# Make a commit in another terminal
-git commit -m "Test commit"
-
-# Watch the output for commit detection</code></pre>
-                </div>
-            </section>
-
-            <!-- Scheduler Tab -->
-            <section id="scheduler" class="tab-content">
-                <h1>Scheduler System</h1>
-                
-                <p>Time-based trigger system that prompts users at configurable intervals and respects work hours settings.</p>
-
-                <h2>Features</h2>
-                <ul>
-                    <li><strong>Configurable Intervals:</strong> Set custom prompt intervals (default: 180 minutes / 3 hours)</li>
-                    <li><strong>Pause/Resume:</strong> Temporarily pause and resume scheduling</li>
-                    <li><strong>Force Trigger:</strong> Manually trigger prompts on demand</li>
-                    <li><strong>Skip Next:</strong> Skip the next scheduled trigger</li>
-                    <li><strong>Work Hours Support:</strong> Optional restriction to work hours only</li>
-                    <li><strong>Statistics:</strong> Track trigger count and timing</li>
-                    <li><strong>Dynamic Interval:</strong> Change interval without restart</li>
-                    <li><strong>Cron-based:</strong> Uses robust cron scheduling library</li>
-                </ul>
-
-                <h2>Configuration</h2>
-                <div class="code-block">
-                    <pre><code>settings:
-  prompt_interval: 180  # Minutes between prompts (default: 3 hours)
-  work_hours_only: false  # Only trigger during work hours
-  work_start_hour: 9   # Start of work hours (24h format)
-  work_end_hour: 18    # End of work hours (24h format)
-  timezone: Asia/Kolkata  # Timezone for work hours</code></pre>
+                <h2>How Git Monitoring Works</h2>
+                <div class="feature-list">
+                    <div class="feature-item">
+                        <span class="feature-number">1</span>
+                        <div class="feature-content">
+                            <h3>Filesystem Watching</h3>
+                            <p>DevTrack uses <strong>fsnotify</strong> to watch the <code>.git</code> directory for changes in real-time. It specifically monitors the <code>.git/HEAD</code> file and <code>.git/refs</code> directory.</p>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-number">2</span>
+                        <div class="feature-content">
+                            <h3>Commit Detection</h3>
+                            <p>When a commit is detected, DevTrack extracts commit info using <strong>go-git</strong> library:</p>
+                            <ul>
+                                <li>Commit hash</li>
+                                <li>Author name and email</li>
+                                <li>Commit message</li>
+                                <li>Timestamp</li>
+                                <li>Changed files</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-number">3</span>
+                        <div class="feature-content">
+                            <h3>Smart Prompting</h3>
+                            <p>A Terminal UI prompt appears with the commit message pre-filled, asking if you want to log work for this commit. You can edit the message or add more details.</p>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-number">4</span>
+                        <div class="feature-content">
+                            <h3>Automatic Task Matching</h3>
+                            <p>The commit message is parsed with NLP to extract task IDs, then matched against Azure DevOps work items using fuzzy and semantic matching.</p>
+                        </div>
+                    </div>
                 </div>
 
-                <h2>Commands</h2>
-                <div class="code-block">
-                    <pre><code># Pause scheduler
-devtrack pause
+                <h2>Git Monitor Architecture</h2>
+                <div class="component-detail">
+                    <h3>🔍 GitMonitor Component</h3>
+                    <p>The <code>GitMonitor</code> struct in Go handles all Git operations:</p>
+                    
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>git_monitor.go</span>
+                        </div>
+                        <pre><code>type GitMonitor struct {
+    repoPath string
+    repo     *git.Repository
+    watcher  *fsnotify.Watcher
+    stopChan chan bool
+}
 
-# Resume scheduler
-devtrack resume
-
-# Force trigger now
-devtrack force-trigger
-
-# Skip next trigger
-devtrack skip-next
-
-# Send daily summary
-devtrack send-summary</code></pre>
-                </div>
-
-                <h2>Work Hours</h2>
-                <p>When <code>work_hours_only: true</code>:</p>
-                <ul>
-                    <li>Triggers only fire between <code>work_start_hour</code> and <code>work_end_hour</code></li>
-                    <li>Outside work hours, triggers are skipped</li>
-                    <li>System calculates next work start time</li>
-                </ul>
-            </section>
-
-            <!-- IPC Tab -->
-            <section id="ipc" class="tab-content">
-                <h1>IPC Communication</h1>
-                
-                <p>Inter-Process Communication enables the Go daemon to communicate with the Python AI layer using Unix sockets or named pipes.</p>
-
-                <h2>Architecture</h2>
-                <div class="architecture-diagram">
-                    <pre>
-┌──────────────────┐         IPC          ┌──────────────────┐
-│   Go Daemon      │◄──────────────────►│  Python Bridge   │
-│                  │  Unix Socket /      │                  │
-│  - Git Monitor   │  Named Pipe         │  - NLP Parser    │
-│  - Scheduler     │                     │  - Task Matching │
-│  - IPC Server    │                     │  - Ollama AI     │
-└──────────────────┘                     └──────────────────┘
-                    </pre>
-                </div>
-
-                <h2>Message Format</h2>
-                <p>All IPC messages use JSON format with newline delimiters.</p>
-
-                <h3>Commit Trigger</h3>
-                <div class="code-block">
-                    <pre><code>{
-  "type": "commit_trigger",
-  "timestamp": "2025-11-08T10:30:00Z",
-  "id": "commit_1699437000000000",
-  "data": {
-    "repo_path": "/path/to/repo",
-    "commit_hash": "abc123...",
-    "commit_message": "Fixed login bug",
-    "author": "developer@example.com",
-    "timestamp": "2025-11-08T10:30:00Z",
-    "files_changed": ["src/auth.go", "tests/auth_test.go"],
-    "branch": "main"
-  }
+type CommitInfo struct {
+    Hash      string
+    Message   string
+    Author    string
+    Timestamp time.Time
+    Files     []string
 }</code></pre>
-                </div>
-
-                <h3>Timer Trigger</h3>
-                <div class="code-block">
-                    <pre><code>{
-  "type": "timer_trigger",
-  "data": {
-    "timestamp": "ISO8601",
-    "interval_mins": 180,
-    "trigger_count": 5
-  }
-}</code></pre>
-                </div>
-
-                <h2>Communication Flow</h2>
-                <ol>
-                    <li>Go daemon detects event (commit or timer)</li>
-                    <li>Serializes event to JSON</li>
-                    <li>Sends over Unix socket to Python bridge</li>
-                    <li>Python receives and parses JSON</li>
-                    <li>Processes with NLP/AI systems</li>
-                    <li>Updates external platforms</li>
-                    <li>Sends response back to Go (optional)</li>
-                </ol>
-            </section>
-
-            <!-- Personalized AI Tab -->
-            <section id="personalized-ai" class="tab-content">
-                <h1>Personalized AI Learning</h1>
-                
-                <p>DevTrack's Personalized AI feature learns from your communication patterns across MS Teams, Azure DevOps, and Outlook to generate responses that sound like you.</p>
-
-                <h2>What It Learns</h2>
-                <ul>
-                    <li><strong>Writing style:</strong> Sentence structure, complexity, and tone</li>
-                    <li><strong>Response patterns:</strong> How you respond to different types of messages</li>
-                    <li><strong>Vocabulary:</strong> Words and phrases you commonly use</li>
-                    <li><strong>Sign-offs and greetings:</strong> Your typical email/chat closings and openings</li>
-                </ul>
-
-                <h2>Privacy & Consent</h2>
-                <div class="info-box">
-                    <h3>Privacy-First Design</h3>
+                    </div>
+                    
+                    <p><strong>Key Features:</strong></p>
                     <ul>
-                        <li>All data stored locally in <code>~/.devtrack/learning/</code></li>
-                        <li>No cloud services or external API calls</li>
-                        <li>Uses only local Ollama for AI processing</li>
-                        <li>Explicit user consent required before ANY data collection</li>
-                        <li>Full data deletion option when revoking consent</li>
+                        <li>Non-blocking async monitoring with goroutines</li>
+                        <li>Debouncing to avoid duplicate detection (100ms delay)</li>
+                        <li>Filters out lock files and temporary Git files</li>
+                        <li>Graceful shutdown with stop channel</li>
                     </ul>
                 </div>
 
-                <h2>Quick Start</h2>
-                <div class="code-block">
-                    <pre><code># Enable learning (will prompt for consent)
-devtrack enable-learning
+                <h2>Supported Git Workflows</h2>
+                <div class="workflow-grid">
+                    <div class="workflow-card">
+                        <h4>✅ Direct Commits</h4>
+                        <p>Commits directly to current branch are detected immediately</p>
+                    </div>
+                    <div class="workflow-card">
+                        <h4>✅ Branch Switching</h4>
+                        <p>Detects when you checkout a different branch</p>
+                    </div>
+                    <div class="workflow-card">
+                        <h4>✅ Merges</h4>
+                        <p>Merge commits are detected and can be logged</p>
+                    </div>
+                    <div class="workflow-card">
+                        <h4>✅ Rebases</h4>
+                        <p>Rebase operations trigger commit detection</p>
+                    </div>
+                    <div class="workflow-card">
+                        <h4>✅ Cherry-picks</h4>
+                        <p>Cherry-picked commits are detected</p>
+                    </div>
+                    <div class="workflow-card">
+                        <h4>✅ Amend</h4>
+                        <p>Amended commits trigger re-detection</p>
+                    </div>
+                </div>
 
-# Check consent status
-devtrack learning-status
+                <h2>Configuration</h2>
+                <div class="config-section">
+                    <h3>Workspace Setup</h3>
+                    <p>Your Git repositories should be under <code>~/workspace</code> for automatic monitoring:</p>
+                    
+                    <div class="code-block">
+                        <pre><code># Create workspace directory
+mkdir -p ~/workspace
+
+# Clone your projects
+cd ~/workspace
+git clone https://github.com/yourorg/project1.git
+git clone https://github.com/yourorg/project2.git
+
+# Start monitoring from any project
+cd project1
+devtrack start
+
+# Daemon will monitor this repository
+# Make commits normally:
+git add .
+git commit -m "Fixed bug #123"
+
+# DevTrack prompt appears automatically!</code></pre>
+                    </div>
+                </div>
+
+                <h2>Commit Message Parsing</h2>
+                <div class="component-detail">
+                    <h3>📝 Automatic Extraction</h3>
+                    <p>DevTrack uses regex patterns to extract task identifiers from commit messages:</p>
+                    
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Supported Formats</span>
+                        </div>
+                        <pre><code># GitHub-style issue numbers
+git commit -m "Fixed #123"
+git commit -m "Resolves #456, closes #789"
+
+# Jira/Azure-style tickets
+git commit -m "PROJ-123: Add authentication"
+git commit -m "AB-456 Fix login bug"
+
+# Multiple patterns
+git commit -m "PA-789: Refactored API (closes #234)"
+
+# Time estimates in commits
+git commit -m "Fixed #123 [2h]"
+git commit -m "AB-456: Added tests (45min)"</code></pre>
+                    </div>
+                    
+                    <p><strong>Extracted Information:</strong></p>
+                    <ul>
+                        <li><strong>Task IDs:</strong> #123, PROJ-456, AB-789</li>
+                        <li><strong>Action verbs:</strong> Fixed, Resolves, Closes, Add, Refactored</li>
+                        <li><strong>Time estimates:</strong> 2h, 45min, 1.5 hours</li>
+                        <li><strong>Status:</strong> Completed, In Progress, etc.</li>
+                    </ul>
+                </div>
+
+                <h2>Interactive Prompts</h2>
+                <div class="code-block">
+                    <pre><code># After you commit:
+$ git commit -m "Fixed authentication bug #234"
+
+# DevTrack detects and prompts:
+┌─────────────────────────────────────────────┐
+│ 🔔 New Commit Detected                      │
+├─────────────────────────────────────────────┤
+│ Commit: a3f5d9c                             │
+│ Message: Fixed authentication bug #234      │
+│                                             │
+│ Log this work? (y/n/e)                      │
+│   y - Yes, log it                           │
+│   n - Skip this commit                      │
+│   e - Edit and log                          │
+└─────────────────────────────────────────────┘
+
+# Press 'e' to edit:
+┌─────────────────────────────────────────────┐
+│ Edit Work Log                               │
+├─────────────────────────────────────────────┤
+│ Task: #234 (auto-matched to AB-234)        │
+│ Description:                                │
+│ Fixed authentication bug - users can now   │
+│ login with SSO correctly. Added tests.     │
+│                                             │
+│ Time spent: 2h                              │
+│                                             │
+│ [Save] [Cancel]                             │
+└─────────────────────────────────────────────┘</code></pre>
+                </div>
+
+                <h2>Advanced Features</h2>
+                
+                <div class="ai-feature-card">
+                    <h3>🎯 Multi-Repository Support</h3>
+                    <p>Monitor multiple repositories simultaneously:</p>
+                    <div class="code-block">
+                        <pre><code># Start daemon in each repo
+cd ~/workspace/project1
+devtrack start
+
+cd ~/workspace/project2
+devtrack start
+
+# Or use parent directory monitoring (future feature)</code></pre>
+                    </div>
+                </div>
+
+                <div class="ai-feature-card">
+                    <h3>⏸️ Temporary Pause</h3>
+                    <p>Pause monitoring when doing experimental work:</p>
+                    <div class="code-block">
+                        <pre><code># Pause monitoring
+devtrack pause
+
+# Make experimental commits without prompts
+git commit -m "WIP: testing approach"
+git commit -m "WIP: another test"
+
+# Resume when ready
+devtrack resume</code></pre>
+                    </div>
+                </div>
+
+                <div class="ai-feature-card">
+                    <h3>🔄 Manual Trigger</h3>
+                    <p>Manually trigger detection for missed commits:</p>
+                    <div class="code-block">
+                        <pre><code># Trigger detection manually
+devtrack force-trigger
+
+# Useful if daemon was stopped during commits</code></pre>
+                    </div>
+                </div>
+
+                <div class="note-box success">
+                    <strong>✨ Pro Tip:</strong> Use conventional commit messages with task IDs for best results. Example: <code>"feat(auth): Add SSO login #234"</code>
+                </div>
+
+                <h2>Troubleshooting Git Monitoring</h2>
+                <div class="troubleshoot-item">
+                    <h3>🔴 Commits not detected</h3>
+                    <p><strong>Symptoms:</strong> You commit but no prompt appears</p>
+                    <p><strong>Solutions:</strong></p>
+                    <ol>
+                        <li>Check daemon is running: <code>devtrack status</code></li>
+                        <li>Verify you're in monitored repo: <code>pwd</code></li>
+                        <li>Check logs for errors: <code>devtrack logs</code></li>
+                        <li>Restart daemon: <code>devtrack restart</code></li>
+                        <li>Manually trigger: <code>devtrack force-trigger</code></li>
+                    </ol>
+                </div>
+
+                <div class="troubleshoot-item">
+                    <h3>🔴 Duplicate prompts</h3>
+                    <p><strong>Symptoms:</strong> Multiple prompts for same commit</p>
+                    <p><strong>Solutions:</strong></p>
+                    <ol>
+                        <li>Check only one daemon instance running: <code>ps aux | grep devtrack</code></li>
+                        <li>Stop all instances: <code>devtrack stop</code></li>
+                        <li>Start fresh: <code>devtrack start</code></li>
+                    </ol>
+                </div>
+
+                <div class="troubleshoot-item">
+                    <h3>🔴 Slow detection</h3>
+                    <p><strong>Symptoms:</strong> Delay between commit and prompt</p>
+                    <p><strong>Solutions:</strong></p>
+                    <ol>
+                        <li>Normal delay is 100ms (debouncing)</li>
+                        <li>On slow systems, may take up to 1-2 seconds</li>
+                        <li>Check container resources: <code>docker stats devtrack-app</code></li>
+                        <li>Large repos may have slower detection</li>
+                    </ol>
+                </div>
+            </section>
+
+            <!-- AI Features Tab -->
+            <section id="ai-features" class="tab-content">
+                <div class="page-header">
+                    <h1>AI Features</h1>
+                    <p class="lead">Intelligent natural language processing with local Ollama models</p>
+                </div>
+
+                <h2>Natural Language Processing Pipeline</h2>
+                <div class="architecture-modern">
+                    <div class="arch-layer">
+                        <div class="arch-title">Input Layer</div>
+                        <div class="arch-components">
+                            <span class="arch-component">User Text / Commit Message</span>
+                        </div>
+                    </div>
+                    <div class="arch-arrow">↓</div>
+                    <div class="arch-layer">
+                        <div class="arch-title">NLP Parsing (spaCy)</div>
+                        <div class="arch-components">
+                            <span class="arch-component">Tokenization</span>
+                            <span class="arch-component">Entity Extraction</span>
+                            <span class="arch-component">Pattern Matching</span>
+                        </div>
+                    </div>
+                    <div class="arch-arrow">↓</div>
+                    <div class="arch-layer">
+                        <div class="arch-title">Task Matching</div>
+                        <div class="arch-components">
+                            <span class="arch-component">Fuzzy Match</span>
+                            <span class="arch-component">Semantic Search</span>
+                        </div>
+                    </div>
+                    <div class="arch-arrow">↓</div>
+                    <div class="arch-layer">
+                        <div class="arch-title">Enhancement (Ollama)</div>
+                        <div class="arch-components">
+                            <span class="arch-component">Summary Generation</span>
+                            <span class="arch-component">Context Enrichment</span>
+                        </div>
+                    </div>
+                </div>
+
+                <h2>NLP Task Parser</h2>
+                <div class="component-detail">
+                    <h3>📝 Text Analysis with spaCy</h3>
+                    <p>The <code>NLPTaskParser</code> extracts structured information from natural language:</p>
+                    
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Example Input</span>
+                        </div>
+                        <pre><code>"Fixed authentication bug in SSO module #234. Took about 2 hours."</code></pre>
+                    </div>
+                    
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Extracted Data</span>
+                        </div>
+                        <pre><code>{
+  "ticket_id": "#234",
+  "action_verb": "Fixed",
+  "status": "completed",
+  "description": "authentication bug in SSO module",
+  "time_spent": "2h",
+  "entities": {
+    "PRODUCT": ["SSO module"],
+    "TASK_TYPE": ["bug"]
+  },
+  "confidence": 0.92
+}</code></pre>
+                    </div>
+                    
+                    <p><strong>Supported Patterns:</strong></p>
+                    <ul>
+                        <li><strong>Ticket formats:</strong> #123, PROJ-456, AB-789, ticket: 123</li>
+                        <li><strong>Time expressions:</strong> 2h, 30min, 1.5 hours, 2 days</li>
+                        <li><strong>Action verbs:</strong> Fixed, Completed, Started, Working on, Reviewed, Merged, Deployed</li>
+                        <li><strong>Status indicators:</strong> Done, In Progress, Blocked, Waiting</li>
+                    </ul>
+                </div>
+
+                <h2>Task Matching Strategies</h2>
+                
+                <div class="ai-feature-card">
+                    <h3>1️⃣ Exact ID Match</h3>
+                    <p><strong>Highest Priority - 100% Confidence</strong></p>
+                    <div class="code-block">
+                        <pre><code># Input
+"Fixed AB-234"
+
+# Matches
+Task AB-234: "Fix authentication bug in login"
+Confidence: 1.0 (exact ID match)</code></pre>
+                    </div>
+                    <p>Direct task ID references always match first.</p>
+                </div>
+
+                <div class="ai-feature-card">
+                    <h3>2️⃣ Fuzzy String Matching</h3>
+                    <p><strong>Handles typos and variations using fuzzywuzzy</strong></p>
+                    <div class="code-block">
+                        <pre><code># Input
+"Fixed autentication bug"  # Note: typo
+
+# Available Tasks
+AB-234: "Fix authentication bug in login"
+AB-235: "Add authorization checks"
+
+# Match
+Task AB-234 (fuzzy score: 89%)
+Confidence: 0.89</code></pre>
+                    </div>
+                    <p><strong>Algorithms used:</strong></p>
+                    <ul>
+                        <li><strong>Token Sort:</strong> Handles word order differences</li>
+                        <li><strong>Partial Ratio:</strong> Matches substrings</li>
+                        <li><strong>Levenshtein Distance:</strong> Character-level similarity</li>
+                    </ul>
+                </div>
+
+                <div class="ai-feature-card">
+                    <h3>3️⃣ Semantic Similarity</h3>
+                    <p><strong>Understands meaning using sentence-transformers</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Example - Understanding Intent</span>
+                        </div>
+                        <pre><code># Input
+"Users can't sign in with Microsoft accounts"
+
+# Available Tasks
+AB-234: "Fix SSO authentication with Azure AD"
+AB-235: "Add multi-factor authentication"
+AB-236: "Update login page styling"
+
+# Semantic Match
+Task AB-234 (cosine similarity: 0.87)
+Reason: Semantic understanding links "sign in", "Microsoft accounts" 
+        with "SSO authentication", "Azure AD"
+Confidence: 0.87</code></pre>
+                    </div>
+                    <p><strong>Model:</strong> all-MiniLM-L6-v2 (384-dimensional embeddings)</p>
+                    <p><strong>Benefits:</strong> Matches tasks even when using different words to describe same issue</p>
+                </div>
+
+                <h2>Ollama Integration</h2>
+                <div class="component-detail">
+                    <h3>🤖 Local LLM Processing</h3>
+                    <p>Ollama provides local AI capabilities without sending data to external APIs:</p>
+                    
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Use Cases</span>
+                        </div>
+                        <pre><code># 1. Work Summary Generation
+Input: List of 15 tasks completed today
+Output: "Today focused on authentication improvements, 
+         fixing SSO bugs and adding MFA support. Also 
+         reviewed 3 PRs and updated documentation."
+
+# 2. Commit Message Enhancement
+Input: "fixed bug"
+Output: "Fixed authentication bug in SSO module that 
+         prevented users from logging in with Microsoft 
+         accounts. Added test coverage."
+
+# 3. Communication Style Learning
+Input: Historical emails and messages
+Output: Writing style profile for personalized responses</code></pre>
+                    </div>
+                </div>
+
+                <h2>Supported Models</h2>
+                <div class="model-grid">
+                    <div class="model-card">
+                        <h4>llama3.1</h4>
+                        <p><strong>Recommended</strong></p>
+                        <p>Best quality for summaries and analysis</p>
+                        <p>Size: ~4.7GB</p>
+                    </div>
+                    <div class="model-card">
+                        <h4>llama2</h4>
+                        <p><strong>Stable</strong></p>
+                        <p>Good balance of speed and quality</p>
+                        <p>Size: ~3.8GB</p>
+                    </div>
+                    <div class="model-card">
+                        <h4>mistral</h4>
+                        <p><strong>Fast</strong></p>
+                        <p>Quick responses, efficient</p>
+                        <p>Size: ~4.1GB</p>
+                    </div>
+                    <div class="model-card">
+                        <h4>phi3</h4>
+                        <p><strong>Compact</strong></p>
+                        <p>Smallest, fastest option</p>
+                        <p>Size: ~2.3GB</p>
+                    </div>
+                </div>
+
+                <h3>Model Management</h3>
+                <div class="code-block">
+                    <pre><code># Pull a model
+docker exec devtrack-ollama ollama pull llama3.1
+
+# List installed models
+docker exec devtrack-ollama ollama list
+
+# Test a model
+docker exec -it devtrack-ollama ollama run llama3.1 "Summarize: Fixed auth bug, added tests, updated docs"
+
+# Output:
+# Completed authentication bug fix with comprehensive testing 
+# and documentation updates.</code></pre>
+                </div>
+
+                <h2>Personalized AI Learning</h2>
+                <div class="component-detail">
+                    <h3>📚 Communication Style Learning</h3>
+                    <p>DevTrack can learn from your communication history to understand your writing style:</p>
+                    
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Data Sources (with explicit consent)</span>
+                        </div>
+                        <pre><code>- MS Teams messages and chats
+- Azure DevOps work item comments
+- Outlook email responses
+- Code review comments</code></pre>
+                    </div>
+                    
+                    <p><strong>What it learns:</strong></p>
+                    <ul>
+                        <li><strong>Writing style:</strong> Formal, casual, technical</li>
+                        <li><strong>Vocabulary:</strong> Common phrases and terminology</li>
+                        <li><strong>Response patterns:</strong> Typical greetings, sign-offs</li>
+                        <li><strong>Tone:</strong> Professional, friendly, concise</li>
+                        <li><strong>Structure:</strong> How you organize information</li>
+                    </ul>
+                </div>
+
+                <h3>Privacy & Consent</h3>
+                <div class="note-box warning">
+                    <strong>🔒 Privacy First:</strong>
+                    <ul>
+                        <li>All learning happens locally - no data uploaded</li>
+                        <li>Requires explicit user consent before collecting data</li>
+                        <li>Data stored encrypted on local machine</li>
+                        <li>Can revoke consent anytime with <code>devtrack revoke-consent</code></li>
+                        <li>All data deleted when consent revoked</li>
+                    </ul>
+                </div>
+
+                <h3>Learning Setup Example</h3>
+                <div class="code-block">
+                    <pre><code># Enable learning with 30-day lookback
+$ devtrack enable-learning 30
+
+📚 Personalized AI Learning Setup
+═════════════════════════════════
+
+This feature analyzes your communication history to learn your style.
+
+Data sources:
+  ✓ MS Teams (last 30 days)
+  ✓ Azure DevOps comments (last 30 days)
+  ✓ Outlook emails (last 30 days)
+
+What we'll learn:
+  - Your writing style and tone
+  - Common phrases you use
+  - How you structure responses
+  - Your vocabulary preferences
+
+Privacy guarantees:
+  ✓ All processing happens locally
+  ✓ No data sent to external servers
+  ✓ Data encrypted on your machine
+  ✓ Revoke consent anytime
+
+Proceed with learning? (yes/no): yes
+
+✓ Consent recorded
+📊 Collecting samples... Found 245 messages
+🧠 Analyzing communication patterns...
+✓ Profile created
 
 # View your learned profile
-devtrack show-profile
+$ devtrack show-profile
 
-# Test response generation
-devtrack test-response "Can you review my code?"
+📊 Your Communication Profile
+═════════════════════════════
 
-# Revoke consent and delete data
-devtrack revoke-consent</code></pre>
+Total samples: 245
+Data period: 2024-10-15 to 2024-11-14
+
+Writing Style:
+  Tone: Professional, technical
+  Formality: Medium
+  Avg length: 87 words
+
+Common Phrases:
+  1. "sounds good" (42 times)
+  2. "let me know" (38 times)
+  3. "I'll take a look" (31 times)
+  4. "thanks for" (28 times)
+
+Response Patterns:
+  Greeting: "Hi [name],"
+  Sign-off: "Thanks," or "Best regards,"
+  Response time: Usually within 2 hours
+
+Vocabulary Insights:
+  Technical terms: authentication, deployment, API, refactor
+  Sentiment: 78% positive, 19% neutral, 3% negative</code></pre>
                 </div>
 
-                <h2>Data Sources</h2>
-                <h3>MS Teams</h3>
-                <ul>
-                    <li>Chat messages where you responded to someone</li>
-                    <li>Captures the trigger (what they said) and your response</li>
-                    <li>Analyzes conversation context</li>
-                </ul>
-
-                <h3>Azure DevOps</h3>
-                <ul>
-                    <li>Comments on work items</li>
-                    <li>Responses in discussions</li>
-                    <li>Code review feedback</li>
-                </ul>
-
-                <h3>Outlook</h3>
-                <ul>
-                    <li>Email replies (extracts your response vs quoted text)</li>
-                    <li>Subject lines you write</li>
-                    <li>Email signatures and greetings</li>
-                </ul>
-
-                <h2>How It Works</h2>
-                <ol>
-                    <li><strong>Data Collection:</strong> Collects last 30 days of communication samples</li>
-                    <li><strong>Pattern Analysis:</strong> Analyzes writing style, vocabulary, and response patterns</li>
-                    <li><strong>Profile Building:</strong> Creates your personalized communication profile</li>
-                    <li><strong>Response Generation:</strong> Uses local Ollama AI to generate responses in YOUR style</li>
-                </ol>
-
-                <h2>Storage Location</h2>
-                <div class="code-block">
-                    <pre><code>~/.devtrack/learning/
-├── consent.json    # Your consent preferences
-├── samples.json    # Communication samples
-└── profile.json    # Your learned profile</code></pre>
-                </div>
-            </section>
-
-            <!-- Integrations Tab -->
-            <section id="integrations" class="tab-content">
-                <h1>Platform Integrations</h1>
-
-                <h2>Azure DevOps</h2>
-                <h3>Features</h3>
-                <ul>
-                    <li>Fetch user stories and work items</li>
-                    <li>Create and update work items</li>
-                    <li>Set iteration paths and due dates</li>
-                    <li>Parent-child work item relationships</li>
-                    <li>Duplicate task prevention</li>
-                    <li>Batch operations</li>
-                </ul>
-
-                <h3>Configuration</h3>
-                <div class="code-block">
-                    <pre><code>integrations:
-  azure_devops:
-    enabled: true
-    organization: "your-org"
-    project: "your-project"
-    pat: ${AZURE_DEVOPS_PAT}</code></pre>
-                </div>
-
-                <h2>GitHub</h2>
-                <h3>Features</h3>
-                <ul>
-                    <li>Issues management</li>
-                    <li>Pull requests tracking</li>
-                    <li>Project boards integration</li>
-                    <li>Commit linking</li>
-                </ul>
-
-                <h3>Configuration</h3>
-                <div class="code-block">
-                    <pre><code>integrations:
-  github:
-    enabled: true
-    owner: "your-username"
-    repo: "your-repo"
-    token: ${GITHUB_TOKEN}</code></pre>
-                </div>
-
-                <h2>Microsoft Graph</h2>
-                <h3>Features</h3>
-                <ul>
-                    <li>Email operations (read, send)</li>
-                    <li>Teams chat integration</li>
-                    <li>Calendar access</li>
-                    <li>User profile information</li>
-                </ul>
-
-                <h3>Setup</h3>
-                <div class="code-block">
-                    <pre><code>cd backend/msgraph_python
-# Edit config.cfg with your Azure app credentials
-python main.py  # Follow device code flow</code></pre>
-                </div>
-
-                <h2>Jira (Planned)</h2>
-                <h3>Features</h3>
-                <ul>
-                    <li>Issue tracking</li>
-                    <li>Project management</li>
-                    <li>Sprint planning</li>
-                </ul>
-
-                <h3>Configuration</h3>
-                <div class="code-block">
-                    <pre><code>integrations:
-  jira:
-    enabled: false
-    url: "https://your-domain.atlassian.net"
-    project: "PROJECT"
-    username: "your-email"
-    api_token: ${JIRA_API_TOKEN}</code></pre>
-                </div>
-            </section>
-
-            <!-- Notifications Tab -->
-            <section id="notifications" class="tab-content">
-                <h1>Notification Configuration</h1>
+                <h2>AI-Powered Features in Action</h2>
                 
-                <p>Configure how DevTrack sends output and reports - via Email, Microsoft Teams, or both.</p>
+                <div class="ai-feature-card">
+                    <h3>✨ Smart Work Summaries</h3>
+                    <div class="code-block">
+                        <pre><code># Daily report generation
+$ devtrack preview-report
 
-                <h2>Output Types</h2>
-                <div class="code-block">
-                    <pre><code>settings:
-  notifications:
-    output_type: "email"  # Options: "email", "teams", "both"
-    
-    # When to send notifications
-    send_on_trigger: false      # Send on each trigger event
-    send_daily_summary: true    # Send daily summary report
-    daily_report_time: "18:00"  # Time to send daily report (HH:MM)
-    weekly_report_day: "Friday" # Day for weekly summary</code></pre>
+📊 Daily Work Report - November 14, 2024
+════════════════════════════════════════
+
+AI Summary:
+Today focused on authentication improvements for the SSO 
+integration. Fixed critical bug preventing Azure AD login 
+(AB-234), added comprehensive test coverage, and updated 
+API documentation. Also reviewed 3 pull requests related 
+to the security enhancements.
+
+Tasks Completed: 4
+  ✓ AB-234: Fix SSO authentication (2.5h)
+  ✓ AB-235: Add MFA support (3h)
+  ✓ AB-240: Update API docs (1h)
+  ✓ Review: PR#456, PR#457, PR#458 (0.5h)
+
+Total Time: 7 hours
+Commits: 8
+Reviews: 3</code></pre>
+                    </div>
                 </div>
 
-                <h2>Email Configuration</h2>
-                <div class="code-block">
-                    <pre><code>settings:
-  notifications:
-    output_type: "email"  # or "both"
-    
-    email:
-      enabled: true
-      to_addresses:
-        - "your.email@example.com"
-        - "colleague@example.com"
-      cc_addresses:
-        - "manager@example.com"
-      subject: "DevTrack Daily Report - {{.Date}}"
-      manager_email: "manager@example.com"</code></pre>
+                <div class="ai-feature-card">
+                    <h3>🎯 Context-Aware Suggestions</h3>
+                    <div class="code-block">
+                        <pre><code># When logging work
+$ devtrack log "fixed login problem"
+
+🤖 AI Suggestions:
+
+Did you mean:
+  1. AB-234: "Fix SSO authentication bug" (89% match)
+  2. AB-189: "Resolve login timeout issue" (72% match)
+
+Enhanced description:
+  "Fixed login problem" → 
+  "Resolved SSO authentication issue preventing users 
+   from logging in with Microsoft accounts"
+
+Estimated time: 2-3 hours (based on similar tasks)
+
+Accept suggestions? (y/n/e): </code></pre>
+                    </div>
                 </div>
 
-                <h2>Teams Configuration</h2>
-                <div class="code-block">
-                    <pre><code>settings:
-  notifications:
-    output_type: "teams"  # or "both"
-    
-    teams:
-      enabled: true
-      chat_type: "channel"  # Options: "channel" or "chat"
-      
-      # For Channel messages
-      channel_id: "19:abc123..."
-      channel_name: "DevTrack Updates"
-      
-      # For 1-on-1 Chat messages
-      chat_id: "19:xyz789..."
-      
-      # Alternative: Incoming Webhook
-      webhook_url: "https://outlook.office.com/webhook/..."
-      
-      mention_user: false  # @mention user in messages</code></pre>
+                <h2>Performance Considerations</h2>
+                <div class="component-detail">
+                    <h3>⚡ Processing Times</h3>
+                    <ul>
+                        <li><strong>NLP Parsing (spaCy):</strong> 10-50ms per text</li>
+                        <li><strong>Fuzzy Matching:</strong> 5-20ms for 100 tasks</li>
+                        <li><strong>Semantic Search:</strong> 50-200ms for 100 tasks</li>
+                        <li><strong>Ollama Summary:</strong> 1-5 seconds (depends on model)</li>
+                    </ul>
+                    
+                    <p><strong>Optimization tips:</strong></p>
+                    <ul>
+                        <li>Fuzzy matching runs first (fastest)</li>
+                        <li>Semantic search only if fuzzy match below threshold</li>
+                        <li>Ollama enhancement is optional and async</li>
+                        <li>Results cached for repeated queries</li>
+                    </ul>
                 </div>
 
-                <h2>Both Email and Teams</h2>
-                <div class="code-block">
-                    <pre><code>settings:
-  notifications:
-    output_type: "both"
-    
-    email:
-      enabled: true
-      to_addresses: ["your.email@example.com"]
-      
-    teams:
-      enabled: true
-      channel_id: "19:abc123..."
-      chat_type: "channel"</code></pre>
-                </div>
-
-                <h2>Notification Types</h2>
-                <ul>
-                    <li><strong>Trigger Notifications:</strong> Sent on each Git commit or timer event</li>
-                    <li><strong>Daily Summary:</strong> End-of-day report with all activities</li>
-                    <li><strong>Weekly Summary:</strong> Weekly rollup of tasks and progress</li>
-                    <li><strong>Ad-hoc Reports:</strong> Manual report generation via CLI</li>
-                </ul>
-            </section>
-
-            <!-- Commands Reference Tab -->
-            <section id="commands" class="tab-content">
-                <h1>Commands Reference</h1>
-
-                <h2>Daemon Control</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Command</th>
-                            <th>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><code>devtrack start</code></td>
-                            <td>Start background daemon</td>
-                        </tr>
-                        <tr>
-                            <td><code>devtrack stop</code></td>
-                            <td>Stop daemon</td>
-                        </tr>
-                        <tr>
-                            <td><code>devtrack restart</code></td>
-                            <td>Restart daemon</td>
-                        </tr>
-                        <tr>
-                            <td><code>devtrack status</code></td>
-                            <td>Show current status</td>
-                        </tr>
-                        <tr>
-                            <td><code>devtrack logs</code></td>
-                            <td>View recent logs</td>
-                        </tr>
-                        <tr>
-                            <td><code>devtrack pause</code></td>
-                            <td>Pause scheduler</td>
-                        </tr>
-                        <tr>
-                            <td><code>devtrack resume</code></td>
-                            <td>Resume scheduler</td>
-                        </tr>
-                    </tbody>
-                </table>
-
-                <h2>Manual Triggers</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Command</th>
-                            <th>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><code>devtrack force-trigger</code></td>
-                            <td>Immediately trigger scheduler callback</td>
-                        </tr>
-                        <tr>
-                            <td><code>devtrack skip-next</code></td>
-                            <td>Skip the next scheduled trigger</td>
-                        </tr>
-                        <tr>
-                            <td><code>devtrack send-summary</code></td>
-                            <td>Generate and send daily summary immediately</td>
-                        </tr>
-                    </tbody>
-                </table>
-
-                <h2>Reports</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Command</th>
-                            <th>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><code>devtrack preview-report</code></td>
-                            <td>Preview today's report</td>
-                        </tr>
-                        <tr>
-                            <td><code>devtrack send-report &lt;email&gt;</code></td>
-                            <td>Email report to specified address</td>
-                        </tr>
-                        <tr>
-                            <td><code>devtrack save-report</code></td>
-                            <td>Save report to file</td>
-                        </tr>
-                    </tbody>
-                </table>
-
-                <h2>AI Learning</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Command</th>
-                            <th>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><code>devtrack enable-learning [days]</code></td>
-                            <td>Enable learning & collect data (default 30 days)</td>
-                        </tr>
-                        <tr>
-                            <td><code>devtrack learning-status</code></td>
-                            <td>Check learning status</td>
-                        </tr>
-                        <tr>
-                            <td><code>devtrack show-profile</code></td>
-                            <td>View learned communication profile</td>
-                        </tr>
-                        <tr>
-                            <td><code>devtrack test-response "&lt;text&gt;"</code></td>
-                            <td>Test generating a personalized response</td>
-                        </tr>
-                        <tr>
-                            <td><code>devtrack revoke-consent</code></td>
-                            <td>Revoke consent and delete learning data</td>
-                        </tr>
-                    </tbody>
-                </table>
-
-                <h2>Database</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Command</th>
-                            <th>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><code>devtrack db-stats</code></td>
-                            <td>Show database statistics</td>
-                        </tr>
-                    </tbody>
-                </table>
-
-                <h2>Python Tools</h2>
-                <div class="code-block">
-                    <pre><code># Test Task Matching
-python3 backend/task_matcher.py test
-
-# Generate HTML Report
-python3 backend/email_reporter.py html > report.html
-open report.html
-
-# Test NLP Parser
-python3 backend/nlp_parser.py test</code></pre>
+                <div class="note-box success">
+                    <strong>✨ Best Results:</strong> For optimal AI performance, use descriptive commit messages and work logs. The more context you provide, the better the AI can understand and match tasks!
                 </div>
             </section>
 
             <!-- Configuration Tab -->
             <section id="configuration" class="tab-content">
-                <h1>Configuration</h1>
-                
-                <p>DevTrack is configured via <code>~/.devtrack/config.yaml</code></p>
-
-                <h2>Complete Configuration Example</h2>
-                <div class="code-block">
-                    <pre><code>version: 1.0.0
-
-repositories:
-  - name: automation_tools
-    path: /path/to/automation_tools
-    enabled: true
-    project: DevTrack
-    ignore: []
-
-daemon:
-  check_interval: 30s
-  log_level: info
-
-git:
-  monitor_interval: 5s
-  
-scheduler:
-  enabled: true
-  interval: "3h"
-  start_time: "09:00"
-  end_time: "18:00"
-
-settings:
-  prompt_interval: 180  # Minutes
-  work_hours_only: false
-  work_start_hour: 9
-  work_end_hour: 18
-  timezone: Asia/Kolkata
-  log_level: info
-  auto_sync: true
-  
-  notifications:
-    output_type: "email"  # email, teams, or both
-    send_on_trigger: false
-    send_daily_summary: true
-    daily_report_time: "18:00"
-    weekly_report_day: "Friday"
-    
-    email:
-      enabled: true
-      to_addresses:
-        - "your.email@example.com"
-      cc_addresses:
-        - "manager@example.com"
-      subject: "DevTrack Daily Report - {{.Date}}"
-      manager_email: "manager@example.com"
-    
-    teams:
-      enabled: false
-      chat_type: "channel"
-      channel_id: ""
-      channel_name: ""
-      mention_user: false
-
-integrations:
-  azure_devops:
-    enabled: true
-    organization: "your-org"
-    project: "your-project"
-    pat: ${AZURE_DEVOPS_PAT}
-    
-  github:
-    enabled: true
-    owner: "your-username"
-    repo: "your-repo"
-    token: ${GITHUB_TOKEN}
-    
-  jira:
-    enabled: false
-    url: ""
-    project: ""
-    username: ""
-    api_token: ${JIRA_API_TOKEN}</code></pre>
+                <div class="page-header">
+                    <h1>Configuration</h1>
+                    <p class="lead">Configure DevTrack integrations and settings</p>
                 </div>
 
-                <h2>Configuration Sections</h2>
-                
-                <h3>Repositories</h3>
-                <p>Define which Git repositories to monitor.</p>
-                
-                <h3>Daemon</h3>
-                <p>Background process settings including check intervals and logging.</p>
-                
-                <h3>Git</h3>
-                <p>Git monitoring configuration and polling intervals.</p>
-                
-                <h3>Scheduler</h3>
-                <p>Time-based trigger settings, work hours, and intervals.</p>
-                
-                <h3>Notifications</h3>
-                <p>Configure email and Teams notification preferences.</p>
-                
-                <h3>Integrations</h3>
-                <p>API credentials and settings for Azure DevOps, GitHub, Jira.</p>
+                <h2>Azure DevOps Setup</h2>
+                <div class="config-section">
+                    <h3>Required Settings</h3>
+                    <ul>
+                        <li>Organization URL</li>
+                        <li>Personal Access Token (PAT)</li>
+                        <li>Project name</li>
+                    </ul>
+                    
+                    <div class="code-block">
+                        <pre><code>devtrack config azure</code></pre>
+                    </div>
+                </div>
 
-                <h2>Environment Variables</h2>
-                <p>Sensitive credentials can be stored in environment variables:</p>
+                <h2>Microsoft Graph Setup</h2>
+                <div class="config-section">
+                    <h3>Required Settings</h3>
+                    <ul>
+                        <li>Tenant ID</li>
+                        <li>Client ID</li>
+                        <li>Client Secret</li>
+                    </ul>
+                    
+                    <div class="code-block">
+                        <pre><code>devtrack config graph</code></pre>
+                    </div>
+                </div>
+
+                <h2>Configuration Files</h2>
+                <p>Config stored in Docker volume at:</p>
                 <div class="code-block">
-                    <pre><code>export AZURE_DEVOPS_PAT="your-pat-token"
-export GITHUB_TOKEN="your-github-token"
-export JIRA_API_TOKEN="your-jira-token"</code></pre>
+                    <pre><code>/home/devtrack/.config/devtrack/config.yaml</code></pre>
+                </div>
+
+                <div class="note-box warning">
+                    <strong>🔒 Security:</strong> Configuration contains sensitive credentials. Never commit to Git or share publicly.
                 </div>
             </section>
 
-            <!-- Roadmap Tab -->
-            <section id="roadmap" class="tab-content">
-                <h1>Development Roadmap</h1>
+            <!-- Troubleshooting Tab -->
+            <section id="troubleshooting" class="tab-content">
+                <div class="page-header">
+                    <h1>Troubleshooting</h1>
+                    <p class="lead">Common issues and solutions</p>
+                </div>
+
+                <h2>Common Issues</h2>
                 
-                <h2>Overall Progress: ~50-55% Complete</h2>
-                
-                <div class="progress-section">
-                    <h3>Phase 1: Python Prototype - 70% Complete</h3>
-                    <div class="status-badge status-complete">On Track</div>
-                    <ul>
-                        <li>Azure DevOps integration</li>
-                        <li>Microsoft Graph API</li>
-                        <li>OLLAMA AI task generation</li>
-                        <li>CSV/Excel task tracking</li>
-                        <li>Teams chat sentiment analysis</li>
-                    </ul>
+                <div class="troubleshoot-item">
+                    <h3>🔴 Container won't start</h3>
+                    <p><strong>Symptoms:</strong> <code>docker compose ps</code> shows containers as "Exited"</p>
+                    <p><strong>Solutions:</strong></p>
+                    <ol>
+                        <li>Check Docker is running: <code>docker info</code></li>
+                        <li>View error logs: <code>docker compose logs</code></li>
+                        <li>Rebuild: <code>docker compose build --no-cache</code></li>
+                        <li>Remove and recreate: <code>docker compose down && docker compose up -d</code></li>
+                    </ol>
                 </div>
 
-                <div class="progress-section">
-                    <h3>Phase 2: Go Background Engine - 60% Complete</h3>
-                    <div class="status-badge status-progress">In Progress</div>
-                    <ul>
-                        <li>Git monitoring and commit detection</li>
-                        <li>Time-based scheduler with cron</li>
-                        <li>Background daemon process</li>
-                        <li>CLI command interface</li>
-                        <li>Email and Teams notification config</li>
-                    </ul>
-                    <p><strong>Missing:</strong> IPC communication, SQLite caching</p>
+                <div class="troubleshoot-item">
+                    <h3>🔴 devtrack command not found</h3>
+                    <p><strong>Symptoms:</strong> Shell says command not found</p>
+                    <p><strong>Solutions:</strong></p>
+                    <ol>
+                        <li>Ensure wrapper is in PATH: <code>echo $PATH | grep .local/bin</code></li>
+                        <li>Reload shell: <code>source ~/.bashrc</code> or <code>source ~/.zshrc</code></li>
+                        <li>Re-run installer to deploy wrapper</li>
+                    </ol>
                 </div>
 
-                <div class="progress-section">
-                    <h3>Phase 3: AI Intelligence - 25% Complete</h3>
-                    <div class="status-badge status-progress">Started</div>
-                    <ul>
-                        <li>NLP task parsing (spaCy) - In Progress</li>
-                        <li>Personalized AI learning - Complete</li>
-                        <li>Task matching & fuzzy logic - Planned</li>
-                        <li>Automated email report generation - Planned</li>
-                    </ul>
+                <div class="troubleshoot-item">
+                    <h3>🔴 Ollama health check failing</h3>
+                    <p><strong>Symptoms:</strong> devtrack-app won't start, waiting for ollama</p>
+                    <p><strong>Solutions:</strong></p>
+                    <ol>
+                        <li>Check Ollama is responding: <code>docker exec devtrack-ollama ollama list</code></li>
+                        <li>Restart service: <code>docker compose restart devtrack-ollama</code></li>
+                        <li>Check port 11434 is not in use on host</li>
+                        <li>Wait 30-60 seconds for Ollama to initialize</li>
+                    </ol>
                 </div>
 
-                <div class="progress-section">
-                    <h3>Phase 4: Enhanced Integrations - 40% Complete</h3>
-                    <div class="status-badge status-progress">Partial</div>
-                    <ul>
-                        <li>Azure DevOps - Complete</li>
-                        <li>Microsoft Graph - Complete</li>
-                        <li>GitHub - In Progress</li>
-                        <li>Jira - Planned</li>
-                    </ul>
+                <div class="troubleshoot-item">
+                    <h3>🔴 Workspace not accessible</h3>
+                    <p><strong>Symptoms:</strong> Git monitoring not detecting commits</p>
+                    <p><strong>Solutions:</strong></p>
+                    <ol>
+                        <li>Verify workspace exists: <code>ls ~/workspace</code></li>
+                        <li>Check mount in container: <code>docker exec devtrack-app ls /workspace</code></li>
+                        <li>Ensure WORKSPACE_PATH is set correctly in installer</li>
+                        <li>Restart containers after creating workspace directory</li>
+                    </ol>
                 </div>
 
-                <div class="progress-section">
-                    <h3>Phase 5: Advanced Features - 0% Complete</h3>
-                    <div class="status-badge status-notstarted">Not Started</div>
+                <h2>Getting Help</h2>
+                <div class="help-section">
+                    <p>If you're still experiencing issues:</p>
                     <ul>
-                        <li>Advanced reporting</li>
-                        <li>Analytics dashboard</li>
-                        <li>Mobile notifications</li>
-                        <li>Plugin system</li>
+                        <li>Check <code>docker compose logs -f</code> for detailed error messages</li>
+                        <li>Verify Docker Desktop has sufficient resources (4GB+ RAM recommended)</li>
+                        <li>Review container inspect output: <code>docker inspect devtrack-app</code></li>
+                        <li>Try complete reinstall with <code>./uninstall.sh</code> then <code>./install_dependencies.sh</code></li>
                     </ul>
-                </div>
-
-                <div class="progress-section">
-                    <h3>Phase 6: Production Ready - 10% Complete</h3>
-                    <div class="status-badge status-attention">Needs Work</div>
-                    <ul>
-                        <li>Cross-platform testing</li>
-                        <li>Performance optimization</li>
-                        <li>Security hardening</li>
-                        <li>Documentation</li>
-                        <li>Deployment scripts</li>
-                    </ul>
-                </div>
-
-                <h2>Target Completion</h2>
-                <ul>
-                    <li><strong>Q4 2025:</strong> Phases 1-2 complete</li>
-                    <li><strong>Q1 2026:</strong> Phases 3-4 complete</li>
-                    <li><strong>Q2 2026:</strong> Phase 5 complete</li>
-                    <li><strong>Q3 2026:</strong> Production ready</li>
-                </ul>
-
-                <div class="info-box" style="margin-top: 2rem;">
-                    <h3>Documentation Milestone</h3>
-                    <p><strong>November 8, 2025:</strong> All documentation consolidated into comprehensive wiki with modern UI, complete privacy policy, and streamlined navigation.</p>
                 </div>
             </section>
 
@@ -1124,5 +1556,43 @@ export JIRA_API_TOKEN="your-jira-token"</code></pre>
     </div>
 
     <script src="assets/script.js"></script>
+    <script>
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+            
+            const targetTab = document.getElementById(tabName);
+            const targetNav = document.querySelector(`[data-tab="${tabName}"]`);
+            
+            if (targetTab) targetTab.classList.add('active');
+            if (targetNav) targetNav.classList.add('active');
+            
+            window.scrollTo(0, 0);
+        }
+
+        function showPlatform(platform) {
+            document.querySelectorAll('.platform-tab').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.platform-content').forEach(content => content.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(`platform-${platform}`).classList.add('active');
+        }
+
+        function copyCode(button) {
+            const codeBlock = button.closest('.code-block').querySelector('code');
+            navigator.clipboard.writeText(codeBlock.textContent);
+            button.textContent = 'Copied!';
+            setTimeout(() => button.textContent = 'Copy', 2000);
+        }
+
+        // Handle navigation clicks
+        document.querySelectorAll('.nav-item[data-tab]').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                const tab = item.getAttribute('data-tab');
+                switchTab(tab);
+            });
+        });
+    </script>
 </body>
 </html>
