@@ -71,10 +71,14 @@ Dockerfile
 docker-compose.yml
 .dockerignore
 
-# Installation scripts and backups
+# Installation scripts and wrappers
 install_dependencies.sh
-install_dependencies.sh.backup
+install_dependencies.ps1
+uninstall.sh
+uninstall.ps1
 devtrack-wrapper.sh
+devtrack-wrapper.ps1
+devtrack-wrapper.bat
 
 # Jupyter notebooks
 *.ipynb

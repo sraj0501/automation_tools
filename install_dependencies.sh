@@ -153,8 +153,31 @@ deploy_wrapper() {
     echo ""
     
     SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-    WRAPPER_SOURCE="$SCRIPT_DIR/devtrack-wrapper.sh"
-    WRAPPER_DEST="$INSTALL_DIR/devtrack"
+    
+    # Detect OS
+    OS_TYPE="$(uname -s)"
+    case "$OS_TYPE" in
+        Linux*)     
+            WRAPPER_SOURCE="$SCRIPT_DIR/devtrack-wrapper.sh"
+            WRAPPER_DEST="$INSTALL_DIR/devtrack"
+            ;;
+        Darwin*)    
+            WRAPPER_SOURCE="$SCRIPT_DIR/devtrack-wrapper.sh"
+            WRAPPER_DEST="$INSTALL_DIR/devtrack"
+            ;;
+        MINGW*|MSYS*|CYGWIN*)
+            print_warning "Windows detected - Please use devtrack.bat or devtrack.ps1"
+            echo ""
+            echo "   Copy these files to a directory in your PATH:"
+            echo "   - devtrack-wrapper.bat → devtrack.bat"
+            echo "   - devtrack-wrapper.ps1 (required by .bat)"
+            return 0
+            ;;
+        *)
+            print_error "Unsupported operating system: $OS_TYPE"
+            exit 1
+            ;;
+    esac
     
     if [ ! -f "$WRAPPER_SOURCE" ]; then
         print_error "Wrapper script not found at $WRAPPER_SOURCE"
