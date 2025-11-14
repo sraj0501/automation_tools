@@ -13,5 +13,4 @@ wheels/
 
 # Golang Files
 *.exe
-*devtrack*
-*go-cli*
+go-cli

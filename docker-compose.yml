@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  # Ollama service for AI/ML features
+  ollama:
+    image: ollama/ollama:latest
+    container_name: devtrack-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - devtrack-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # DevTrack application
+  devtrack:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: devtrack-app
+    restart: unless-stopped
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - DEVTRACK_DATA_DIR=/home/devtrack/.local/share/devtrack
+      - DEVTRACK_CONFIG_DIR=/home/devtrack/.config/devtrack
+      - WORKSPACE_DIR=/workspace
+    volumes:
+      # Persistent data storage
+      - devtrack-data:/home/devtrack/.local/share/devtrack
+      - devtrack-config:/home/devtrack/.config/devtrack
+      # Workspace mount (read/write access to user's files)
+      - ${WORKSPACE_PATH:-$HOME/workspace}:/workspace
+      # Optional: Mount Git config for repository access
+      - ${HOME}/.gitconfig:/home/devtrack/.gitconfig:ro
+      # Optional: Mount SSH keys for Git operations
+      - ${HOME}/.ssh:/home/devtrack/.ssh:ro
+    networks:
+      - devtrack-network
+    stdin_open: true
+    tty: true
+    command: ["--help"]
+
+volumes:
+  # Ollama models and data
+  ollama-data:
+    driver: local
+  # DevTrack database and state
+  devtrack-data:
+    driver: local
+  # DevTrack configuration files
+  devtrack-config:
+    driver: local
+
+networks:
+  devtrack-network:
+    driver: bridge
