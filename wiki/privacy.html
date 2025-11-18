@@ -1,37 +1,85 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Privacy Policy - DevTrack</title>
     <link rel="stylesheet" href="assets/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
+
 <body>
-    <div class="sidebar">
-        <div class="logo">
-            <h1>DevTrack</h1>
-            <p class="tagline">Developer Automation Tools</p>
+    <!-- Sidebar Toggle Button -->
+    <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle Sidebar">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <div class="logo-icon"><i class="fas fa-shield-alt"></i></div>
+                <h1>DevTrack</h1>
+                <p class="tagline">Privacy Policy</p>
+            </div>
+
+            <div class="sidebar-controls">
+                <button class="control-btn" id="darkModeToggle" aria-label="Toggle Dark Mode" title="Toggle Dark Mode">
+                    <i class="fas fa-moon"></i>
+                </button>
+                <button class="control-btn sidebar-collapse" id="sidebarCollapse" aria-label="Collapse Sidebar"
+                    title="Collapse Sidebar">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+            </div>
         </div>
+
         <nav class="nav-menu">
-            <a href="index.html" class="nav-item">Back to Wiki</a>
-            <a href="#overview" class="nav-item active" data-tab="overview">Privacy Overview</a>
-            <a href="#data-collection" class="nav-item" data-tab="data-collection">Data Collection</a>
-            <a href="#consent" class="nav-item" data-tab="consent">Consent Management</a>
-            <a href="#storage" class="nav-item" data-tab="storage">Data Storage</a>
-            <a href="#ai-processing" class="nav-item" data-tab="ai-processing">AI Processing</a>
-            <a href="#user-rights" class="nav-item" data-tab="user-rights">Your Rights</a>
-            <a href="#security" class="nav-item" data-tab="security">Security Measures</a>
+            <a href="index.html" class="nav-item">
+                <i class="nav-icon fas fa-arrow-left"></i> <span class="nav-text">Back to Wiki</span>
+            </a>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Privacy Sections</div>
+                <a href="#overview" class="nav-item active" data-tab="overview">
+                    <i class="nav-icon fas fa-eye"></i> <span class="nav-text">Overview</span>
+                </a>
+                <a href="#data-collection" class="nav-item" data-tab="data-collection">
+                    <i class="nav-icon fas fa-database"></i> <span class="nav-text">Data Collection</span>
+                </a>
+                <a href="#consent" class="nav-item" data-tab="consent">
+                    <i class="nav-icon fas fa-check-circle"></i> <span class="nav-text">Consent</span>
+                </a>
+                <a href="#storage" class="nav-item" data-tab="storage">
+                    <i class="nav-icon fas fa-hdd"></i> <span class="nav-text">Storage</span>
+                </a>
+                <a href="#ai-processing" class="nav-item" data-tab="ai-processing">
+                    <i class="nav-icon fas fa-brain"></i> <span class="nav-text">AI Processing</span>
+                </a>
+                <a href="#user-rights" class="nav-item" data-tab="user-rights">
+                    <i class="nav-icon fas fa-user-shield"></i> <span class="nav-text">Your Rights</span>
+                </a>
+                <a href="#security" class="nav-item" data-tab="security">
+                    <i class="nav-icon fas fa-lock"></i> <span class="nav-text">Security</span>
+                </a>
+            </div>
         </nav>
     </div>
 
     <div class="main-content">
         <div class="content-wrapper">
-            
+
             <!-- Overview Tab -->
             <section id="overview" class="tab-content active">
                 <h1>Privacy Policy</h1>
-                <p class="lead">DevTrack is built with privacy as a core principle. All data processing happens locally on your machine, and no information is ever sent to external cloud services.</p>
-                
+                <p class="lead">DevTrack is built with privacy as a core principle. All data processing happens locally
+                    on your machine, and no information is ever sent to external cloud services.</p>
+
                 <div class="privacy-highlight">
                     <h2>Privacy-First Design Principles</h2>
                     <ul class="check-list">
@@ -48,15 +96,18 @@
                 <div class="info-grid">
                     <div class="info-card">
                         <h3>Local Storage Only</h3>
-                        <p>All data is stored in <code>~/.devtrack/</code> on your local machine. Nothing is uploaded to external servers.</p>
+                        <p>All data is stored in <code>~/.devtrack/</code> on your local machine. Nothing is uploaded to
+                            external servers.</p>
                     </div>
                     <div class="info-card">
                         <h3>Local AI Processing</h3>
-                        <p>Uses Ollama running locally on your machine. No data sent to OpenAI, Anthropic, or other cloud AI services.</p>
+                        <p>Uses Ollama running locally on your machine. No data sent to OpenAI, Anthropic, or other
+                            cloud AI services.</p>
                     </div>
                     <div class="info-card">
                         <h3>Consent-Based</h3>
-                        <p>Explicit opt-in required for AI learning features. The system never collects data without your permission.</p>
+                        <p>Explicit opt-in required for AI learning features. The system never collects data without
+                            your permission.</p>
                     </div>
                     <div class="info-card">
                         <h3>Transparent</h3>
@@ -91,7 +142,8 @@
 
                 <div class="warning-box">
                     <h3>Important Note about Microsoft Services</h3>
-                    <p>When you enable integrations with Microsoft Teams, Azure DevOps, or Outlook, DevTrack uses Microsoft's APIs to access your data. However:</p>
+                    <p>When you enable integrations with Microsoft Teams, Azure DevOps, or Outlook, DevTrack uses
+                        Microsoft's APIs to access your data. However:</p>
                     <ul>
                         <li>You authenticate directly with Microsoft (device code flow)</li>
                         <li>DevTrack stores access tokens locally</li>
@@ -105,7 +157,7 @@
             <!-- Data Collection Tab -->
             <section id="data-collection" class="tab-content">
                 <h1>What Data is Collected</h1>
-                
+
                 <h2>Core Functionality (No Consent Required)</h2>
                 <p>These features run automatically and are essential for DevTrack's operation:</p>
 
@@ -144,9 +196,11 @@
                 <h3>Communication Samples</h3>
                 <p><strong>Only collected if you run:</strong> <code>devtrack enable-learning</code></p>
                 <ul>
-                    <li><strong>MS Teams Messages:</strong> Chat messages where you responded to someone (last 30 days)</li>
+                    <li><strong>MS Teams Messages:</strong> Chat messages where you responded to someone (last 30 days)
+                    </li>
                     <li><strong>Azure DevOps Comments:</strong> Your comments on work items and discussions</li>
-                    <li><strong>Outlook Emails:</strong> Your sent emails and replies (extracting only your written content)</li>
+                    <li><strong>Outlook Emails:</strong> Your sent emails and replies (extracting only your written
+                        content)</li>
                 </ul>
                 <p><em>Storage:</em> <code>~/.devtrack/learning/samples.json</code></p>
 
@@ -155,7 +209,8 @@
                 <ul>
                     <li><strong>Writing style metrics:</strong> Average sentence length, formality level, tone</li>
                     <li><strong>Common phrases:</strong> Words and phrases you frequently use</li>
-                    <li><strong>Response patterns:</strong> How you typically respond to different types of messages</li>
+                    <li><strong>Response patterns:</strong> How you typically respond to different types of messages
+                    </li>
                     <li><strong>Greetings and sign-offs:</strong> Your typical email/chat openings and closings</li>
                 </ul>
                 <p><em>Storage:</em> <code>~/.devtrack/learning/profile.json</code></p>
@@ -174,7 +229,7 @@
             <!-- Consent Tab -->
             <section id="consent" class="tab-content">
                 <h1>Consent Management</h1>
-                
+
                 <h2>Consent Workflow</h2>
                 <p>DevTrack implements a clear, transparent consent process for AI learning features.</p>
 
@@ -266,7 +321,7 @@ Do you consent to this data collection? (yes/no):
             <!-- Storage Tab -->
             <section id="storage" class="tab-content">
                 <h1>Data Storage</h1>
-                
+
                 <h2>Storage Locations</h2>
                 <p>All DevTrack data is stored locally in your home directory:</p>
 
@@ -400,9 +455,10 @@ Do you consent to this data collection? (yes/no):
             <!-- AI Processing Tab -->
             <section id="ai-processing" class="tab-content">
                 <h1>AI Processing</h1>
-                
+
                 <h2>Local AI with Ollama</h2>
-                <p>DevTrack uses <strong>Ollama</strong> for all AI processing, which runs entirely on your local machine.</p>
+                <p>DevTrack uses <strong>Ollama</strong> for all AI processing, which runs entirely on your local
+                    machine.</p>
 
                 <div class="info-grid">
                     <div class="info-card">
@@ -493,14 +549,15 @@ User Input → DevTrack → Ollama (Local) → Response
 
                 <div class="privacy-highlight">
                     <h3>Privacy Guarantee</h3>
-                    <p>Your data never leaves your machine during AI processing. Ollama runs completely offline after the initial model download.</p>
+                    <p>Your data never leaves your machine during AI processing. Ollama runs completely offline after
+                        the initial model download.</p>
                 </div>
             </section>
 
             <!-- User Rights Tab -->
             <section id="user-rights" class="tab-content">
                 <h1>Your Rights</h1>
-                
+
                 <h2>Right to Access</h2>
                 <p>You have complete access to all data DevTrack stores about you.</p>
                 <div class="code-block">
@@ -563,7 +620,8 @@ cp ~/.devtrack/learning/*.json ~/export/</code></pre>
                     <li><strong>Disable Git monitoring:</strong> <code>devtrack stop</code></li>
                     <li><strong>Disable scheduler:</strong> <code>devtrack pause</code></li>
                     <li><strong>Disable learning:</strong> <code>devtrack revoke-consent</code></li>
-                    <li><strong>Disable integrations:</strong> Edit <code>config.yaml</code> and set <code>enabled: false</code></li>
+                    <li><strong>Disable integrations:</strong> Edit <code>config.yaml</code> and set
+                        <code>enabled: false</code></li>
                 </ul>
 
                 <h2>Right to Be Informed</h2>
@@ -579,7 +637,8 @@ cp ~/.devtrack/learning/*.json ~/export/</code></pre>
                 <h2>Contact & Questions</h2>
                 <p>DevTrack is an open source project. For questions or concerns about privacy:</p>
                 <ul>
-                    <li><strong>Review the code:</strong> <a href="https://github.com/sraj0501/automation_tools">GitHub Repository</a></li>
+                    <li><strong>Review the code:</strong> <a href="https://github.com/sraj0501/automation_tools">GitHub
+                            Repository</a></li>
                     <li><strong>Open an issue:</strong> Report privacy concerns on GitHub Issues</li>
                     <li><strong>Read documentation:</strong> All features are documented in the wiki</li>
                 </ul>
@@ -588,9 +647,9 @@ cp ~/.devtrack/learning/*.json ~/export/</code></pre>
             <!-- Security Tab -->
             <section id="security" class="tab-content">
                 <h1>Security Measures</h1>
-                
+
                 <h2>Credential Storage</h2>
-                
+
                 <h3>Environment Variables</h3>
                 <p>API tokens and credentials should be stored as environment variables, not in config files:</p>
                 <div class="code-block">
@@ -620,7 +679,7 @@ chmod 600 ~/.devtrack/learning/*.json</code></pre>
                 </div>
 
                 <h2>Network Security</h2>
-                
+
                 <h3>HTTPS Only</h3>
                 <p>All external API calls use HTTPS:</p>
                 <ul class="check-list">
@@ -633,14 +692,15 @@ chmod 600 ~/.devtrack/learning/*.json</code></pre>
                 <p>DevTrack does not send telemetry, analytics, or crash reports to any external service.</p>
 
                 <h2>Authentication</h2>
-                
+
                 <h3>Microsoft Services</h3>
                 <p>Uses OAuth 2.0 device code flow:</p>
                 <ul>
                     <li>You authenticate directly with Microsoft</li>
                     <li>DevTrack never sees your password</li>
                     <li>Access tokens stored locally with restricted permissions</li>
-                    <li>Tokens can be revoked at <a href="https://myaccount.microsoft.com/permissions">Microsoft Account Permissions</a></li>
+                    <li>Tokens can be revoked at <a href="https://myaccount.microsoft.com/permissions">Microsoft Account
+                            Permissions</a></li>
                 </ul>
 
                 <h3>Personal Access Tokens</h3>
@@ -660,7 +720,7 @@ chmod 600 ~/.devtrack/learning/*.json</code></pre>
                 </ul>
 
                 <h2>Recommended Practices</h2>
-                
+
                 <h3>System Security</h3>
                 <ul class="check-list">
                     <li>Keep your OS and software up to date</li>
@@ -683,17 +743,21 @@ chmod 600 ~/.devtrack/learning/*.json</code></pre>
                 <ol>
                     <li><strong>Stop the daemon:</strong> <code>devtrack stop</code></li>
                     <li><strong>Revoke tokens:</strong> Revoke all API tokens for Azure DevOps, GitHub, Microsoft</li>
-                    <li><strong>Check logs:</strong> Review <code>~/.devtrack/daemon.log</code> for suspicious activity</li>
+                    <li><strong>Check logs:</strong> Review <code>~/.devtrack/daemon.log</code> for suspicious activity
+                    </li>
                     <li><strong>Reset credentials:</strong> Generate new tokens and update configuration</li>
                     <li><strong>Report:</strong> Open a GitHub issue if the problem is with DevTrack itself</li>
                 </ol>
 
                 <div class="warning-box">
                     <h3>Security Reminder</h3>
-                    <p>While DevTrack implements security best practices, ultimate security depends on your system's security. Keep your OS updated, use strong passwords, and follow security guidelines for your organization.</p>
+                    <p>While DevTrack implements security best practices, ultimate security depends on your system's
+                        security. Keep your OS updated, use strong passwords, and follow security guidelines for your
+                        organization.</p>
                 </div>
 
-                <div style="margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.875rem; text-align: center;">
+                <div
+                    style="margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.875rem; text-align: center;">
                     <p><strong>Last Updated:</strong> November 8, 2025</p>
                     <p><a href="index.html">← Back to Main Wiki</a></p>
                 </div>
@@ -704,4 +768,5 @@ chmod 600 ~/.devtrack/learning/*.json</code></pre>
 
     <script src="assets/script.js"></script>
 </body>
+
 </html>

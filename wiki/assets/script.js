@@ -1,9 +1,57 @@
-// Tab Navigation
+// DevTrack Wiki - Modern Interactive Features
 document.addEventListener('DOMContentLoaded', function() {
+    // ===== DARK MODE =====
+    const darkModeToggle = document.getElementById('darkModeToggle');
+    const html = document.documentElement;
+    
+    // Check for saved theme preference or default to light mode
+    const currentTheme = localStorage.getItem('theme') || 'light';
+    html.setAttribute('data-theme', currentTheme);
+    updateDarkModeIcon(currentTheme);
+    
+    darkModeToggle.addEventListener('click', function() {
+        const currentTheme = html.getAttribute('data-theme');
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        
+        html.setAttribute('data-theme', newTheme);
+        localStorage.setItem('theme', newTheme);
+        updateDarkModeIcon(newTheme);
+    });
+    
+    function updateDarkModeIcon(theme) {
+        const icon = darkModeToggle.querySelector('i');
+        if (theme === 'dark') {
+            icon.className = 'fas fa-sun';
+        } else {
+            icon.className = 'fas fa-moon';
+        }
+    }
+    
+    // ===== SIDEBAR COLLAPSE =====
+    const sidebarCollapse = document.getElementById('sidebarCollapse');
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    const body = document.body;
+    
+    // Check for saved sidebar state
+    const sidebarState = localStorage.getItem('sidebarCollapsed');
+    if (sidebarState === 'true') {
+        body.classList.add('sidebar-collapsed');
+    }
+    
+    sidebarCollapse.addEventListener('click', function() {
+        body.classList.toggle('sidebar-collapsed');
+        localStorage.setItem('sidebarCollapsed', body.classList.contains('sidebar-collapsed'));
+    });
+    
+    sidebarToggle.addEventListener('click', function() {
+        body.classList.remove('sidebar-collapsed');
+        localStorage.setItem('sidebarCollapsed', 'false');
+    });
+    
+    // ===== TAB NAVIGATION =====
     const navItems = document.querySelectorAll('.nav-item[data-tab]');
     const tabContents = document.querySelectorAll('.tab-content');
     
-    // Handle tab switching
     navItems.forEach(item => {
         item.addEventListener('click', function(e) {
             e.preventDefault();
@@ -40,108 +88,37 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Load tab from hash on page load
     loadTabFromHash();
-    
-    // Handle browser back/forward buttons
     window.addEventListener('hashchange', loadTabFromHash);
     
-    // Handle anchor links within tabs
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-        anchor.addEventListener('click', function(e) {
-            const href = this.getAttribute('href');
-            const targetId = href.substring(1);
-            
-            // Check if this is a tab navigation link
-            const targetNav = document.querySelector(`.nav-item[data-tab="${targetId}"]`);
-            if (targetNav) {
-                e.preventDefault();
-                targetNav.click();
-            }
-        });
-    });
-    
-    // Code block copy functionality
+    // ===== CODE BLOCK COPY FUNCTIONALITY =====
     const codeBlocks = document.querySelectorAll('.code-block');
     codeBlocks.forEach(block => {
-        // Create copy button
-        const copyButton = document.createElement('button');
-        copyButton.className = 'copy-button';
-        copyButton.innerHTML = 'Copy';
-        copyButton.style.cssText = `
-            position: absolute;
-            top: 0.5rem;
-            right: 0.5rem;
-            padding: 0.25rem 0.75rem;
-            background: var(--primary-color);
-            color: white;
-            border: none;
-            border-radius: 0.25rem;
-            cursor: pointer;
-            font-size: 0.75rem;
-            opacity: 0;
-            transition: opacity 0.2s;
-        `;
-        
-        // Make parent relative
-        block.style.position = 'relative';
-        
-        // Show button on hover
-        block.addEventListener('mouseenter', () => {
-            copyButton.style.opacity = '1';
-        });
-        
-        block.addEventListener('mouseleave', () => {
-            copyButton.style.opacity = '0';
-        });
-        
-        // Copy functionality
-        copyButton.addEventListener('click', () => {
-            const code = block.querySelector('code') || block.querySelector('pre');
-            if (code) {
-                navigator.clipboard.writeText(code.textContent).then(() => {
-                    copyButton.innerHTML = 'Copied!';
-                    setTimeout(() => {
-                        copyButton.innerHTML = 'Copy';
-                    }, 2000);
-                }).catch(err => {
-                    console.error('Failed to copy:', err);
-                });
-            }
-        });
-        
-        block.appendChild(copyButton);
-    });
-    
-    // Search functionality (basic)
-    const searchInput = document.getElementById('wiki-search');
-    if (searchInput) {
-        searchInput.addEventListener('input', function(e) {
-            const searchTerm = e.target.value.toLowerCase();
+        const header = block.querySelector('.code-header');
+        if (header) {
+            const copyButton = document.createElement('button');
+            copyButton.className = 'copy-btn';
+            copyButton.innerHTML = '<i class="fas fa-copy"></i> Copy';
             
-            if (searchTerm.length < 3) return;
-            
-            const allContent = document.querySelectorAll('.tab-content h1, .tab-content h2, .tab-content h3, .tab-content p');
-            let results = [];
-            
-            allContent.forEach(element => {
-                if (element.textContent.toLowerCase().includes(searchTerm)) {
-                    const tabContent = element.closest('.tab-content');
-                    if (tabContent) {
-                        results.push({
-                            tab: tabContent.id,
-                            text: element.textContent.substring(0, 100)
-                        });
-                    }
+            copyButton.addEventListener('click', () => {
+                const code = block.querySelector('code');
+                if (code) {
+                    navigator.clipboard.writeText(code.textContent).then(() => {
+                        copyButton.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                        setTimeout(() => {
+                            copyButton.innerHTML = '<i class="fas fa-copy"></i> Copy';
+                        }, 2000);
+                    }).catch(err => {
+                        console.error('Failed to copy:', err);
+                    });
                 }
             });
             
-            // Display search results (can be enhanced with a proper UI)
-            console.log('Search results:', results);
-        });
-    }
+            header.appendChild(copyButton);
+        }
+    });
     
-    // Smooth scroll for anchor links
+    // ===== SMOOTH SCROLL FOR ANCHOR LINKS =====
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
         anchor.addEventListener('click', function(e) {
             const targetId = this.getAttribute('href').substring(1);
@@ -158,90 +135,117 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Table of contents generator (for long sections)
-    function generateTOC(section) {
-        const headings = section.querySelectorAll('h2, h3');
-        if (headings.length < 3) return; // Only generate TOC if there are multiple headings
-        
-        const toc = document.createElement('nav');
-        toc.className = 'table-of-contents';
-        toc.innerHTML = '<h4>On this page:</h4>';
-        
-        const list = document.createElement('ul');
-        
-        headings.forEach((heading, index) => {
-            // Add ID if not present
-            if (!heading.id) {
-                heading.id = `section-${index}`;
+    // ===== MOBILE RESPONSIVENESS =====
+    function handleResize() {
+        if (window.innerWidth <= 768) {
+            // On mobile, show toggle button
+            sidebarToggle.style.display = 'flex';
+        } else {
+            // On desktop, hide toggle button unless sidebar is collapsed
+            if (!body.classList.contains('sidebar-collapsed')) {
+                sidebarToggle.style.display = 'none';
             }
-            
-            const listItem = document.createElement('li');
-            const link = document.createElement('a');
-            link.href = `#${heading.id}`;
-            link.textContent = heading.textContent;
-            link.style.fontSize = heading.tagName === 'H2' ? '1rem' : '0.9rem';
-            link.style.marginLeft = heading.tagName === 'H3' ? '1rem' : '0';
-            
-            listItem.appendChild(link);
-            list.appendChild(listItem);
-        });
-        
-        toc.appendChild(list);
-        
-        // Insert TOC after the first heading
-        const firstHeading = section.querySelector('h1');
-        if (firstHeading && firstHeading.nextSibling) {
-            firstHeading.parentNode.insertBefore(toc, firstHeading.nextSibling);
         }
     }
     
-    // Generate TOC for each tab with multiple sections
-    // tabContents.forEach(generateTOC);
+    handleResize();
+    window.addEventListener('resize', handleResize);
     
-    // Mobile menu toggle (for responsive design)
-    const createMobileToggle = () => {
-        if (window.innerWidth <= 768) {
-            const sidebar = document.querySelector('.sidebar');
-            const toggle = document.createElement('button');
-            toggle.className = 'mobile-menu-toggle';
-            toggle.innerHTML = '☰ Menu';
-            toggle.style.cssText = `
-                position: fixed;
-                top: 1rem;
-                left: 1rem;
-                z-index: 1000;
-                padding: 0.5rem 1rem;
-                background: var(--primary-color);
-                color: white;
-                border: none;
-                border-radius: 0.25rem;
-                cursor: pointer;
-            `;
-            
-            toggle.addEventListener('click', () => {
-                sidebar.style.display = sidebar.style.display === 'none' ? 'block' : 'none';
-            });
-            
-            document.body.appendChild(toggle);
+    // ===== KEYBOARD SHORTCUTS =====
+    document.addEventListener('keydown', function(e) {
+        // Ctrl/Cmd + K to toggle dark mode
+        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+            e.preventDefault();
+            darkModeToggle.click();
         }
-    };
+        
+        // Ctrl/Cmd + B to toggle sidebar
+        if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+            e.preventDefault();
+            sidebarCollapse.click();
+        }
+    });
     
-    // createMobileToggle();
-    // window.addEventListener('resize', createMobileToggle);
+    // ===== PLATFORM TAB SWITCHING =====
+    const platformTabs = document.querySelectorAll('.platform-tab');
+    platformTabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+            const platform = this.getAttribute('data-platform');
+            
+            // Remove active class from all tabs and content
+            document.querySelectorAll('.platform-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.platform-content').forEach(c => c.classList.remove('active'));
+            
+            // Add active class to clicked tab and corresponding content
+            this.classList.add('active');
+            const content = document.getElementById(`platform-${platform}`);
+            if (content) {
+                content.classList.add('active');
+            }
+        });
+    });
     
-    // Analytics placeholder (can be integrated with analytics service)
+    // ===== ANALYTICS (PLACEHOLDER) =====
     const trackPageView = (page) => {
         console.log('Page view:', page);
-        // Integration point for analytics
+        // Integration point for analytics service
     };
     
-    // Track initial page view
     trackPageView(window.location.pathname + window.location.hash);
     
-    // Track tab changes
     navItems.forEach(item => {
         item.addEventListener('click', () => {
             trackPageView(window.location.pathname + '#' + item.getAttribute('data-tab'));
         });
     });
+    
+    // ===== SCROLL TO TOP BUTTON =====
+    const scrollToTopBtn = document.createElement('button');
+    scrollToTopBtn.className = 'scroll-to-top';
+    scrollToTopBtn.innerHTML = '<i class="fas fa-arrow-up"></i>';
+    scrollToTopBtn.style.cssText = `
+        position: fixed;
+        bottom: 2rem;
+        right: 2rem;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: var(--primary);
+        color: white;
+        border: none;
+        cursor: pointer;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        box-shadow: var(--shadow-lg);
+        transition: all 0.3s ease;
+        z-index: 999;
+    `;
+    
+    scrollToTopBtn.addEventListener('click', () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    
+    document.body.appendChild(scrollToTopBtn);
+    
+    window.addEventListener('scroll', () => {
+        if (window.scrollY > 300) {
+            scrollToTopBtn.style.display = 'flex';
+        } else {
+            scrollToTopBtn.style.display = 'none';
+        }
+    });
+    
+    scrollToTopBtn.addEventListener('mouseenter', () => {
+        scrollToTopBtn.style.transform = 'scale(1.1)';
+    });
+    
+    scrollToTopBtn.addEventListener('mouseleave', () => {
+        scrollToTopBtn.style.transform = 'scale(1)';
+    });
+    
+    console.log('DevTrack Wiki initialized successfully');
+    console.log('Keyboard shortcuts:');
+    console.log('  Ctrl/Cmd + K: Toggle dark mode');
+    console.log('  Ctrl/Cmd + B: Toggle sidebar');
 });
