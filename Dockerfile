@@ -12,11 +12,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /build
 
 # Copy Go module files
-COPY devtrack/go.mod devtrack/go.sum ./
+COPY devtrack-bin/go.mod devtrack-bin/go.sum ./
 RUN go mod download
 
 # Copy Go source code
-COPY devtrack/ ./
+COPY devtrack-bin/ ./
 
 # Build the binary
 RUN CGO_ENABLED=1 go build -ldflags="-w -s" -o devtrack-cli .

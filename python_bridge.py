@@ -11,7 +11,6 @@ import sys
 import os
 import time
 import logging
-from datetime import datetime
 from pathlib import Path
 
 # Load environment variables from .env file
@@ -44,7 +43,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
 from backend.ipc_client import (
     IPCClient, IPCMessage, MessageType,
     create_ack_message, create_task_update_message,
-    create_response_message, create_error_message
+    create_response_message
 )
 
 # Import NLP parser (will be None if spaCy not installed)
@@ -57,6 +56,15 @@ except (ImportError, RuntimeError) as e:
     nlp_available = False
     NLPTaskParser = None
     parse_task = None
+
+# Import Git Diff Analyzer
+try:
+    from backend.git_diff_analyzer import GitDiffAnalyzer
+    git_analyzer_available = True
+except ImportError as e:
+    logger.warning(f"Git diff analyzer not available: {e}")
+    git_analyzer_available = False
+    GitDiffAnalyzer = None
 
 
 class DevTrackBridge:
@@ -75,6 +83,15 @@ class DevTrackBridge:
                 logger.info("✓ NLP parser initialized")
             except Exception as e:
                 logger.warning(f"Could not initialize NLP parser: {e}")
+        
+        # Initialize Git Diff Analyzer if available
+        self.git_analyzer = None
+        if git_analyzer_available:
+            try:
+                self.git_analyzer = GitDiffAnalyzer()
+                logger.info("✓ Git diff analyzer initialized")
+            except Exception as e:
+                logger.warning(f"Could not initialize git analyzer: {e}")
     
     def handle_commit_trigger(self, msg: IPCMessage):
         """Handle commit trigger from Go daemon"""
@@ -106,6 +123,42 @@ class DevTrackBridge:
         
         # Parse commit message with NLP if available
         commit_msg = data.get('commit_message', '')
+        repo_path = data.get('repo_path', '')
+        commit_hash = data.get('commit_hash', '')
+        
+        # Check if we should use git diff analysis (no project management system)
+        use_diff_analysis = False
+        if self.git_analyzer and self.git_analyzer.is_project_management_connected():
+            logger.info("ℹ️  Project management system connected, using standard parsing")
+        elif self.git_analyzer:
+            logger.info("ℹ️  No project management system detected, will analyze git diff")
+            use_diff_analysis = True
+        
+        # If using diff analysis, get AI summary
+        ai_summary = None
+        if use_diff_analysis and repo_path and commit_hash:
+            try:
+                logger.info("🔍 Analyzing commit changes with AI...")
+                analysis = self.git_analyzer.process_commit(
+                    repo_path=repo_path,
+                    commit_hash=commit_hash,
+                    commit_message=commit_msg,
+                    files_changed=files or []
+                )
+                
+                logger.info(f"   Type: {analysis.get('type', 'unknown')}")
+                logger.info(f"   Impact: {analysis.get('impact', 'unknown')}")
+                logger.info(f"   Summary: {analysis.get('summary', '')[:80]}...")
+                
+                ai_summary = analysis
+                
+                # Use AI-generated summary as description
+                commit_msg = analysis.get('summary', commit_msg)
+                
+            except Exception as e:
+                logger.error(f"Error analyzing diff: {e}")
+                use_diff_analysis = False
+        
         if self.nlp_parser and commit_msg:
             logger.info("📝 Parsing commit message with NLP...")
             try:
@@ -116,11 +169,17 @@ class DevTrackBridge:
                 logger.info(f"   Status:  {parsed.status}")
                 logger.info(f"   Confidence: {parsed.confidence:.2f}")
                 
+                # Build description
+                description = parsed.description or commit_msg
+                if ai_summary and use_diff_analysis:
+                    # Enhance with AI analysis
+                    description = f"[{ai_summary.get('type', 'update')}] {description}"
+                
                 # Send task update with parsed data
                 task_update = create_task_update_message(
                     project=parsed.project or "automation_tools",
                     ticket_id=parsed.ticket_id or "",
-                    description=parsed.description or commit_msg,
+                    description=description,
                     status=parsed.status or "in_progress",
                     time_spent=parsed.time_spent or "",
                     synced=False
@@ -130,35 +189,31 @@ class DevTrackBridge:
             except Exception as e:
                 logger.error(f"Error parsing commit message: {e}")
         else:
-            # Fallback: send basic task update
-            logger.info("ℹ️  NLP parser not available, sending basic update")
-        
-        # TODO: Phase 3 - Use Ollama to enhance task descriptions
-        # TODO: Phase 4 - Update Azure DevOps/GitHub with task status
-        # TODO: Phase 5 - Log to SQLite database
-        
-        logger.info("")
-        logger.info("📝 Next steps (to be implemented):")
-        if not self.nlp_parser:
-            logger.info("   1. Install spaCy: pip install spacy")
-            logger.info("   2. Download model: python -m spacy download en_core_web_sm")
-        logger.info("   3. Use Ollama to enhance descriptions (Ollama only)")
-        logger.info("   4. Match to existing tasks (semantic matching)")
-        logger.info("   5. Update Azure DevOps/GitHub")
-        logger.info("")
-        
-        # Simulate a task update response (for demonstration)
-        # In production, this would be the result of NLP parsing and task matching
-        if not self.nlp_parser:
+            # Fallback: send basic task update (with AI summary if available)
+            if use_diff_analysis and ai_summary:
+                logger.info("ℹ️  NLP parser not available, using AI-generated summary")
+                description = f"[{ai_summary.get('type', 'update')}] {ai_summary.get('summary', commit_msg)}"
+            else:
+                logger.info("ℹ️  NLP parser not available, sending basic update")
+                description = commit_msg
+            
             task_update = create_task_update_message(
                 project="automation_tools",
-                ticket_id="",  # Would be extracted from commit message
-                description=data.get('commit_message', ''),
+                ticket_id="",
+                description=description,
                 status="in_progress",
                 time_spent="",
                 synced=False
             )
             self.ipc_client.send_message(task_update)
+        
+        logger.info("")
+        logger.info("📝 Commit processing complete")
+        if use_diff_analysis and ai_summary:
+            logger.info(f"   ✓ AI-enhanced summary generated")
+        if self.nlp_parser:
+            logger.info(f"   ✓ NLP parsing completed")
+        logger.info("")
     
     def handle_timer_trigger(self, msg: IPCMessage):
         """Handle timer trigger from Go daemon"""

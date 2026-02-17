@@ -9,7 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/common-nighthawk/go-figure"
+	// "github.com/common-nighthawk/go-figure"
 )
 
 type model struct {
@@ -152,9 +152,9 @@ func (m model) View() string {
 	}
 
 	var s strings.Builder
-	myFigure := figure.NewFigure("AI Task Manager", "", true)
-	s.WriteString(myFigure.String())
-	s.WriteString("\n")
+	// myFigure := figure.NewFigure("AI Task Manager", "", true)
+	// s.WriteString(myFigure.String())
+	// s.WriteString("\n")
 
 	for i, choice := range m.choices {
 		cursor := " "

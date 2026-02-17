@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -119,8 +120,6 @@ func (cli *CLI) Execute() error {
 
 // handleStart starts the daemon
 func (cli *CLI) handleStart() error {
-	fmt.Println("🚀 Starting DevTrack daemon...")
-
 	if cli.daemon.IsRunning() {
 		pid, _ := cli.daemon.readPID()
 		fmt.Printf("❌ Daemon is already running (PID: %d)\n", pid)
@@ -129,11 +128,54 @@ func (cli *CLI) handleStart() error {
 		return nil
 	}
 
-	// Start daemon (will block, but wrapper runs this detached)
-	if err := cli.daemon.Start(); err != nil {
-		fmt.Printf("❌ Failed to start daemon: %v\n", err)
-		return err
+	// Check if we're already daemonized (child process)
+	if os.Getenv("DEVTRACK_DAEMON") == "1" {
+		// We are the daemon process - run it
+		if err := cli.daemon.Start(); err != nil {
+			fmt.Printf("❌ Failed to start daemon: %v\n", err)
+			return err
+		}
+		return nil
 	}
+
+	// Parent process - fork to background
+	fmt.Println("🚀 Starting DevTrack daemon...")
+	
+	// Get current executable path
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get executable path: %w", err)
+	}
+
+	// Start ourselves as a background daemon
+	cmd := exec.Command(exe, "start")
+	cmd.Env = append(os.Environ(), "DEVTRACK_DAEMON=1")
+	
+	// Redirect output to log file
+	logPath := filepath.Join(GetDevTrackDir(), GetLogFileName())
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open log file: %w", err)
+	}
+	defer logFile.Close()
+	
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	
+	// Detach from parent
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid: true,
+	}
+	
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start daemon process: %w", err)
+	}
+
+	// Parent exits immediately
+	fmt.Println("✓ Daemon started successfully")
+	fmt.Printf("   PID: %d\n", cmd.Process.Pid)
+	fmt.Printf("   Log: %s\n", logPath)
+	fmt.Println("\nUse 'devtrack-cli status' to check status")
 
 	return nil
 }

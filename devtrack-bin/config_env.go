@@ -77,7 +77,7 @@ func LoadEnvConfig() (*EnvConfig, error) {
 		filepath.Join(homeDir, ".config", "devtrack", ".env"),              // XDG config
 		filepath.Join(homeDir, ".devtrack", ".env"),                        // Home config
 		filepath.Join(homeDir, "Documents", "GitHub", "automation_tools", ".env"), // Project dir
-		"../.env",                                                          // Relative (when run from devtrack/)
+		"../.env",                                                          // Relative (when run from devtrack-bin/)
 		".env",                                                             // Current dir
 	}
 	

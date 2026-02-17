@@ -23,6 +23,8 @@ DevTrack combines background process automation with AI intelligence to:
 
 ## Installation Options
 
+> **📘 New to local setup?** See the complete [Local Setup Guide](LOCAL_SETUP.md) for step-by-step instructions from scratch.
+
 ### Option 1: Local/Manual Installation (Recommended for Development)
 
 Run DevTrack natively on your system without Docker for faster iteration and easier debugging.

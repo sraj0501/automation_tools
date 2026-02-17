@@ -22,7 +22,11 @@ func main() {
 		// Handle daemon commands
 		if cmd == "start" || cmd == "stop" || cmd == "restart" ||
 			cmd == "status" || cmd == "pause" || cmd == "resume" ||
-			cmd == "logs" || cmd == "version" || cmd == "help" {
+			cmd == "logs" || cmd == "version" || cmd == "help" ||
+			cmd == "db-stats" || cmd == "enable-learning" || cmd == "show-profile" ||
+			cmd == "test-response" || cmd == "revoke-consent" || cmd == "learning-status" ||
+			cmd == "preview-report" || cmd == "send-report" || cmd == "save-report" ||
+			cmd == "force-trigger" || cmd == "send-summary" || cmd == "skip-next" {
 			cli, err := NewCLI()
 			if err != nil {
 				fmt.Printf("Error initializing CLI: %v\n", err)
