@@ -149,7 +149,19 @@ if [ ! -d "$DEVTRACK_DIR" ]; then
 fi
 echo "✓ DevTrack home directory exists"
 
-# Check 9: Verify repository path exists
+# Check 9: Install DevTrack Git wrapper
+if [ -f "$WORK_DIR/devtrack-git-wrapper.sh" ]; then
+    echo "Installing DevTrack Git wrapper..."
+    mkdir -p "$HOME/.local/bin"
+    cp "$WORK_DIR/devtrack-git-wrapper.sh" "$HOME/.local/bin/devtrack"
+    chmod +x "$HOME/.local/bin/devtrack"
+    echo "✓ Git wrapper installed at ~/.local/bin/devtrack"
+    echo "  Use: devtrack git commit -m 'message' for AI-enhanced commits"
+else
+    echo "⚠️  Warning: devtrack-git-wrapper.sh not found"
+fi
+
+# Check 10: Verify repository path exists
 if [ ! -d "$REPO_PATH" ]; then
     echo "⚠️  Warning: Repository path does not exist: $REPO_PATH"
     echo "   The daemon will monitor this path when it's created."

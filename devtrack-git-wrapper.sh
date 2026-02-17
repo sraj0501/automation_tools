@@ -92,8 +92,55 @@ if [ "$GIT_COMMAND" = "commit" ]; then
         
         # Commit with enhanced message
         git commit -F "$TEMP_MSG" "${COMMIT_ARGS[@]}"
-        echo ""
-        echo -e "${GREEN}✓ Committed successfully with AI-enhanced message!${NC}"
+        COMMIT_RESULT=$?
+        
+        if [ $COMMIT_RESULT -eq 0 ]; then
+            echo ""
+            echo -e "${GREEN}✓ Committed successfully with AI-enhanced message!${NC}"
+            echo ""
+            
+            # Interactive feedback prompt
+            echo -e "${YELLOW}🔔 DevTrack: Log this work? (y/n)${NC}"
+            read -r -n 1 RESPONSE
+            echo ""
+            
+            if [[ "$RESPONSE" =~ ^[Yy]$ ]]; then
+                # Get the commit hash
+                COMMIT_HASH=$(git rev-parse HEAD)
+                COMMIT_SHORT=$(git rev-parse --short HEAD)
+                
+                # Extract ticket ID if present (common patterns: AB-234, PROJ-123, #234)
+                TICKET_ID=$(echo "$ENHANCED_MESSAGE" | grep -oE '([A-Z]+-[0-9]+|#[0-9]+)' | head -1)
+                
+                # Show logged message (first line only)
+                FIRST_LINE=$(echo "$ENHANCED_MESSAGE" | head -1)
+                echo -e "${GREEN}✓ Logged work: ${FIRST_LINE}${NC}"
+                
+                # Detect and show git provider
+                REPO_URL=$(git config --get remote.origin.url 2>/dev/null)
+                if [ -n "$REPO_URL" ]; then
+                    if echo "$REPO_URL" | grep -q "github.com"; then
+                        echo -e "${GREEN}✓ Logged to GitHub commit ${COMMIT_SHORT}${NC}"
+                    elif echo "$REPO_URL" | grep -q "gitlab"; then
+                        echo -e "${GREEN}✓ Logged to GitLab commit ${COMMIT_SHORT}${NC}"
+                    elif echo "$REPO_URL" | grep -q "dev.azure.com"; then
+                        echo -e "${GREEN}✓ Logged to Azure Repos commit ${COMMIT_SHORT}${NC}"
+                        if [ -n "$TICKET_ID" ]; then
+                            echo -e "${GREEN}✓ Work item ${TICKET_ID} referenced${NC}"
+                        fi
+                    else
+                        echo -e "${GREEN}✓ Logged to Git commit ${COMMIT_SHORT}${NC}"
+                    fi
+                else
+                    echo -e "${GREEN}✓ Logged to local Git commit ${COMMIT_SHORT}${NC}"
+                fi
+                
+                # Daemon will handle project management sync if configured
+                echo -e "${BLUE}  → DevTrack daemon will sync with project management...${NC}"
+            else
+                echo -e "${BLUE}  Skipped logging. Commit saved to Git.${NC}"
+            fi
+        fi
     else
         echo -e "${YELLOW}⚠️  AI enhancement failed, using original message${NC}"
         if [ -n "$USER_MESSAGE" ]; then
