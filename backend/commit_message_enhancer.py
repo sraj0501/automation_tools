@@ -102,7 +102,7 @@ class CommitMessageEnhancer:
             )
             
             if is_placeholder:
-                prompt = f"""Generate a natural git commit message based on these code changes.
+                prompt = f"""Generate a descriptive git commit message that explains WHAT changed and WHY.
 
 Files Changed ({len(files)}):
 {files_list}
@@ -110,22 +110,30 @@ Files Changed ({len(files)}):
 Diff:
 {diff[:2000]}
 
-Write a commit message that:
-1. Sounds like a developer wrote it naturally
-2. Is concise and specific about what changed
-3. Uses simple language ("Add", "Fix", "Update", "Remove", etc.)
-4. Is under 72 characters for the first line
-5. Does NOT mention AI, automation, or that it's generated
+Write a commit message with this structure:
 
-Examples:
-- "Add user authentication to login page"
-- "Fix undefined variable error in checkout"
-- "Update API endpoint to handle empty responses"
-- "Remove deprecated function calls"
+First line (under 72 chars):
+- What changed (concise, action-oriented)
+- Example: "Add interactive feedback prompt after commit"
 
-Generate ONLY the commit message, nothing else."""
+Second paragraph (2-4 lines):
+- WHY this change was made (the motivation/reasoning)
+- What problem it solves or benefit it provides
+- Be specific about the user impact or developer workflow improvement
+
+Example format:
+\"\"\"Add user authentication to login page
+
+Adds OAuth2 integration to improve security and provide seamless login experience. This change is needed because users were experiencing security issues with password-only authentication.\"\"\"
+
+Another example:
+\"\"\"Add interactive feedback prompt after commit
+
+Displays confirmation and logging details immediately after a successful commit. This helps users verify their work was logged correctly and understand what project management systems were updated.\"\"\"
+
+Generate ONLY the commit message following this format, nothing else."""
             else:
-                prompt = f"""Improve this git commit message based on the actual code changes.
+                prompt = f"""Improve this git commit message to explain both WHAT changed and WHY.
 
 Original Message: {original_message}
 
@@ -135,16 +143,26 @@ Files Changed ({len(files)}):
 Diff:
 {diff[:2000]}
 
-Enhance the commit message to:
-1. Be more specific about what actually changed in the code
-2. Keep it natural and conversational
-3. Stay concise (under 72 characters for first line)
-4. Use simple verbs (Add, Fix, Update, Remove, etc.)
-5. Do NOT mention AI or that it's generated
+Enhance the commit message with this structure:
 
-If the original message is already good and specific, keep it.
+First line (under 72 chars):
+- Keep or improve the original message to be more specific
+- Action-oriented (Add, Fix, Update, Remove, Refactor, etc.)
 
-Generate ONLY the improved commit message, nothing else."""
+Second paragraph (2-4 lines):
+- WHY this change was made (reasoning/motivation)
+- What problem does it solve?
+- What benefit does it provide to users or developers?
+- How does it improve the codebase?
+
+Based on the actual code changes, provide meaningful context that would help someone reviewing a PR understand the reasoning behind this commit.
+
+Example:
+\"\"\"Fix undefined variable error in checkout flow
+
+Resolves a bug where the payment processor would fail when users had empty cart metadata. This change ensures all variables are properly initialized before processing, preventing checkout failures that were affecting 5% of transactions.\"\"\"
+
+Generate ONLY the improved commit message with reasoning, nothing else."""
 
             # Call Ollama
             response = requests.post(
