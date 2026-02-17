@@ -48,7 +48,7 @@ confirm_uninstall() {
     echo "  • DevTrack Docker containers and images"
     echo "  • All DevTrack data and configuration"
     echo "  • DevTrack CLI wrapper from $INSTALL_DIR"
-    echo "  • Docker volumes (database, config, Ollama models)"
+    echo "  • Docker volumes (database and config)"
     echo ""
     echo -e "${RED}This action CANNOT be undone!${NC}"
     echo ""
@@ -82,7 +82,7 @@ stop_containers() {
         print_warning "docker-compose.yml not found, trying manual cleanup"
         
         # Try to stop containers manually
-        for container in devtrack-app devtrack-ollama; do
+        for container in devtrack-app; do
             if docker ps -a --format '{{.Names}}' | grep -q "^${container}$"; then
                 echo -e "${BLUE}Stopping $container...${NC}"
                 docker stop "$container" 2>/dev/null || true
@@ -107,19 +107,6 @@ remove_images() {
         print_info "DevTrack image not found (already removed)"
     fi
     
-    echo ""
-    echo -ne "${CYAN}Remove Ollama image as well? (yes/no): ${NC}"
-    read -r remove_ollama
-    
-    if [[ "$remove_ollama" =~ ^[Yy]([Ee][Ss])?$ ]]; then
-        echo -e "${BLUE}🗑️  Removing Ollama image...${NC}"
-        if docker image inspect ollama/ollama:latest >/dev/null 2>&1; then
-            docker rmi ollama/ollama:latest 2>/dev/null || true
-            print_success "Ollama image removed"
-        else
-            print_info "Ollama image not found (already removed)"
-        fi
-    fi
 }
 
 # Remove Docker volumes
@@ -131,13 +118,12 @@ remove_volumes() {
     echo -e "${RED}WARNING: This will delete all DevTrack data, including:${NC}"
     echo "  • Database and task history"
     echo "  • Configuration files"
-    echo "  • Ollama models (can be large)"
     echo ""
     echo -ne "${CYAN}Delete all data volumes? (yes/no): ${NC}"
     read -r remove_data
     
     if [[ "$remove_data" =~ ^[Yy]([Ee][Ss])?$ ]]; then
-        for volume in devtrack-data devtrack-config ollama-data; do
+        for volume in devtrack-data devtrack-config; do
             if docker volume inspect "$volume" >/dev/null 2>&1; then
                 echo -e "${BLUE}Removing volume $volume...${NC}"
                 docker volume rm "$volume" 2>/dev/null || true

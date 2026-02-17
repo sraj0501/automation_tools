@@ -41,7 +41,7 @@ Write-Host "WARNING: This will remove:" -ForegroundColor Yellow
 Write-Host "  • DevTrack Docker containers and images"
 Write-Host "  • All DevTrack data and configuration"
 Write-Host "  • DevTrack CLI wrapper from $INSTALL_DIR"
-Write-Host "  • Docker volumes (database, config, Ollama models)"
+Write-Host "  • Docker volumes (database and config)"
 Write-Host ""
 Write-Host "This action CANNOT be undone!" -ForegroundColor Red
 Write-Host ""
@@ -82,7 +82,7 @@ if (Test-Path $composeFile) {
     Write-Warning "docker-compose.yml not found, trying manual cleanup"
     
     # Try to stop containers manually
-    $containers = @("devtrack-app", "devtrack-ollama")
+    $containers = @("devtrack-app")
     foreach ($container in $containers) {
         $exists = docker ps -a --format "{{.Names}}" | Select-String -Pattern "^$container$"
         if ($exists) {
@@ -108,20 +108,6 @@ try {
     Write-Info "DevTrack image not found (already removed)"
 }
 
-Write-Host ""
-$removeOllama = Read-Host "Remove Ollama image as well? (yes/no)"
-
-if ($removeOllama -match '^[Yy]') {
-    Write-Host "🗑️  Removing Ollama image..." -ForegroundColor Blue
-    try {
-        docker image inspect ollama/ollama:latest 2>$null | Out-Null
-        docker rmi ollama/ollama:latest 2>$null | Out-Null
-        Write-Success "Ollama image removed"
-    } catch {
-        Write-Info "Ollama image not found (already removed)"
-    }
-}
-
 # Remove Docker volumes
 Write-Host ""
 Write-Host "━━━ Removing DevTrack Data ━━━" -ForegroundColor Magenta
@@ -130,12 +116,11 @@ Write-Host ""
 Write-Host "WARNING: This will delete all DevTrack data, including:" -ForegroundColor Red
 Write-Host "  • Database and task history"
 Write-Host "  • Configuration files"
-Write-Host "  • Ollama models (can be large)"
 Write-Host ""
 $removeData = Read-Host "Delete all data volumes? (yes/no)"
 
 if ($removeData -match '^[Yy]') {
-    $volumes = @("devtrack-data", "devtrack-config", "ollama-data")
+    $volumes = @("devtrack-data", "devtrack-config")
     foreach ($volume in $volumes) {
         try {
             docker volume inspect $volume 2>$null | Out-Null

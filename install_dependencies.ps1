@@ -86,6 +86,32 @@ if (-not (Test-Path $WorkspacePath)) {
 }
 Write-Success "Workspace ready: $WorkspacePath"
 
+# Check host Ollama availability
+Write-Host ""
+Write-Host "🔍 Checking host Ollama service..." -ForegroundColor Blue
+try {
+    Get-Command ollama -ErrorAction Stop | Out-Null
+    Write-Success "Ollama CLI detected"
+} catch {
+    Write-Warning "Ollama CLI not found on host. Download it from https://ollama.com/download"
+}
+
+try {
+    Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
+    $client = [System.Net.Http.HttpClient]::new()
+    $client.Timeout = [TimeSpan]::FromSeconds(3)
+    $response = $client.GetAsync('http://127.0.0.1:11434/api/version').GetAwaiter().GetResult()
+    if ($response.IsSuccessStatusCode) {
+        Write-Success "Ollama service responding on localhost:11434"
+    } else {
+        Write-Warning "Ollama service returned status $($response.StatusCode). Ensure it's running with 'ollama serve' or update OLLAMA_HOST in .env"
+    }
+} catch {
+    Write-Warning "Unable to reach Ollama on localhost:11434. Start it with 'ollama serve' or set OLLAMA_HOST in .env"
+} finally {
+    if ($client) { $client.Dispose() }
+}
+
 # Build Docker images
 Write-Host ""
 Write-Host "━━━ Building DevTrack Docker Images ━━━" -ForegroundColor Magenta
@@ -103,16 +129,6 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 Write-Success "DevTrack image built successfully"
-
-# Pull Ollama
-Write-Host ""
-Write-Host "📦 Pulling Ollama image..." -ForegroundColor Blue
-docker pull ollama/ollama:latest
-if ($LASTEXITCODE -eq 0) {
-    Write-Success "Ollama image pulled successfully"
-} else {
-    Write-Warning "Failed to pull Ollama image"
-}
 
 # Deploy wrapper
 Write-Host ""
@@ -138,8 +154,8 @@ Write-Host ""
 Write-Host "━━━ Starting DevTrack Services ━━━" -ForegroundColor Magenta
 Write-Host ""
 
-$env:WORKSPACE_PATH = $WorkspacePath
-docker compose up -d
+$env:DEVTRACK_WORKSPACE = $WorkspacePath
+docker compose up -d devtrack
 if ($LASTEXITCODE -eq 0) {
     Write-Success "DevTrack services started"
 } else {
@@ -151,45 +167,8 @@ Start-Sleep -Seconds 3
 
 # Check services
 $containers = docker ps --format "{{.Names}}"
-if ($containers -contains "devtrack-ollama") {
-    Write-Success "Ollama service is running"
-}
 if ($containers -contains "devtrack-app") {
     Write-Success "DevTrack service is running"
-}
-
-# Ollama models
-Write-Host ""
-Write-Host "━━━ Ollama Model Setup ━━━" -ForegroundColor Magenta
-Write-Host ""
-
-$response = Read-Host "Would you like to download an Ollama model now? (yes/no)"
-if ($response -match '^[Yy]') {
-    Write-Host ""
-    Write-Host "Which model would you like to download?" -ForegroundColor Cyan
-    Write-Host "   1) llama3.1 (recommended, ~4GB)"
-    Write-Host "   2) llama2 (~4GB)"
-    Write-Host "   3) mistral (~4GB)"
-    Write-Host "   4) phi3 (smaller, ~2GB)"
-    $choice = Read-Host "Enter choice (1-4)"
-    
-    $modelName = switch ($choice) {
-        "1" { "llama3.1" }
-        "2" { "llama2" }
-        "3" { "mistral" }
-        "4" { "phi3" }
-        default { "" }
-    }
-    
-    if ($modelName) {
-        Write-Host ""
-        Write-Host "📥 Downloading $modelName model..." -ForegroundColor Blue
-        Write-Host "   This may take several minutes..." -ForegroundColor Yellow
-        docker exec devtrack-ollama ollama pull $modelName
-        if ($LASTEXITCODE -eq 0) {
-            Write-Success "$modelName model downloaded"
-        }
-    }
 }
 
 Pop-Location

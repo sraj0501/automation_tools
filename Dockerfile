@@ -1,9 +1,10 @@
+# syntax=docker/dockerfile:1.6
 # Multi-stage Dockerfile for DevTrack
 # Stage 1: Build Go application
 FROM golang:1.24-alpine AS go-builder
 
-# Install build dependencies
-RUN apk add --no-cache git
+# Install build dependencies (build-base provides gcc, musl, make)
+RUN apk add --no-cache git build-base
 
 WORKDIR /build
 
@@ -17,16 +18,41 @@ COPY devtrack/ ./
 # Build the binary
 RUN CGO_ENABLED=1 go build -ldflags="-w -s" -o devtrack-cli .
 
-# Stage 2: Runtime environment
-FROM python:3.11-slim
+# Stage 2: Base Python environment with cached apt/uv layers
+FROM python:3.11-slim AS python-base
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    curl \
-    git \
-    sqlite3 \
-    ca-certificates \
+ENV PATH="/root/.local/bin:${PATH}"
+
+RUN --mount=type=cache,target=/var/lib/apt \
+    --mount=type=cache,target=/var/cache/apt \
+    apt-get update && apt-get install -y --no-install-recommends \
+        curl \
+        git \
+        sqlite3 \
+        ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Stage 3: Install Python dependencies once
+FROM python-base AS python-deps
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system --no-cache-dir \
+        spacy \
+        en-core-web-sm==3.7.1 \
+        dateparser \
+        sentence-transformers \
+        scikit-learn \
+        fuzzywuzzy \
+        python-Levenshtein \
+        ollama
+
+# Stage 4: Runtime environment
+FROM python-base AS runtime
+
+# Copy Python deps from cached stage
+COPY --from=python-deps /usr/local /usr/local
 
 # Create app user
 RUN useradd -m -u 1000 devtrack && \
@@ -40,23 +66,10 @@ WORKDIR /app
 COPY --from=go-builder /build/devtrack-cli /usr/local/bin/devtrack-cli
 RUN chmod +x /usr/local/bin/devtrack-cli
 
-# Copy Python backend
+# Copy Python backend and entrypoints
 COPY backend/ /app/backend/
 COPY main.py python_bridge.py /app/
 COPY pyproject.toml /app/
-
-# Install Python dependencies
-RUN pip install --no-cache-dir --user \
-    spacy \
-    dateparser \
-    sentence-transformers \
-    scikit-learn \
-    fuzzywuzzy \
-    python-Levenshtein \
-    ollama
-
-# Download spaCy model
-RUN python3 -m spacy download en_core_web_sm
 
 # Set up environment
 ENV PATH="/home/devtrack/.local/bin:${PATH}"

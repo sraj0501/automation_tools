@@ -112,6 +112,33 @@ check_workspace() {
     print_success "Workspace ready: $WORKSPACE_PATH"
 }
 
+# Ensure host-side Ollama is installed and reachable
+check_ollama() {
+    echo ""
+    echo -e "${BLUE}🔍 Checking host Ollama service...${NC}"
+
+    if ! command -v ollama >/dev/null 2>&1; then
+        print_warning "Ollama CLI not found on host"
+        echo ""
+        echo "   Download it from:"
+        echo "   ${CYAN}https://ollama.com/download${NC}"
+    else
+        print_success "Ollama CLI detected"
+    fi
+
+    if command -v curl >/dev/null 2>&1; then
+        if curl -fsS "http://127.0.0.1:11434/api/version" >/dev/null 2>&1; then
+            print_success "Ollama service responding on localhost:11434"
+        else
+            print_warning "Ollama service not reachable on localhost:11434"
+            echo "   Start it with: ${CYAN}ollama serve${NC}"
+            echo "   or set ${CYAN}OLLAMA_HOST${NC} in .env to match your endpoint"
+        fi
+    else
+        print_info "curl not available; skipping Ollama reachability check"
+    fi
+}
+
 # Build Docker images
 build_images() {
     echo ""
@@ -129,20 +156,6 @@ build_images() {
     else
         print_error "Failed to build DevTrack image"
         exit 1
-    fi
-}
-
-# Pull Ollama image
-pull_ollama() {
-    echo ""
-    echo -e "${BLUE}📦 Pulling Ollama image...${NC}"
-    
-    if docker pull ollama/ollama:latest; then
-        print_success "Ollama image pulled successfully"
-    else
-        print_warning "Failed to pull Ollama image"
-        echo "   You can try pulling it manually later with:"
-        echo "   docker pull ollama/ollama:latest"
     fi
 }
 
@@ -205,9 +218,9 @@ start_services() {
     
     echo -e "${BLUE}🚀 Starting containers...${NC}"
     
-    export WORKSPACE_PATH
+    export DEVTRACK_WORKSPACE="$WORKSPACE_PATH"
     
-    if docker compose up -d; then
+    if docker compose up -d devtrack; then
         print_success "DevTrack services started"
     else
         print_error "Failed to start services"
@@ -219,68 +232,11 @@ start_services() {
     echo -e "${BLUE}⏳ Waiting for services to be ready...${NC}"
     sleep 3
     
-    # Check Ollama
-    if docker ps --format '{{.Names}}' | grep -q "devtrack-ollama"; then
-        print_success "Ollama service is running"
-    else
-        print_warning "Ollama service may not be running"
-    fi
-    
     # Check DevTrack
     if docker ps --format '{{.Names}}' | grep -q "devtrack-app"; then
         print_success "DevTrack service is running"
     else
         print_warning "DevTrack service may not be running"
-    fi
-}
-
-# Download Ollama models
-setup_ollama_models() {
-    echo ""
-    echo -e "${MAGENTA}━━━ Ollama Model Setup ━━━${NC}"
-    echo ""
-    
-    echo -ne "${CYAN}Would you like to download an Ollama model now? (yes/no): ${NC}"
-    read -r DOWNLOAD_MODEL
-    
-    if [[ "$DOWNLOAD_MODEL" =~ ^[Yy]([Ee][Ss])?$ ]]; then
-        echo ""
-        echo -e "${CYAN}Which model would you like to download?${NC}"
-        echo "   1) llama3.1 (recommended, ~4GB)"
-        echo "   2) llama2 (~4GB)"
-        echo "   3) mistral (~4GB)"
-        echo "   4) phi3 (smaller, ~2GB)"
-        echo -ne "${CYAN}Enter choice (1-4): ${NC}"
-        read -r MODEL_CHOICE
-        
-        MODEL_NAME=""
-        case $MODEL_CHOICE in
-            1) MODEL_NAME="llama3.1" ;;
-            2) MODEL_NAME="llama2" ;;
-            3) MODEL_NAME="mistral" ;;
-            4) MODEL_NAME="phi3" ;;
-            *)
-                print_warning "Invalid choice. Skipping model download."
-                return
-                ;;
-        esac
-        
-        echo ""
-        echo -e "${BLUE}📥 Downloading $MODEL_NAME model...${NC}"
-        echo -e "${YELLOW}   This may take several minutes...${NC}"
-        
-        if docker exec devtrack-ollama ollama pull "$MODEL_NAME"; then
-            print_success "$MODEL_NAME model downloaded"
-        else
-            print_warning "Failed to download model"
-            echo "   You can download it later with:"
-            echo "   docker exec devtrack-ollama ollama pull $MODEL_NAME"
-        fi
-    else
-        echo ""
-        print_info "Skipping model download."
-        echo "   You can download a model later with:"
-        echo "   docker exec devtrack-ollama ollama pull llama3.1"
     fi
 }
 
@@ -291,10 +247,9 @@ print_header
 echo -e "${GREEN}This installer will:${NC}"
 echo "  • Check Docker and Docker Compose"
 echo "  • Build DevTrack container image"
-echo "  • Pull Ollama image"
 echo "  • Deploy devtrack CLI wrapper"
-echo "  • Start all services"
-echo "  • Optionally download AI models"
+echo "  • Verify host-side Ollama availability"
+echo "  • Start the DevTrack container"
 echo ""
 echo -ne "${CYAN}Press Enter to continue...${NC}"
 read -r
@@ -306,12 +261,11 @@ check_docker
 check_docker_compose
 check_install_dir
 check_workspace
+check_ollama
 
 build_images
-pull_ollama
 deploy_wrapper
 start_services
-setup_ollama_models
 
 echo ""
 echo -e "${CYAN}╔══════════════════════════════════════════════════════════╗${NC}"

@@ -21,6 +21,32 @@ DevTrack combines background process automation with AI intelligence to:
 - Generate professional reports for managers and stakeholders
 - Track time and productivity without manual timesheet entry
 
+## Containerized Setup (Cross-Platform)
+
+This workflow runs the full stack on macOS, Windows (PowerShell, WSL, or Git Bash), and Linux with the same commands.
+
+1. Copy `.env.example` to `.env` and set `DEVTRACK_WORKSPACE` to the host path you want mounted at `/workspace`. Relative paths (default `.`) resolve to the repository root and work on every OS. Use Windows-style paths (e.g., `C:\Users\you\Projects\automation_tools`) when running from PowerShell.
+2. Enable BuildKit for faster incremental builds:
+
+     ```bash
+     DOCKER_BUILDKIT=1 docker buildx build --load .
+     ```
+
+3. Install and run [Ollama](https://ollama.com/download) locally on your host machine. Keep it listening on `11434` (or set `OLLAMA_HOST` in `.env` to match your custom port/URL). The container reaches the host via `host.docker.internal`, which is mapped automatically for Linux, macOS, and Windows.
+
+     ```bash
+     # host shell
+     ollama serve
+     ```
+
+4. Launch the DevTrack container (it will call the host's Ollama endpoint):
+
+     ```bash
+     docker compose up devtrack
+     ```
+
+Bind mounts now rely on the portable `DEVTRACK_WORKSPACE` variable, so no OS-specific path rewriting or WSL hacks are required.
+
 ## System Architecture
 
 \`\`\`
