@@ -102,67 +102,61 @@ class CommitMessageEnhancer:
             )
             
             if is_placeholder:
-                prompt = f"""Generate a descriptive git commit message that explains WHAT changed and WHY.
+                prompt = f"""You are writing a git commit message. Analyze the code changes and write a clear, professional commit message.
 
 Files Changed ({len(files)}):
 {files_list}
 
-Diff:
+Code Changes:
 {diff[:2000]}
 
-Write a commit message with this structure:
+REQUIREMENTS:
+1. First line: Brief summary of WHAT changed (under 72 characters)
+2. Blank line
+3. Body (2-4 sentences): Explain WHY this change was made and what problem it solves
 
-First line (under 72 chars):
-- What changed (concise, action-oriented)
-- Example: "Add interactive feedback prompt after commit"
+GOOD EXAMPLE:
+Add interactive feedback prompt after commit
 
-Second paragraph (2-4 lines):
-- WHY this change was made (the motivation/reasoning)
-- What problem it solves or benefit it provides
-- Be specific about the user impact or developer workflow improvement
+Provides immediate confirmation when commits are created, showing users
+what was logged and which systems were updated. This improves user
+confidence and helps track work more effectively.
 
-Example format:
-\"\"\"Add user authentication to login page
+BAD EXAMPLE (DO NOT DO THIS):
+Update files
 
-Adds OAuth2 integration to improve security and provide seamless login experience. This change is needed because users were experiencing security issues with password-only authentication.\"\"\"
+Changed some code.
 
-Another example:
-\"\"\"Add interactive feedback prompt after commit
-
-Displays confirmation and logging details immediately after a successful commit. This helps users verify their work was logged correctly and understand what project management systems were updated.\"\"\"
-
-Generate ONLY the commit message following this format, nothing else."""
+Write ONLY the commit message. DO NOT include options, explanations, meta-commentary, or anything except the commit message itself."""
             else:
-                prompt = f"""Improve this git commit message to explain both WHAT changed and WHY.
+                prompt = f"""You are improving a git commit message. Analyze the code changes and rewrite the message to be more informative.
 
 Original Message: {original_message}
 
 Files Changed ({len(files)}):
 {files_list}
 
-Diff:
+Code Changes:
 {diff[:2000]}
 
-Enhance the commit message with this structure:
+REQUIREMENTS:
+1. First line: Improved summary of WHAT changed (under 72 characters)
+2. Blank line  
+3. Body (2-4 sentences): Explain WHY this change was made and its benefits
 
-First line (under 72 chars):
-- Keep or improve the original message to be more specific
-- Action-oriented (Add, Fix, Update, Remove, Refactor, etc.)
+GOOD EXAMPLE:
+Fix authentication timeout in user sessions
 
-Second paragraph (2-4 lines):
-- WHY this change was made (reasoning/motivation)
-- What problem does it solve?
-- What benefit does it provide to users or developers?
-- How does it improve the codebase?
+Resolves issue where users were logged out unexpectedly after 5 minutes
+of inactivity. Updates session timeout to 30 minutes and adds proper
+refresh logic to improve user experience.
 
-Based on the actual code changes, provide meaningful context that would help someone reviewing a PR understand the reasoning behind this commit.
+BAD EXAMPLE (DO NOT DO THIS):
+Fixed bug
 
-Example:
-\"\"\"Fix undefined variable error in checkout flow
+Made some changes to auth.
 
-Resolves a bug where the payment processor would fail when users had empty cart metadata. This change ensures all variables are properly initialized before processing, preventing checkout failures that were affecting 5% of transactions.\"\"\"
-
-Generate ONLY the improved commit message with reasoning, nothing else."""
+Write ONLY the improved commit message. DO NOT include options, explanations, meta-commentary, or anything except the commit message itself."""
 
             # Call Ollama
             response = requests.post(
@@ -172,8 +166,8 @@ Generate ONLY the improved commit message with reasoning, nothing else."""
                     "prompt": prompt,
                     "stream": False,
                     "options": {
-                        "temperature": 0.3,
-                        "num_predict": 150
+                        "temperature": 0.2,  # Lower temperature for more focused output
+                        "num_predict": 200   # Allow space for body paragraphs
                     }
                 },
                 timeout=30
@@ -186,8 +180,22 @@ Generate ONLY the improved commit message with reasoning, nothing else."""
             result = response.json()
             enhanced = result.get("response", "").strip()
             
-            # Clean up response - remove any markdown formatting
+            # Clean up response - remove markdown, meta-commentary, and formatting
             enhanced = enhanced.replace("```", "").strip()
+            
+            # Remove common meta-commentary patterns
+            meta_patterns = [
+                "Here's", "here's", "Okay,", "Option ", "OPTION ",
+                "I've aimed", "Choose the", "This is", "Let me"
+            ]
+            for pattern in meta_patterns:
+                if enhanced.startswith(pattern):
+                    # Find first newline and take everything after
+                    lines = enhanced.split('\n')
+                    for i, line in enumerate(lines):
+                        if not any(p in line for p in meta_patterns):
+                            enhanced = '\n'.join(lines[i:])
+                            break
             
             # If AI response is empty or looks wrong, return original
             if not enhanced or len(enhanced) < 5 or enhanced.startswith("I "):
