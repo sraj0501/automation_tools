@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strconv"
@@ -14,13 +15,14 @@ import (
 
 // Daemon manages the background process lifecycle
 type Daemon struct {
-	monitor   *IntegratedMonitor
-	config    *Config
-	pidFile   string
-	logFile   string
-	ctx       context.Context
-	cancel    context.CancelFunc
-	isRunning bool
+	monitor      *IntegratedMonitor
+	config       *Config
+	pidFile      string
+	logFile      string
+	ctx          context.Context
+	cancel       context.CancelFunc
+	isRunning    bool
+	pythonBridge *exec.Cmd
 }
 
 // DaemonStatus represents the current daemon state
@@ -106,6 +108,12 @@ func (d *Daemon) Start() error {
 		return fmt.Errorf("failed to start monitoring: %w", err)
 	}
 
+	// Start Python bridge AFTER IPC server is ready
+	if err := d.startPythonBridge(); err != nil {
+		log.Printf("Warning: Failed to start Python bridge: %v", err)
+		log.Println("IPC functionality will be limited")
+	}
+
 	d.isRunning = true
 	log.Println("✓ Daemon started successfully")
 
@@ -129,6 +137,14 @@ func (d *Daemon) Stop() error {
 	}
 
 	log.Println("Stopping daemon...")
+
+	// Stop Python bridge
+	if d.pythonBridge != nil {
+		log.Println("Stopping Python bridge...")
+		if err := d.pythonBridge.Process.Kill(); err != nil {
+			log.Printf("Warning: error stopping Python bridge: %v", err)
+		}
+	}
 
 	// Stop monitoring
 	if d.monitor != nil {
@@ -354,6 +370,48 @@ func (d *Daemon) GetLogs(lines int) ([]string, error) {
 	}
 
 	return allLines[len(allLines)-lines:], nil
+}
+
+// startPythonBridge starts the Python bridge process for IPC communication
+func (d *Daemon) startPythonBridge() error {
+	// Find python_bridge.py
+	// In Docker container, it's at /app/python_bridge.py
+	// In dev, it might be in the project root
+	bridgePath := "/app/python_bridge.py"
+	if _, err := os.Stat(bridgePath); os.IsNotExist(err) {
+		// Try project root
+		homeDir, _ := os.UserHomeDir()
+		bridgePath = filepath.Join(homeDir, "git_apps/personal/automation_tools/python_bridge.py")
+		if _, err := os.Stat(bridgePath); os.IsNotExist(err) {
+			return fmt.Errorf("python_bridge.py not found")
+		}
+	}
+
+	// Start Python bridge
+	log.Printf("Starting Python bridge: %s", bridgePath)
+	cmd := exec.Command("python3", bridgePath)
+	
+	// Redirect output to daemon log
+	logFile, err := os.OpenFile(d.logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open log file: %w", err)
+	}
+	
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	
+	// Start the process
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start Python bridge: %w", err)
+	}
+	
+	d.pythonBridge = cmd
+	log.Printf("✓ Python bridge started (PID: %d)", cmd.Process.Pid)
+	
+	// Give it a moment to connect to IPC server
+	time.Sleep(time.Second)
+	
+	return nil
 }
 
 // KillDaemon forcefully kills a running daemon process

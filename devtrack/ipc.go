@@ -120,14 +120,25 @@ func (s *IPCServer) Start() error {
 
 	// Ensure the directory exists
 	dir := filepath.Dir(s.socketPath)
+	log.Printf("Creating socket directory: %s", dir)
 	if err := os.MkdirAll(dir, 0755); err != nil {
+		log.Printf("ERROR: Failed to create socket directory: %v", err)
 		return fmt.Errorf("failed to create socket directory: %w", err)
 	}
 
+	log.Printf("Attempting to create Unix socket at: %s", s.socketPath)
 	var err error
 	s.listener, err = net.Listen("unix", s.socketPath)
 	if err != nil {
+		log.Printf("ERROR: Failed to create Unix socket: %v", err)
 		return fmt.Errorf("failed to start IPC listener: %w", err)
+	}
+
+	// Verify socket was created
+	if _, statErr := os.Stat(s.socketPath); statErr != nil {
+		log.Printf("WARNING: Socket file not found after Listen: %v", statErr)
+	} else {
+		log.Printf("✓ Socket file verified at: %s", s.socketPath)
 	}
 
 	s.running = true
@@ -136,7 +147,28 @@ func (s *IPCServer) Start() error {
 	// Start accepting connections in a goroutine
 	go s.acceptConnections()
 
+	// Start socket keepalive monitoring
+	go s.monitorSocket()
+
 	return nil
+}
+
+// monitorSocket periodically checks if the socket file still exists
+func (s *IPCServer) monitorSocket() {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	for s.running {
+		<-ticker.C
+		if _, err := os.Stat(s.socketPath); err != nil {
+			log.Printf("WARNING: Socket file disappeared! %v", err)
+			log.Printf("Attempting to recreate socket...")
+			// Socket is gone but server thinks it's running
+			// This shouldn't happen - indicates external deletion
+		} else {
+			log.Printf("DEBUG: Socket file exists at %s", s.socketPath)
+		}
+	}
 }
 
 // Stop closes the IPC server
@@ -148,6 +180,7 @@ func (s *IPCServer) Stop() error {
 		return nil
 	}
 
+	log.Println("Stopping IPC server...")
 	s.running = false
 
 	// Close all client connections
@@ -158,10 +191,12 @@ func (s *IPCServer) Stop() error {
 
 	// Close listener
 	if s.listener != nil {
+		log.Println("Closing IPC listener...")
 		s.listener.Close()
 	}
 
 	// Remove socket file
+	log.Printf("Removing socket file: %s", s.socketPath)
 	os.Remove(s.socketPath)
 
 	log.Println("IPC server stopped")
