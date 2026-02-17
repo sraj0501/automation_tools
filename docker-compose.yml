@@ -19,6 +19,10 @@ services:
       - type: bind
         source: ${DEVTRACK_WORKSPACE:-.}
         target: /workspace
+      # Mount home directory to access all git repositories
+      - type: bind
+        source: ${HOME}
+        target: /home/host
     networks:
       - devtrack-network
     extra_hosts:

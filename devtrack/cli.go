@@ -129,7 +129,7 @@ func (cli *CLI) handleStart() error {
 		return nil
 	}
 
-	// Start in foreground for now (will background in production)
+	// Start daemon (will block, but wrapper runs this detached)
 	if err := cli.daemon.Start(); err != nil {
 		fmt.Printf("❌ Failed to start daemon: %v\n", err)
 		return err

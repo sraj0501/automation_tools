@@ -1,10 +1,13 @@
 # syntax=docker/dockerfile:1.6
 # Multi-stage Dockerfile for DevTrack
 # Stage 1: Build Go application
-FROM golang:1.24-alpine AS go-builder
+FROM golang:1.24-bookworm AS go-builder
 
-# Install build dependencies (build-base provides gcc, musl, make)
-RUN apk add --no-cache git build-base
+# Install build dependencies (build-essential provides gcc, libc, make)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git \
+        build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 
@@ -40,7 +43,7 @@ FROM python-base AS python-deps
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --system --no-cache-dir \
         spacy \
-        en-core-web-sm==3.7.1 \
+        en-core-web-sm@https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl \
         dateparser \
         sentence-transformers \
         scikit-learn \

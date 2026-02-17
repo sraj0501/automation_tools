@@ -46,25 +46,97 @@ if ($runningContainers -notcontains $CONTAINER_NAME) {
     }
 }
 
-# Get current directory relative to workspace
+# Get current directory and find git repository root
 $currentDir = Get-Location | Select-Object -ExpandProperty Path
-$workspacePathNormalized = $WORKSPACE_PATH.Replace('\', '/')
+$gitRoot = $currentDir
 
-if ($currentDir.StartsWith($WORKSPACE_PATH)) {
-    # Inside workspace, maintain relative path
-    $relPath = $currentDir.Substring($WORKSPACE_PATH.Length).Replace('\', '/')
-    $workDir = "/workspace$relPath"
-} else {
-    # Not inside workspace, use workspace root
-    $workDir = "/workspace"
+# Find git repository root by traversing up
+while ($gitRoot -ne "" -and $gitRoot -ne $null) {
+    if (Test-Path (Join-Path $gitRoot ".git")) {
+        break
+    }
+    $parent = Split-Path -Parent $gitRoot
+    if ($parent -eq $gitRoot) {
+        $gitRoot = $null
+        break
+    }
+    $gitRoot = $parent
 }
 
-# Run devtrack command in container
-$env:TERM = if ($env:TERM) { $env:TERM } else { "xterm-256color" }
-docker exec -it `
-    -w $workDir `
-    -e "TERM=$env:TERM" `
-    $CONTAINER_NAME `
-    devtrack-cli $args
+# If we found a git repo, calculate its path in the container (/home/host prefix)
+if ($gitRoot -and (Test-Path (Join-Path $gitRoot ".git"))) {
+    # Map Windows path to container path
+    # Windows uses USERPROFILE as home directory
+    $homeDir = if ($env:HOME) { $env:HOME } else { $env:USERPROFILE }
+    
+    # Replace home directory with /home/host prefix
+    if ($gitRoot.StartsWith($homeDir)) {
+        $relativePath = $gitRoot.Substring($homeDir.Length) -replace '\\', '/'
+        $containerWorkDir = "/home/host$relativePath"
+    } else {
+        # If not under home, just map the drive
+        $containerWorkDir = $gitRoot -replace '^[A-Za-z]:', '' -replace '\\', '/'
+        $containerWorkDir = "/home/host$containerWorkDir"
+    }
+    
+    # For 'start' command, run detached so daemon persists
+    if ($args[0] -eq "start") {
+        docker exec -d `
+            -w $containerWorkDir `
+            -e "TERM=$env:TERM" `
+            $CONTAINER_NAME `
+            devtrack-cli $args
+        
+        # Give it a moment to start
+        Start-Sleep -Seconds 1
+        
+        # Show status
+        docker exec `
+            -w $containerWorkDir `
+            $CONTAINER_NAME `
+            devtrack-cli status
+    } else {
+        # Run interactively for other commands
+        $env:TERM = if ($env:TERM) { $env:TERM } else { "xterm-256color" }
+        docker exec -it `
+            -w $containerWorkDir `
+            -e "TERM=$env:TERM" `
+            $CONTAINER_NAME `
+            devtrack-cli $args
+    }
+} else {
+    # No git repo found, use workspace as fallback
+    $workspacePathNormalized = $WORKSPACE_PATH.Replace('\', '/')
+    
+    if ($currentDir.StartsWith($WORKSPACE_PATH)) {
+        $relPath = $currentDir.Substring($WORKSPACE_PATH.Length).Replace('\', '/')
+        $workDir = "/workspace$relPath"
+    } else {
+        $workDir = "/workspace"
+    }
+    
+    # For 'start' command, run detached
+    if ($args[0] -eq "start") {
+        docker exec -d `
+            -w $workDir `
+            -e "TERM=$env:TERM" `
+            $CONTAINER_NAME `
+            devtrack-cli $args
+        
+        Start-Sleep -Seconds 1
+        
+        docker exec `
+            -w $workDir `
+            $CONTAINER_NAME `
+            devtrack-cli status
+    } else {
+        $env:TERM = if ($env:TERM) { $env:TERM } else { "xterm-256color" }
+        docker exec -it `
+            -w $workDir `
+            -e "TERM=$env:TERM" `
+            $CONTAINER_NAME `
+            devtrack-cli $args
+    }
+}
 
 exit $LASTEXITCODE

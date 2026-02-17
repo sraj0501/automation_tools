@@ -37,21 +37,82 @@ if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
     fi
 fi
 
-# Get current directory relative to workspace
+# Get current directory and find git repository root
 CURRENT_DIR="$(pwd)"
-REL_PATH="${CURRENT_DIR#$WORKSPACE_PATH}"
-if [ "$REL_PATH" = "$CURRENT_DIR" ]; then
-    # Not inside workspace, use workspace root
-    WORKDIR="/workspace"
-else
-    # Inside workspace, maintain relative path
-    WORKDIR="/workspace${REL_PATH}"
-fi
+GIT_ROOT="$CURRENT_DIR"
 
-# Run devtrack command in container
-docker exec -it \
-    -w "$WORKDIR" \
-    -e TERM="$TERM" \
-    -e COLORTERM="$COLORTERM" \
-    "$CONTAINER_NAME" \
-    devtrack-cli "$@"
+# Find git repository root by traversing up
+while [ "$GIT_ROOT" != "/" ]; do
+    if [ -d "$GIT_ROOT/.git" ]; then
+        break
+    fi
+    GIT_ROOT="$(dirname "$GIT_ROOT")"
+done
+
+# If we found a git repo, calculate its path in the container (/home/host prefix)
+if [ -d "$GIT_ROOT/.git" ]; then
+    # Map host path to container path: /home/sraj/... -> /home/host/...
+    CONTAINER_WORKDIR="${GIT_ROOT/#$HOME/\/home\/host}"
+    
+    # For 'start' command, run detached so daemon persists
+    if [ "$1" = "start" ]; then
+        docker exec -d \
+            -w "$CONTAINER_WORKDIR" \
+            -e TERM="$TERM" \
+            -e COLORTERM="$COLORTERM" \
+            "$CONTAINER_NAME" \
+            devtrack-cli "$@"
+        
+        # Give it a moment to start
+        sleep 1
+        
+        # Show status
+        docker exec \
+            -w "$CONTAINER_WORKDIR" \
+            "$CONTAINER_NAME" \
+            devtrack-cli status
+    else
+        # Run interactively for other commands
+        docker exec -it \
+            -w "$CONTAINER_WORKDIR" \
+            -e TERM="$TERM" \
+            -e COLORTERM="$COLORTERM" \
+            "$CONTAINER_NAME" \
+            devtrack-cli "$@"
+    fi
+else
+    # No git repo found, use workspace as fallback
+    REL_PATH="${CURRENT_DIR#$WORKSPACE_PATH}"
+    if [ "$REL_PATH" = "$CURRENT_DIR" ]; then
+        WORKDIR="/workspace"
+    else
+        WORKDIR="/workspace${REL_PATH}"
+    fi
+    
+    # For 'start' command, run detached so daemon persists
+    if [ "$1" = "start" ]; then
+        docker exec -d \
+            -w "$WORKDIR" \
+            -e TERM="$TERM" \
+            -e COLORTERM="$COLORTERM" \
+            "$CONTAINER_NAME" \
+            devtrack-cli "$@"
+        
+        # Give it a moment to start
+        sleep 1
+        
+        # Show status
+        docker exec \
+            -w "$WORKDIR" \
+            "$CONTAINER_NAME" \
+            devtrack-cli status
+    else
+        # Run interactively for other commands
+        docker exec -it \
+            -w "$WORKDIR" \
+            -e TERM="$TERM" \
+            -e COLORTERM="$COLORTERM" \
+            "$CONTAINER_NAME" \
+            devtrack-cli "$@"
+    fi
+fi
