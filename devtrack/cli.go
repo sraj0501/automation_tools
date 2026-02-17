@@ -148,8 +148,7 @@ func (cli *CLI) handleStop() error {
 	}
 
 	// Try graceful stop first
-	homeDir, _ := os.UserHomeDir()
-	pidFile := filepath.Join(homeDir, ".devtrack", "daemon.pid")
+	pidFile := filepath.Join(GetDevTrackDir(), GetPIDFileName())
 
 	if err := KillDaemon(pidFile); err != nil {
 		fmt.Printf("❌ Failed to stop daemon: %v\n", err)
@@ -181,8 +180,7 @@ func (cli *CLI) handleRestart() error {
 func (cli *CLI) handleStatus() error {
 	// Handle case where daemon is nil (status check without repo)
 	if cli.daemon == nil {
-		homeDir, _ := os.UserHomeDir()
-		pidFile := filepath.Join(homeDir, ".devtrack", "daemon.pid")
+		pidFile := filepath.Join(GetDevTrackDir(), GetPIDFileName())
 
 		// Check if daemon is running by PID file
 		data, err := os.ReadFile(pidFile)
@@ -194,7 +192,7 @@ func (cli *CLI) handleStatus() error {
 			fmt.Println()
 			fmt.Println("Configuration:")
 			fmt.Printf("  Config:   %s\n", GetConfigPath())
-			fmt.Printf("  Logs:     %s\n", filepath.Join(homeDir, ".devtrack", "daemon.log"))
+			fmt.Printf("  Logs:     %s\n", filepath.Join(GetDevTrackDir(), GetLogFileName()))
 			fmt.Printf("  PID file: %s\n", pidFile)
 			fmt.Println()
 			fmt.Println("Commands:")
@@ -430,7 +428,7 @@ func (cli *CLI) handleLogs() error {
 	if len(os.Args) > 2 {
 		if os.Args[2] == "-f" || os.Args[2] == "--follow" {
 			fmt.Println("❌ Follow mode not yet implemented")
-			fmt.Println("Use: tail -f ~/.devtrack/daemon.log")
+			fmt.Printf("Use: tail -f %s\n", filepath.Join(GetDevTrackDir(), GetLogFileName()))
 			return nil
 		}
 	}
@@ -735,9 +733,9 @@ func (cli *CLI) printUsage() {
 	fmt.Println("  devtrack help          Show this help message")
 	fmt.Println()
 	fmt.Println("CONFIGURATION:")
-	fmt.Println("  Config file: ~/.devtrack/config.yaml")
-	fmt.Println("  Log file:    ~/.devtrack/daemon.log")
-	fmt.Println("  PID file:    ~/.devtrack/daemon.pid")
+	fmt.Printf("  Config file: %s\n", filepath.Join(GetDevTrackDir(), GetConfigFileName()))
+	fmt.Printf("  Log file:    %s\n", filepath.Join(GetDevTrackDir(), GetLogFileName()))
+	fmt.Printf("  PID file:    %s\n", filepath.Join(GetDevTrackDir(), GetPIDFileName()))
 	fmt.Println()
 }
 

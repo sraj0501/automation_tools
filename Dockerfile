@@ -71,8 +71,11 @@ RUN chmod +x /usr/local/bin/devtrack-cli
 
 # Copy Python backend and entrypoints
 COPY backend/ /app/backend/
-COPY main.py python_bridge.py /app/
+COPY main.py python_bridge.py entrypoint.sh /app/
 COPY pyproject.toml /app/
+
+# Make entrypoint executable
+RUN chmod +x /app/entrypoint.sh
 
 # Set up environment
 ENV PATH="/home/devtrack/.local/bin:${PATH}"

@@ -72,17 +72,13 @@ type LogRecord struct {
 // NewDatabase creates a new database connection
 func NewDatabase() (*Database, error) {
 	// Get database path
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get home directory: %w", err)
-	}
-
-	dbDir := filepath.Join(homeDir, ".devtrack")
+	// Database location from env config
+	dbDir := GetDevTrackDir()
 	if err := os.MkdirAll(dbDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
-	dbPath := filepath.Join(dbDir, "devtrack.db")
+	dbPath := filepath.Join(dbDir, GetDatabaseFileName())
 
 	// Open database
 	db, err := sql.Open("sqlite", dbPath)

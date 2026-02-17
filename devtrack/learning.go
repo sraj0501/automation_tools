@@ -100,12 +100,7 @@ func (lc *LearningCommands) RevokeConsent() error {
 
 // GetLearningStatus gets the status of personalized learning
 func (lc *LearningCommands) GetLearningStatus() (*LearningStatus, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, err
-	}
-
-	learningDir := filepath.Join(homeDir, ".devtrack", "learning")
+	learningDir := filepath.Join(GetDevTrackDir(), GetLearningDirName())
 	consentFile := filepath.Join(learningDir, "consent.json")
 	profileFile := filepath.Join(learningDir, "profile.json")
 	samplesFile := filepath.Join(learningDir, "samples.json")

@@ -10,13 +10,13 @@ All data collection requires explicit user consent and happens locally.
 import os
 import logging
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional
+from typing import List, Dict
 import sys
 
 # Add backend to path
 sys.path.insert(0, os.path.dirname(__file__))
 
-from personalized_ai import PersonalizedAI, CommunicationSample
+from personalized_ai import PersonalizedAI
 
 logger = logging.getLogger(__name__)
 

@@ -102,11 +102,7 @@ type JIRAConfig struct {
 
 // GetConfigPath returns the path to the configuration file
 func GetConfigPath() string {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return ".devtrack/config.yaml"
-	}
-	return filepath.Join(homeDir, ".devtrack", "config.yaml")
+	return filepath.Join(GetDevTrackDir(), GetConfigFileName())
 }
 
 // LoadConfig loads the configuration from the YAML file

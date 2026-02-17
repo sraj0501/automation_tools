@@ -21,7 +21,97 @@ DevTrack combines background process automation with AI intelligence to:
 - Generate professional reports for managers and stakeholders
 - Track time and productivity without manual timesheet entry
 
-## Containerized Setup (Cross-Platform)
+## Installation Options
+
+### Option 1: Local/Manual Installation (Recommended for Development)
+
+Run DevTrack natively on your system without Docker for faster iteration and easier debugging.
+
+#### Prerequisites
+- **Go** 1.20+ ([Download](https://go.dev/dl/))
+- **Python** 3.12+ with **uv** package manager ([Install uv](https://github.com/astral-sh/uv))
+- **Git** (for repository monitoring)
+- **Ollama** (optional, for AI features) ([Download](https://ollama.com/download))
+
+#### Setup Steps
+
+1. **Clone and configure**:
+   ```bash
+   git clone https://github.com/yourusername/automation_tools.git
+   cd automation_tools
+   
+   # Copy and configure environment
+   cp .env.example .env
+   # Edit .env - set PROJECT_ROOT to your repo path
+   ```
+
+2. **Install Python dependencies**:
+   ```bash
+   # uv automatically creates and manages virtual environment
+   uv sync
+   ```
+
+3. **Build the Go binary**:
+   ```bash
+   cd devtrack
+   go build -o devtrack-cli .
+   
+   # Optional: Install globally
+   mv devtrack-cli ~/.local/bin/
+   # Add to PATH if not already: export PATH="$HOME/.local/bin:$PATH"
+   ```
+
+4. **Set up environment** (add to `~/.bashrc` or `~/.zshrc`):
+   ```bash
+   export PROJECT_ROOT="/path/to/automation_tools"
+   ```
+
+5. **Start the daemon**:
+   ```bash
+   # Navigate to the repository you want to monitor
+   cd ~/path/to/your/project
+   
+   # Start daemon (runs in background)
+   devtrack-cli start &
+   disown
+   
+   # Check status
+   devtrack-cli status
+   ```
+
+#### Key Configuration (.env file)
+
+All configuration is centralized in `.env` with **no hardcoded defaults**:
+
+```bash
+# Required settings
+PROJECT_ROOT=/home/user/Documents/GitHub/automation_tools
+DEVTRACK_HOME=/home/user/.devtrack
+DEVTRACK_WORKSPACE=/home/user/Documents/GitHub
+
+# IPC Configuration
+IPC_HOST=127.0.0.1
+IPC_PORT=35893
+
+# File names (customizable)
+CONFIG_FILE_NAME=config.yaml
+DATABASE_FILE_NAME=devtrack.db
+PID_FILE_NAME=daemon.pid
+LOG_FILE_NAME=daemon.log
+
+# See .env.example for all 16 required variables
+```
+
+#### Local Installation Benefits
+- ✅ Faster startup and iteration
+- ✅ Native filesystem access (no Docker overhead)
+- ✅ Easier debugging with direct log access
+- ✅ Uses uv for fast dependency management
+- ✅ Full Python 3.12 compatibility with spaCy NLP
+
+---
+
+### Option 2: Containerized Setup (Cross-Platform)
 
 This workflow runs the full stack on macOS, Windows (PowerShell, WSL, or Git Bash), and Linux with the same commands.
 
@@ -65,78 +155,96 @@ Git Activity/Timer → Go Daemon → Python AI Layer → Project Management APIs
 
 ## Quick Start
 
-### Installation
+Choose your installation method above, then use these commands:
 
-\`\`\`bash
-# 1. Install dependencies
-./install_phase3_deps.sh          # NLP parsing
-./install_learning_deps.sh        # Personalized AI
-./install_advanced_features.sh    # Reports & Matching
+### Using Local Installation
 
-# 2. Build CLI
-cd go-cli && go build -o devtrack
+```bash
+# Navigate to a Git repository you want to monitor
+cd ~/path/to/your/project
 
-# 3. Configure MS Graph (optional)
-cd ../backend/msgraph_python
-# Edit config.cfg with your Azure app credentials
-python main.py  # Follow device code flow
-\`\`\`
+# Start daemon in background
+devtrack-cli start &
+disown
 
-### Basic Usage
+# Check status and view configuration
+devtrack-cli status
 
-\`\`\`bash
-# Start the daemon
-./devtrack start
+# View recent logs
+devtrack-cli logs
 
-# Check status
-./devtrack status
+# Make a commit with task info for NLP parsing
+git commit -m "Working on #PROJ-123 - Fixed authentication bug (2h)"
 
-# View logs
-./devtrack logs
+# Check logs to see NLP parsing results
+tail -f ~/.devtrack/daemon.log
 
-# Stop the daemon
-./devtrack stop
-\`\`\`
+# Stop daemon
+devtrack-cli stop
+```
 
-### Key Commands
+### Using Docker
 
-\`\`\`bash
+```bash
+# Start containerized daemon
+docker compose up devtrack -d
+
+# Check logs
+docker compose logs devtrack -f
+
+# Stop container
+docker compose down
+```
+
+### Common Commands
+
+```bash
 # Daemon Control
-devtrack start|stop|restart|status|logs
+devtrack-cli start              # Start monitoring
+devtrack-cli stop               # Stop daemon
+devtrack-cli restart            # Restart with new config
+devtrack-cli status             # Show running status
 
-# AI Learning
-devtrack enable-learning              # Enable & collect data
-devtrack learning-status              # Check status
-devtrack show-profile                 # View learned patterns
+# Scheduler Control
+devtrack-cli pause              # Pause scheduled triggers
+devtrack-cli resume             # Resume scheduler
+devtrack-cli force-trigger      # Trigger immediately
+devtrack-cli skip-next          # Skip next scheduled trigger
 
-# Reports
-devtrack preview-report               # Preview today's report
-devtrack send-report <email>          # Email report
-
-# Manual Triggers
-devtrack force-trigger                # Trigger immediately
-devtrack skip-next                    # Skip next trigger
-\`\`\`
+# Information
+devtrack-cli logs               # View recent logs
+devtrack-cli db-stats           # Database statistics
+devtrack-cli version            # Version information
+devtrack-cli help               # Full command list
+```
 
 ## Technology Stack
 
 ### Backend (Go)
-- Go daemon for monitoring and triggers
-- fsnotify for Git repository monitoring
-- Cron-based scheduling
-- SQLite for local caching
+- Go 1.20+ daemon for monitoring and triggers
+- fsnotify for real-time Git repository monitoring
+- Cron-based scheduling with configurable intervals
+- SQLite for local caching and trigger history
+- TCP-based IPC for Go ↔ Python communication
 
-### Intelligence (Python)
-- OLLAMA for local LLM processing
-- spaCy for NLP and entity recognition
-- sentence-transformers for semantic matching
-- Microsoft Graph SDK for integrations
+### Intelligence (Python 3.12+)
+- **uv** for fast dependency management
+- **spaCy** (en_core_web_sm) for NLP and entity recognition
+- **OLLAMA** for local LLM processing (privacy-first)
+- **sentence-transformers** for semantic task matching
+- **python-dotenv** for environment configuration
+- Microsoft Graph SDK for Teams/Outlook integrations
 
 ### Integrations
 - Azure DevOps REST API
 - Microsoft Graph API (Teams, Email, Lists)
 - GitHub API
 - Jira API (planned)
+
+### Configuration
+- **.env file**: Zero-fallback configuration (16 required variables)
+- All paths, ports, and file names customizable
+- No hardcoded values - explicit configuration enforced
 
 ## Privacy & Security
 
@@ -148,6 +256,61 @@ DevTrack is built with privacy as a core principle:
 - Full data deletion option available anytime
 
 For complete details, see the **[Privacy Policy](wiki/privacy.html)**.
+
+## Troubleshooting
+
+### Local Installation Issues
+
+**Python version compatibility:**
+```bash
+# DevTrack requires Python 3.12 or 3.13 (not 3.14+)
+python3 --version
+
+# If using Python 3.14, uv will automatically downgrade
+# based on pyproject.toml settings
+```
+
+**spaCy NLP model not found:**
+```bash
+# Install spaCy language model
+uv run python -m spacy download en_core_web_sm
+```
+
+**Daemon won't start:**
+```bash
+# Check logs for errors
+tail -50 ~/.devtrack/daemon.log
+
+# Verify .env file exists and PROJECT_ROOT is set
+cat .env | grep PROJECT_ROOT
+
+# Ensure binary is in PATH
+which devtrack-cli
+
+# Check if port is already in use
+lsof -i :35893
+```
+
+**Git commits not detected:**
+```bash
+# Verify daemon is running in correct repository
+devtrack-cli status
+
+# Check git monitor is active
+tail ~/.devtrack/daemon.log | grep "Git monitor"
+
+# Ensure you're making commits in the monitored repo
+```
+
+**IPC connection errors:**
+```bash
+# Check IPC configuration in .env
+grep IPC .env
+
+# Verify no firewall blocking localhost:35893
+# Restart daemon after .env changes
+devtrack-cli restart
+```
 
 ## Project Status
 

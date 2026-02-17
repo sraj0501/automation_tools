@@ -12,6 +12,24 @@ import os
 import time
 import logging
 from datetime import datetime
+from pathlib import Path
+
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    env_paths = [
+        os.getenv("DEVTRACK_ENV_FILE"),
+        Path.home() / ".config" / "devtrack" / ".env",
+        Path.home() / ".devtrack" / ".env",
+        Path.home() / "Documents" / "GitHub" / "automation_tools" / ".env",
+        Path(__file__).parent / ".env",
+    ]
+    for env_path in env_paths:
+        if env_path and Path(env_path).exists():
+            load_dotenv(env_path)
+            break
+except ImportError:
+    pass  # python-dotenv not installed, use system environment variables
 
 # Set up logging first
 logging.basicConfig(

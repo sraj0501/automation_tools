@@ -53,7 +53,9 @@ class IPCMessage:
         error: Optional[str] = None
     ):
         self.type = msg_type
-        self.timestamp = datetime.now().isoformat()
+        # Use timezone-aware timestamp (RFC3339 format for Go compatibility)
+        from datetime import timezone
+        self.timestamp = datetime.now(timezone.utc).astimezone().isoformat()
         self.id = msg_id or f"{msg_type.value}_{int(time.time() * 1000000)}"
         self.data = data
         self.error = error
@@ -104,14 +106,13 @@ class IPCClient:
         self.listener_thread: Optional[Thread] = None
     
     def _get_socket_path(self) -> str:
-        """Get platform-specific socket path"""
-        if sys.platform == "win32":
-            # Windows uses named pipes
-            return r"\\.\pipe\devtrack"
-        else:
-            # Unix-like systems use domain sockets
-            home = Path.home()
-            return str(home / ".devtrack" / "devtrack.sock")
+        """Get IPC server address"""
+        # Use TCP socket for better container compatibility
+        # Unix sockets can have issues with docker exec -d
+        # Read from environment variables
+        host = os.getenv("IPC_HOST", "127.0.0.1")
+        port = os.getenv("IPC_PORT", "35893")
+        return f"{host}:{port}"
     
     def connect(self, timeout: int = 5, retry_count: int = 3) -> bool:
         """
@@ -131,16 +132,13 @@ class IPCClient:
                         logger.info("Already connected to IPC server")
                         return True
                     
-                    # Create socket
-                    if sys.platform == "win32":
-                        # Windows named pipe
-                        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                    else:
-                        # Unix domain socket
-                        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                    
+                    # Create TCP socket
+                    self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     self.sock.settimeout(timeout)
-                    self.sock.connect(self.socket_path)
+                    
+                    # Parse address:port
+                    host, port = self.socket_path.split(':')
+                    self.sock.connect((host, int(port)))
                     self.connected = True
                     
                     logger.info(f"Connected to IPC server at {self.socket_path}")

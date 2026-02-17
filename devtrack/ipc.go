@@ -7,9 +7,6 @@ import (
 	"io"
 	"log"
 	"net"
-	"os"
-	"path/filepath"
-	"runtime"
 	"sync"
 	"time"
 )
@@ -95,11 +92,6 @@ func NewIPCServer() (*IPCServer, error) {
 		return nil, fmt.Errorf("failed to get socket path: %w", err)
 	}
 
-	// Remove existing socket file if it exists
-	if err := os.Remove(socketPath); err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("failed to remove existing socket: %w", err)
-	}
-
 	server := &IPCServer{
 		socketPath: socketPath,
 		clients:    make(map[string]net.Conn),
@@ -118,28 +110,15 @@ func (s *IPCServer) Start() error {
 		return fmt.Errorf("IPC server already running")
 	}
 
-	// Ensure the directory exists
-	dir := filepath.Dir(s.socketPath)
-	log.Printf("Creating socket directory: %s", dir)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		log.Printf("ERROR: Failed to create socket directory: %v", err)
-		return fmt.Errorf("failed to create socket directory: %w", err)
-	}
-
-	log.Printf("Attempting to create Unix socket at: %s", s.socketPath)
+	log.Printf("Attempting to start IPC server on: %s", s.socketPath)
 	var err error
-	s.listener, err = net.Listen("unix", s.socketPath)
+	s.listener, err = net.Listen("tcp", s.socketPath)
 	if err != nil {
-		log.Printf("ERROR: Failed to create Unix socket: %v", err)
+		log.Printf("ERROR: Failed to start TCP listener: %v", err)
 		return fmt.Errorf("failed to start IPC listener: %w", err)
 	}
 
-	// Verify socket was created
-	if _, statErr := os.Stat(s.socketPath); statErr != nil {
-		log.Printf("WARNING: Socket file not found after Listen: %v", statErr)
-	} else {
-		log.Printf("✓ Socket file verified at: %s", s.socketPath)
-	}
+	log.Printf("✓ IPC server bound to: %s", s.socketPath)
 
 	s.running = true
 	log.Printf("IPC server listening on %s", s.socketPath)
@@ -153,22 +132,11 @@ func (s *IPCServer) Start() error {
 	return nil
 }
 
-// monitorSocket periodically checks if the socket file still exists
+// monitorSocket periodically checks if the listener is still accepting
 func (s *IPCServer) monitorSocket() {
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-
-	for s.running {
-		<-ticker.C
-		if _, err := os.Stat(s.socketPath); err != nil {
-			log.Printf("WARNING: Socket file disappeared! %v", err)
-			log.Printf("Attempting to recreate socket...")
-			// Socket is gone but server thinks it's running
-			// This shouldn't happen - indicates external deletion
-		} else {
-			log.Printf("DEBUG: Socket file exists at %s", s.socketPath)
-		}
-	}
+	// For TCP sockets, we don't need to monitor file existence
+	// The listener will be alive as long as the process is alive
+	log.Printf("Socket monitor: IPC server on %s", s.socketPath)
 }
 
 // Stop closes the IPC server
@@ -194,10 +162,6 @@ func (s *IPCServer) Stop() error {
 		log.Println("Closing IPC listener...")
 		s.listener.Close()
 	}
-
-	// Remove socket file
-	log.Printf("Removing socket file: %s", s.socketPath)
-	os.Remove(s.socketPath)
 
 	log.Println("IPC server stopped")
 	return nil
@@ -421,20 +385,9 @@ func (c *IPCClient) StartListening(handler func(msg IPCMessage) error) {
 
 // getSocketPath returns the platform-specific socket path
 func getSocketPath() (string, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-
-	devtrackDir := filepath.Join(homeDir, ".devtrack")
-
-	if runtime.GOOS == "windows" {
-		// Windows uses named pipes
-		return `\\.\pipe\devtrack`, nil
-	}
-
-	// Unix-like systems use domain sockets
-	return filepath.Join(devtrackDir, "devtrack.sock"), nil
+	// Use TCP socket instead of Unix socket for better container compatibility
+	// Unix sockets can have issues with docker exec -d due to file descriptor handling
+	return GetIPCAddress(), nil  // Get from environment config
 }
 
 // CreateCommitTriggerMessage creates a commit trigger message

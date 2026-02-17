@@ -47,12 +47,7 @@ func NewDaemon(repoPath string) (*Daemon, error) {
 	}
 
 	// Get daemon paths
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get home directory: %w", err)
-	}
-
-	daemonDir := filepath.Join(homeDir, ".devtrack")
+	daemonDir := GetDevTrackDir()
 	if err := os.MkdirAll(daemonDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create daemon directory: %w", err)
 	}
@@ -62,8 +57,8 @@ func NewDaemon(repoPath string) (*Daemon, error) {
 
 	daemon := &Daemon{
 		config:  config,
-		pidFile: filepath.Join(daemonDir, "daemon.pid"),
-		logFile: filepath.Join(daemonDir, "daemon.log"),
+		pidFile: filepath.Join(daemonDir, GetPIDFileName()),
+		logFile: filepath.Join(daemonDir, GetLogFileName()),
 		ctx:     ctx,
 		cancel:  cancel,
 	}
@@ -374,22 +369,24 @@ func (d *Daemon) GetLogs(lines int) ([]string, error) {
 
 // startPythonBridge starts the Python bridge process for IPC communication
 func (d *Daemon) startPythonBridge() error {
-	// Find python_bridge.py
-	// In Docker container, it's at /app/python_bridge.py
-	// In dev, it might be in the project root
-	bridgePath := "/app/python_bridge.py"
-	if _, err := os.Stat(bridgePath); os.IsNotExist(err) {
-		// Try project root
-		homeDir, _ := os.UserHomeDir()
-		bridgePath = filepath.Join(homeDir, "git_apps/personal/automation_tools/python_bridge.py")
-		if _, err := os.Stat(bridgePath); os.IsNotExist(err) {
-			return fmt.Errorf("python_bridge.py not found")
-		}
-	}
+	// Get python_bridge.py path from centralized config (fails if not found)
+	bridgePath := GetPythonBridgePath()
 
-	// Start Python bridge
+	// Start Python bridge using uv run to access project dependencies
 	log.Printf("Starting Python bridge: %s", bridgePath)
-	cmd := exec.Command("python3", bridgePath)
+	
+	var cmd *exec.Cmd
+	projectRoot := os.Getenv("PROJECT_ROOT")
+	if projectRoot != "" {
+		// Use uv run to execute with project dependencies
+		cmd = exec.Command("uv", "run", "--directory", projectRoot, "python", bridgePath)
+		cmd.Dir = projectRoot
+		log.Printf("Using uv environment from: %s", projectRoot)
+	} else {
+		// Fallback to system python3 if PROJECT_ROOT not set
+		cmd = exec.Command("python3", bridgePath)
+		log.Printf("Warning: PROJECT_ROOT not set, using system python3")
+	}
 	
 	// Redirect output to daemon log
 	logFile, err := os.OpenFile(d.logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
