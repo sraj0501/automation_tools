@@ -1753,6 +1753,347 @@ Accept suggestions? (y/n/e): </code></pre>
                     <strong>✨ Best Results:</strong> For optimal AI performance, use descriptive commit messages and
                     work logs. The more context you provide, the better the AI can understand and match tasks!
                 </div>
+
+                <h2>Interactive Work Updates (Phase 3)</h2>
+                <p>DevTrack now includes a complete interactive workflow for capturing work updates via terminal UI with AI-powered enhancement.</p>
+
+                <div class="architecture-modern">
+                    <div class="arch-layer">
+                        <div class="arch-title">1. TUI User Prompt</div>
+                        <div class="arch-components">
+                            <span class="arch-component">Terminal UI</span>
+                            <span class="arch-component">Timeout Handling</span>
+                            <span class="arch-component">User Input</span>
+                        </div>
+                    </div>
+                    <div class="arch-arrow">↓</div>
+                    <div class="arch-layer">
+                        <div class="arch-title">2. spaCy NLP Parsing</div>
+                        <div class="arch-components">
+                            <span class="arch-component">Ticket Extraction</span>
+                            <span class="arch-component">Time Detection</span>
+                            <span class="arch-component">Status Inference</span>
+                        </div>
+                    </div>
+                    <div class="arch-arrow">↓</div>
+                    <div class="arch-layer">
+                        <div class="arch-title">3. Ollama Enhancement</div>
+                        <div class="arch-components">
+                            <span class="arch-component">Description Enhancement</span>
+                            <span class="arch-component">Category Detection</span>
+                            <span class="arch-component">Keyword Extraction</span>
+                        </div>
+                    </div>
+                    <div class="arch-arrow">↓</div>
+                    <div class="arch-layer">
+                        <div class="arch-title">4. Confirmation &amp; Save</div>
+                        <div class="arch-components">
+                            <span class="arch-component">User Confirmation</span>
+                            <span class="arch-component">Task Update</span>
+                        </div>
+                    </div>
+                </div>
+
+                <h3><i class="fas fa-terminal"></i> Terminal User Interface (TUI)</h3>
+                <div class="component-detail">
+                    <p>The <code>DevTrackTUI</code> class provides a rich terminal interface with:</p>
+                    <ul>
+                        <li><strong>Colored output:</strong> ANSI color codes for visual clarity</li>
+                        <li><strong>Box drawing:</strong> Clean visual structure with Unicode characters</li>
+                        <li><strong>Timeout handling:</strong> Configurable timeouts with graceful fallbacks</li>
+                        <li><strong>Yes/No prompts:</strong> Quick confirmation dialogs</li>
+                        <li><strong>Progress indicators:</strong> Visual feedback during processing</li>
+                    </ul>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>TUI Example Output</span>
+                        </div>
+                        <pre><code>┌──────────────────────────────────────────────────────────┐
+│           ⏰ DevTrack - Work Update                      │
+└──────────────────────────────────────────────────────────┘
+
+What have you been working on?
+(Include ticket numbers like #123 or PROJ-456, time like '2h' or '30min')
+
+➜ Describe your work
+> Fixed #PA-123 login timeout bug, spent 2h</code></pre>
+                    </div>
+                </div>
+
+                <h3><i class="fas fa-brain"></i> Description Enhancement with Ollama</h3>
+                <div class="component-detail">
+                    <p>The <code>DescriptionEnhancer</code> transforms informal descriptions into professional task updates:</p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Enhancement Example</span>
+                        </div>
+                        <pre><code># Input
+"fixed that bug in the login page"
+
+# Enhanced Output
+{
+  "enhanced": "Fixed authentication bug on the login page that was preventing users from signing in successfully.",
+  "summary": "Fixed login page authentication bug",
+  "category": "bugfix",
+  "keywords": ["authentication", "login", "bugfix"]
+}</code></pre>
+                    </div>
+
+                    <p><strong>Supported Categories:</strong></p>
+                    <div class="model-grid">
+                        <div class="model-card">
+                            <h4>feature</h4>
+                            <p>New functionality</p>
+                        </div>
+                        <div class="model-card">
+                            <h4>bugfix</h4>
+                            <p>Bug fixes</p>
+                        </div>
+                        <div class="model-card">
+                            <h4>refactor</h4>
+                            <p>Code refactoring</p>
+                        </div>
+                        <div class="model-card">
+                            <h4>docs</h4>
+                            <p>Documentation</p>
+                        </div>
+                        <div class="model-card">
+                            <h4>test</h4>
+                            <p>Testing</p>
+                        </div>
+                        <div class="model-card">
+                            <h4>devops</h4>
+                            <p>CI/CD, deployment</p>
+                        </div>
+                    </div>
+                </div>
+
+                <h3><i class="fas fa-play-circle"></i> Complete Workflow Example</h3>
+                <div class="code-block">
+                    <div class="code-header">
+                        <span>Timer Trigger → Work Update Flow</span>
+                    </div>
+                    <pre><code>⏰ TIMER TRIGGER #1
+════════════════════════════════════════════════════════════
+
+┌──────────────────────────────────────────────────────────┐
+│           ⏰ DevTrack - Work Update                      │
+└──────────────────────────────────────────────────────────┘
+
+Time since last check: 30 minutes
+
+What have you been working on?
+➜ Describe your work
+> Fixed #PA-123 login timeout bug, spent 2h
+
+✓ Parsing with NLP
+
+📋 Parsed Task Information
+──────────────────────────────────────────
+  Ticket: PA-123
+  Status: completed
+  Time Spent: 2h
+  Confidence: 85%
+
+✓ Enhancing description with AI
+
+🧠 AI-Enhanced Description
+──────────────────────────────────────────
+
+Fixed authentication timeout bug that was causing users to be logged
+out unexpectedly. Updated session handling logic and added proper
+error messages for better user experience.
+
+Summary: Fixed login authentication timeout bug
+Category: bugfix
+Keywords: authentication, timeout, bugfix, session
+
+📋 Final description:
+   [bugfix] Fixed authentication timeout bug that was causing...
+Save this update? [Y/n] y
+
+✓ Work update saved!
+
+✓ Update Summary
+───────────────────────────────────────
+  Project: automation_tools
+  Ticket: PA-123
+  Status: completed
+  Time: 2h</code></pre>
+                </div>
+
+                <h3>Module Reference</h3>
+                <table class="reference-table">
+                    <thead>
+                        <tr>
+                            <th>Module</th>
+                            <th>Class</th>
+                            <th>Purpose</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>backend/user_prompt.py</code></td>
+                            <td><code>DevTrackTUI</code></td>
+                            <td>Terminal UI for user prompts, confirmations, and display</td>
+                        </tr>
+                        <tr>
+                            <td><code>backend/description_enhancer.py</code></td>
+                            <td><code>DescriptionEnhancer</code></td>
+                            <td>Ollama-based description enhancement and categorization</td>
+                        </tr>
+                        <tr>
+                            <td><code>backend/nlp_parser.py</code></td>
+                            <td><code>NLPTaskParser</code></td>
+                            <td>spaCy-based NLP parsing for task extraction</td>
+                        </tr>
+                        <tr>
+                            <td><code>python_bridge.py</code></td>
+                            <td><code>DevTrackBridge</code></td>
+                            <td>Main bridge integrating all components with IPC</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h2 class="section-header" style="margin-top: 40px;">AI-Enhanced Daily Reports (Phase 5)</h2>
+                <p>
+                    Phase 5 introduces intelligent daily report generation with AI-powered insights.
+                    Reports are automatically generated at end-of-day or on-demand, providing
+                    comprehensive summaries with productivity analysis.
+                </p>
+
+                <h3>Features</h3>
+                <ul>
+                    <li><strong>Automatic End-of-Day Detection:</strong> Prompts for report generation at configured time</li>
+                    <li><strong>AI-Powered Insights:</strong> Ollama generates executive summaries, accomplishments, and recommendations</li>
+                    <li><strong>Multiple Output Formats:</strong> Terminal, Text, HTML, Markdown, and JSON</li>
+                    <li><strong>Productivity Scoring:</strong> AI assigns a 1-10 productivity score based on activities</li>
+                    <li><strong>Professional Styling:</strong> Clean, formatted reports suitable for manager updates</li>
+                </ul>
+
+                <h3>Report Generation Flow</h3>
+                <pre class="architecture-diagram">
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  Timer Trigger  │────▶│  End-of-Day      │────▶│  User Prompt    │
+│  (6:00 PM)      │     │  Detection       │     │  via TUI        │
+└─────────────────┘     └──────────────────┘     └────────┬────────┘
+                                                          │
+                                                          ▼
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  Save Report    │◀────│  AI Insights     │◀────│  Activity       │
+│  (MD/HTML/TXT)  │     │  (Ollama)        │     │  Collection     │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
+                </pre>
+
+                <h3>AI Insights Generated</h3>
+                <table class="reference-table">
+                    <thead>
+                        <tr>
+                            <th>Insight Type</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Executive Summary</td>
+                            <td>2-3 sentence overview of the day's work</td>
+                        </tr>
+                        <tr>
+                            <td>Key Accomplishments</td>
+                            <td>List of major completed items</td>
+                        </tr>
+                        <tr>
+                            <td>Ongoing Work</td>
+                            <td>In-progress items and status</td>
+                        </tr>
+                        <tr>
+                            <td>Blockers & Risks</td>
+                            <td>Items requiring attention or escalation</td>
+                        </tr>
+                        <tr>
+                            <td>Recommendations</td>
+                            <td>AI suggestions for tomorrow's focus</td>
+                        </tr>
+                        <tr>
+                            <td>Productivity Score</td>
+                            <td>1-10 rating based on activity analysis</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Terminal Report Example</h3>
+                <div class="code-block">
+<pre><code>╔══════════════════════════════════════════════════════════════════════╗
+║  📊 DAILY STATUS REPORT - Monday, February 23, 2026                  ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+  ✨ AI-Enhanced Report
+
+  ┌─ SUMMARY ─────────────────────────────────────────────────────────┐
+  │  ⏱️  Total Hours:     6.5h
+  │  ✅ Completed:       4 tasks
+  │  🔄 In Progress:     2 tasks
+  │  📁 Projects:        automation_tools, frontend-app
+  └────────────────────────────────────────────────────────────────────┘
+
+  ┌─ AI INSIGHTS ──────────────────────────────────────────────────────┐
+  │  💡 Productive day focused on bug fixes and feature implementation.
+  │     Good progress across multiple projects with clear deliverables.
+  │  📈 Productivity: ●●●●●●●○○○ 7/10
+  │
+  │  Key Accomplishments:
+  │   ✓ Completed authentication timeout fix
+  │   ✓ Implemented daily report generation module
+  │   ✓ Added AI insights integration
+  │
+  │  📋 Tomorrow's Recommendations:
+  │   • Focus on completing the integration tests
+  │   • Review PR feedback from team
+  └────────────────────────────────────────────────────────────────────┘
+
+  Generated at 6:15 PM | AI-Enhanced</code></pre>
+                </div>
+
+                <h3>CLI Commands</h3>
+                <div class="code-block">
+<pre><code># Preview today's report
+devtrack preview-report
+
+# Preview report for specific date
+devtrack preview-report 2026-02-20
+
+# Save report to file
+devtrack save-report
+
+# Send report via email (requires MS Graph config)
+devtrack send-report user@company.com</code></pre>
+                </div>
+
+                <h3>Phase 5 Module Reference</h3>
+                <table class="reference-table">
+                    <thead>
+                        <tr>
+                            <th>Module</th>
+                            <th>Class</th>
+                            <th>Purpose</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>backend/daily_report_generator.py</code></td>
+                            <td><code>DailyReportGenerator</code></td>
+                            <td>AI-enhanced report generation with multiple formats</td>
+                        </tr>
+                        <tr>
+                            <td><code>backend/email_reporter.py</code></td>
+                            <td><code>EmailReporter</code></td>
+                            <td>Activity collection and email sending via MS Graph</td>
+                        </tr>
+                    </tbody>
+                </table>
+
             </section>
 
             <!-- Configuration Tab -->

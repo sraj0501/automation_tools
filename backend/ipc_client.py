@@ -30,6 +30,7 @@ class MessageType(str, Enum):
     # Go -> Python
     COMMIT_TRIGGER = "commit_trigger"
     TIMER_TRIGGER = "timer_trigger"
+    REPORT_TRIGGER = "report_trigger"  # Trigger daily report generation
     STATUS_QUERY = "status_query"
     SHUTDOWN = "shutdown"
     CONFIG_UPDATE = "config_update"

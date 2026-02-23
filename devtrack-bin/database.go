@@ -69,6 +69,24 @@ type LogRecord struct {
 	Data      string // JSON data
 }
 
+// ReportRecord represents a generated report in the database
+type ReportRecord struct {
+	ID             int64
+	ReportDate     time.Time
+	ReportType     string // "daily", "weekly"
+	Format         string // "text", "html", "markdown", "json"
+	Content        string // Full report content
+	Summary        string // Brief summary
+	TotalHours     float64
+	TaskCount      int
+	CompletedCount int
+	ProjectsCount  int
+	AIEnhanced     bool
+	EmailSent      bool
+	EmailSentAt    *time.Time
+	CreatedAt      time.Time
+}
+
 // NewDatabase creates a new database connection
 func NewDatabase() (*Database, error) {
 	// Get database path
@@ -182,6 +200,24 @@ func (d *Database) initSchema() error {
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 
+	-- Reports table: stores generated daily/weekly reports
+	CREATE TABLE IF NOT EXISTS reports (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		report_date DATE NOT NULL,
+		report_type TEXT NOT NULL,
+		format TEXT NOT NULL,
+		content TEXT NOT NULL,
+		summary TEXT,
+		total_hours REAL DEFAULT 0,
+		task_count INTEGER DEFAULT 0,
+		completed_count INTEGER DEFAULT 0,
+		projects_count INTEGER DEFAULT 0,
+		ai_enhanced BOOLEAN DEFAULT 0,
+		email_sent BOOLEAN DEFAULT 0,
+		email_sent_at DATETIME,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
 	-- Create indexes for common queries
 	CREATE INDEX IF NOT EXISTS idx_triggers_timestamp ON triggers(timestamp);
 	CREATE INDEX IF NOT EXISTS idx_triggers_type ON triggers(trigger_type);
@@ -194,6 +230,8 @@ func (d *Database) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs(timestamp);
 	CREATE INDEX IF NOT EXISTS idx_logs_level ON logs(level);
 	CREATE INDEX IF NOT EXISTS idx_logs_component ON logs(component);
+	CREATE INDEX IF NOT EXISTS idx_reports_date ON reports(report_date);
+	CREATE INDEX IF NOT EXISTS idx_reports_type ON reports(report_type);
 	`
 
 	_, err := d.db.Exec(schema)
@@ -549,5 +587,187 @@ func (d *Database) GetStats() (map[string]interface{}, error) {
 
 	stats["database_path"] = d.path
 
+	// Count reports
+	var reportCount int
+	err = d.db.QueryRow("SELECT COUNT(*) FROM reports").Scan(&reportCount)
+	if err != nil {
+		return nil, err
+	}
+	stats["reports"] = reportCount
+
 	return stats, nil
+}
+
+// InsertReport inserts a report record into the database
+func (d *Database) InsertReport(record ReportRecord) (int64, error) {
+	query := `
+		INSERT INTO reports (report_date, report_type, format, content, summary, total_hours, task_count, completed_count, projects_count, ai_enhanced, email_sent, email_sent_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+
+	result, err := d.db.Exec(query,
+		record.ReportDate,
+		record.ReportType,
+		record.Format,
+		record.Content,
+		record.Summary,
+		record.TotalHours,
+		record.TaskCount,
+		record.CompletedCount,
+		record.ProjectsCount,
+		record.AIEnhanced,
+		record.EmailSent,
+		record.EmailSentAt,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("failed to insert report: %w", err)
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get last insert id: %w", err)
+	}
+
+	return id, nil
+}
+
+// GetReportByID retrieves a report by ID
+func (d *Database) GetReportByID(id int64) (*ReportRecord, error) {
+	query := `
+		SELECT id, report_date, report_type, format, content, summary, total_hours, task_count, completed_count, projects_count, ai_enhanced, email_sent, email_sent_at, created_at
+		FROM reports
+		WHERE id = ?
+	`
+
+	var record ReportRecord
+	err := d.db.QueryRow(query, id).Scan(
+		&record.ID,
+		&record.ReportDate,
+		&record.ReportType,
+		&record.Format,
+		&record.Content,
+		&record.Summary,
+		&record.TotalHours,
+		&record.TaskCount,
+		&record.CompletedCount,
+		&record.ProjectsCount,
+		&record.AIEnhanced,
+		&record.EmailSent,
+		&record.EmailSentAt,
+		&record.CreatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get report: %w", err)
+	}
+
+	return &record, nil
+}
+
+// GetReports retrieves reports with optional filters
+func (d *Database) GetReports(reportType string, days int, limit int) ([]ReportRecord, error) {
+	var query string
+	var args []interface{}
+
+	if reportType != "" {
+		query = `
+			SELECT id, report_date, report_type, format, content, summary, total_hours, task_count, completed_count, projects_count, ai_enhanced, email_sent, email_sent_at, created_at
+			FROM reports
+			WHERE report_type = ? AND report_date >= date('now', '-' || ? || ' days')
+			ORDER BY report_date DESC
+			LIMIT ?
+		`
+		args = []interface{}{reportType, days, limit}
+	} else {
+		query = `
+			SELECT id, report_date, report_type, format, content, summary, total_hours, task_count, completed_count, projects_count, ai_enhanced, email_sent, email_sent_at, created_at
+			FROM reports
+			WHERE report_date >= date('now', '-' || ? || ' days')
+			ORDER BY report_date DESC
+			LIMIT ?
+		`
+		args = []interface{}{days, limit}
+	}
+
+	rows, err := d.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query reports: %w", err)
+	}
+	defer rows.Close()
+
+	var reports []ReportRecord
+	for rows.Next() {
+		var record ReportRecord
+		err := rows.Scan(
+			&record.ID,
+			&record.ReportDate,
+			&record.ReportType,
+			&record.Format,
+			&record.Content,
+			&record.Summary,
+			&record.TotalHours,
+			&record.TaskCount,
+			&record.CompletedCount,
+			&record.ProjectsCount,
+			&record.AIEnhanced,
+			&record.EmailSent,
+			&record.EmailSentAt,
+			&record.CreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan report: %w", err)
+		}
+		reports = append(reports, record)
+	}
+
+	return reports, nil
+}
+
+// UpdateReportEmailStatus updates the email sent status for a report
+func (d *Database) UpdateReportEmailStatus(id int64, sent bool) error {
+	query := `
+		UPDATE reports
+		SET email_sent = ?, email_sent_at = CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE NULL END
+		WHERE id = ?
+	`
+
+	_, err := d.db.Exec(query, sent, sent, id)
+	if err != nil {
+		return fmt.Errorf("failed to update report email status: %w", err)
+	}
+
+	return nil
+}
+
+// GetReportByDate retrieves a report for a specific date and type
+func (d *Database) GetReportByDate(reportDate time.Time, reportType string) (*ReportRecord, error) {
+	query := `
+		SELECT id, report_date, report_type, format, content, summary, total_hours, task_count, completed_count, projects_count, ai_enhanced, email_sent, email_sent_at, created_at
+		FROM reports
+		WHERE date(report_date) = date(?) AND report_type = ?
+		ORDER BY created_at DESC
+		LIMIT 1
+	`
+
+	var record ReportRecord
+	err := d.db.QueryRow(query, reportDate, reportType).Scan(
+		&record.ID,
+		&record.ReportDate,
+		&record.ReportType,
+		&record.Format,
+		&record.Content,
+		&record.Summary,
+		&record.TotalHours,
+		&record.TaskCount,
+		&record.CompletedCount,
+		&record.ProjectsCount,
+		&record.AIEnhanced,
+		&record.EmailSent,
+		&record.EmailSentAt,
+		&record.CreatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get report by date: %w", err)
+	}
+
+	return &record, nil
 }

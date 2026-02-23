@@ -66,6 +66,41 @@ except ImportError as e:
     git_analyzer_available = False
     GitDiffAnalyzer = None
 
+# Import Description Enhancer (Ollama-based)
+try:
+    from backend.description_enhancer import DescriptionEnhancer, EnhancedDescription
+    description_enhancer_available = True
+except ImportError as e:
+    logger.warning(f"Description enhancer not available: {e}")
+    description_enhancer_available = False
+    DescriptionEnhancer = None
+    EnhancedDescription = None
+
+# Import TUI for user prompts
+try:
+    from backend.user_prompt import DevTrackTUI, UserResponse
+    tui_available = True
+except ImportError as e:
+    logger.warning(f"TUI not available: {e}")
+    tui_available = False
+    DevTrackTUI = None
+    UserResponse = None
+
+# Import Daily Report Generator (Phase 5)
+try:
+    from backend.daily_report_generator import (
+        DailyReportGenerator, EnhancedReport, ReportStyle, OutputFormat, WeeklyReport
+    )
+    daily_report_available = True
+except ImportError as e:
+    logger.warning(f"Daily report generator not available: {e}")
+    daily_report_available = False
+    DailyReportGenerator = None
+    EnhancedReport = None
+    ReportStyle = None
+    OutputFormat = None
+    WeeklyReport = None
+
 
 class DevTrackBridge:
     """Main bridge between Go daemon and Python AI layer"""
@@ -92,6 +127,39 @@ class DevTrackBridge:
                 logger.info("✓ Git diff analyzer initialized")
             except Exception as e:
                 logger.warning(f"Could not initialize git analyzer: {e}")
+        
+        # Initialize Description Enhancer (Ollama) if available
+        self.description_enhancer = None
+        if description_enhancer_available:
+            try:
+                self.description_enhancer = DescriptionEnhancer()
+                if self.description_enhancer.is_available():
+                    logger.info("✓ Description enhancer initialized (Ollama available)")
+                else:
+                    logger.info("✓ Description enhancer initialized (Ollama not available, using fallback)")
+            except Exception as e:
+                logger.warning(f"Could not initialize description enhancer: {e}")
+        
+        # Initialize TUI if available
+        self.tui = None
+        if tui_available:
+            try:
+                self.tui = DevTrackTUI()
+                logger.info("✓ TUI initialized")
+            except Exception as e:
+                logger.warning(f"Could not initialize TUI: {e}")
+        
+        # Initialize Daily Report Generator (Phase 5) if available
+        self.report_generator = None
+        if daily_report_available:
+            try:
+                self.report_generator = DailyReportGenerator()
+                if self.report_generator.check_ollama_available():
+                    logger.info("✓ Daily report generator initialized (AI-enhanced)")
+                else:
+                    logger.info("✓ Daily report generator initialized (basic mode)")
+            except Exception as e:
+                logger.warning(f"Could not initialize daily report generator: {e}")
     
     def handle_commit_trigger(self, msg: IPCMessage):
         """Handle commit trigger from Go daemon"""
@@ -216,7 +284,7 @@ class DevTrackBridge:
         logger.info("")
     
     def handle_timer_trigger(self, msg: IPCMessage):
-        """Handle timer trigger from Go daemon"""
+        """Handle timer trigger from Go daemon - prompts user for work update"""
         self.trigger_count["timer"] += 1
         
         logger.info("=" * 60)
@@ -224,8 +292,9 @@ class DevTrackBridge:
         logger.info("=" * 60)
         
         data = msg.data
+        interval_mins = data.get('interval_mins', 0)
         logger.info(f"Timestamp: {data.get('timestamp', '')}")
-        logger.info(f"Interval: {data.get('interval_mins', 0)} minutes")
+        logger.info(f"Interval: {interval_mins} minutes")
         logger.info(f"Trigger Count: {data.get('trigger_count', 0)}")
         logger.info("")
         
@@ -233,21 +302,392 @@ class DevTrackBridge:
         ack = create_ack_message(msg.id)
         self.ipc_client.send_message(ack)
         
-        # TODO: Phase 3 - Prompt user for update via TUI or web interface
-        # TODO: Phase 3 - Parse user input with spaCy NLP
-        # TODO: Phase 3 - Use Ollama to enhance descriptions
-        # TODO: Phase 4 - Update task management systems
-        # TODO: Phase 5 - Generate daily report if end of day
+        # Phase 3 Implementation: TUI + NLP + Ollama Enhancement
         
-        logger.info("📝 Next steps (to be implemented):")
-        logger.info("   1. Prompt user: 'What did you work on?'")
-        logger.info("   2. Parse response with spaCy NLP")
-        logger.info("   3. Extract tasks, tickets, time spent")
-        logger.info("   4. Use Ollama for task description enhancement")
-        logger.info("   5. Match to existing tasks (semantic matching)")
-        logger.info("   6. Update Azure DevOps/GitHub/JIRA")
-        logger.info("   7. Check if EOD - generate email report")
+        # Step 1: Prompt user for work update via TUI
+        user_input = None
+        if self.tui:
+            try:
+                context = {
+                    "interval_mins": interval_mins,
+                    "trigger_count": data.get('trigger_count', 0)
+                }
+                response = self.tui.prompt_work_update(context)
+                
+                if response.cancelled:
+                    logger.info("⚠️  User cancelled the prompt")
+                    self.tui.print_warning("Update skipped - you can update later")
+                    return
+                elif response.timed_out:
+                    logger.info("⚠️  Prompt timed out")
+                    self.tui.print_warning("Prompt timed out - will ask again next interval")
+                    return
+                elif not response.is_valid():
+                    logger.info("ℹ️  Empty response - no update to process")
+                    self.tui.print_info("No input received - skipping update")
+                    return
+                
+                user_input = response.raw_input
+                logger.info(f"📝 User input received: {user_input[:50]}...")
+                
+            except Exception as e:
+                logger.error(f"Error prompting user: {e}")
+                return
+        else:
+            logger.warning("TUI not available - cannot prompt user interactively")
+            logger.info("📝 Next steps (TUI not available):")
+            logger.info("   - Install TUI dependencies or use non-interactive mode")
+            return
+        
+        # Step 2: Parse user input with spaCy NLP
+        parsed = None
+        if self.nlp_parser and user_input:
+            try:
+                self.tui.show_progress("Parsing with NLP")
+                parsed = self.nlp_parser.parse(user_input)
+                self.tui.show_progress("Parsing with NLP", done=True)
+                
+                # Display parsed information
+                self.tui.display_parsed_task(parsed.to_dict())
+                
+                logger.info("📋 NLP Parsing Results:")
+                logger.info(f"   Project: {parsed.project}")
+                logger.info(f"   Ticket:  {parsed.ticket_id}")
+                logger.info(f"   Action:  {parsed.action_verb}")
+                logger.info(f"   Status:  {parsed.status}")
+                logger.info(f"   Time:    {parsed.time_spent}")
+                logger.info(f"   Confidence: {parsed.confidence:.2f}")
+                
+            except Exception as e:
+                logger.error(f"Error parsing with NLP: {e}")
+                # Continue with basic processing
+        
+        # Step 3: Enhance description with Ollama
+        enhanced = None
+        if self.description_enhancer and user_input:
+            try:
+                self.tui.show_progress("Enhancing description with AI")
+                
+                # Build context for enhancement
+                enhance_context = {}
+                if parsed:
+                    if parsed.project:
+                        enhance_context["project"] = parsed.project
+                    if parsed.ticket_id:
+                        enhance_context["ticket_id"] = parsed.ticket_id
+                
+                enhanced = self.description_enhancer.enhance(user_input, enhance_context)
+                self.tui.show_progress("Enhancing description with AI", done=True)
+                
+                # Display enhanced description
+                self.tui.display_enhanced_description(enhanced.to_dict())
+                
+                logger.info("🧠 AI Enhancement Results:")
+                logger.info(f"   Category: {enhanced.category}")
+                logger.info(f"   Summary: {enhanced.summary}")
+                logger.info(f"   Keywords: {', '.join(enhanced.keywords)}")
+                
+            except Exception as e:
+                logger.error(f"Error enhancing description: {e}")
+                # Continue with parsed description
+        
+        # Step 4: Confirm with user
+        final_description = user_input
+        if enhanced and enhanced.enhanced:
+            final_description = enhanced.enhanced
+        elif parsed and parsed.description:
+            final_description = parsed.description
+        
+        # Ask user to confirm
+        if self.tui:
+            print(f"\n{self.tui.ICON_TASK} Final description:")
+            print(f"   {final_description[:100]}...")
+            confirmed = self.tui.prompt_yes_no("Save this update?", default=True)
+            
+            if not confirmed:
+                self.tui.print_warning("Update cancelled by user")
+                return
+        
+        # Step 5: Create and send task update
+        project = "automation_tools"
+        ticket_id = ""
+        status = "in_progress"
+        time_spent = ""
+        
+        if parsed:
+            project = parsed.project or project
+            ticket_id = parsed.ticket_id or ticket_id
+            status = parsed.status or status
+            time_spent = parsed.time_spent or time_spent
+        
+        # Add category prefix if enhanced
+        if enhanced and enhanced.category and enhanced.category != "other":
+            final_description = f"[{enhanced.category}] {final_description}"
+        
+        task_update = create_task_update_message(
+            project=project,
+            ticket_id=ticket_id,
+            description=final_description,
+            status=status,
+            time_spent=time_spent,
+            synced=False
+        )
+        self.ipc_client.send_message(task_update)
+        
+        # Success feedback
+        if self.tui:
+            self.tui.print_success("Work update saved!")
+            summary_items = {}
+            if project:
+                summary_items["Project"] = project
+            if ticket_id:
+                summary_items["Ticket"] = ticket_id
+            if status:
+                summary_items["Status"] = status
+            if time_spent:
+                summary_items["Time"] = time_spent
+            if summary_items:
+                self.tui.print_section("Update Summary", summary_items, icon="✓")
+        
         logger.info("")
+        logger.info("✓ Timer trigger processing complete")
+        logger.info(f"   ✓ User prompted via TUI")
+        if parsed:
+            logger.info(f"   ✓ Parsed with spaCy NLP (confidence: {parsed.confidence:.2f})")
+        if enhanced:
+            logger.info(f"   ✓ Enhanced with Ollama (category: {enhanced.category})")
+        logger.info(f"   ✓ Task update sent to daemon")
+        logger.info("")
+        
+        # TODO: Phase 4 - Update task management systems (Azure DevOps/GitHub/JIRA)
+        
+        # Phase 5 - Generate daily report if end of day
+        self._check_end_of_day_report()
+    
+    def _check_end_of_day_report(self):
+        """Check if it's end of day and offer to generate report."""
+        if not self.report_generator:
+            logger.debug("Report generator not available, skipping end-of-day check")
+            return
+        
+        # Check if within end-of-day window (default 6:00 PM ± 15 minutes)
+        if not self.report_generator.is_end_of_day():
+            return
+        
+        from datetime import datetime
+        is_friday = datetime.now().weekday() == 4  # Friday
+        
+        logger.info("")
+        logger.info("📊 End of day detected - offering report generation")
+        
+        # Prompt user via TUI if available
+        if self.tui:
+            # On Fridays, offer weekly report option
+            if is_friday:
+                logger.info("📅 It's Friday - weekly report option available")
+                
+                # Ask which report they want
+                options = [
+                    "Daily report only",
+                    "Weekly report (includes all days)",
+                    "Skip for now"
+                ]
+                choice_idx, choice_text = self.tui.prompt_choice(
+                    "End of week! Which report would you like?",
+                    options=options,
+                    default=1  # Weekly is default on Friday
+                )
+                
+                if choice_idx == 2:  # Skip
+                    logger.info("User skipped report generation")
+                    return
+                elif choice_idx == 1:  # Weekly
+                    self._generate_weekly_report()
+                    return
+                # else choice_idx == 0: continue with daily
+            else:
+                generate = self.tui.prompt_yes_no(
+                    "End of day! Would you like to generate your daily report?",
+                    default=True
+                )
+                
+                if not generate:
+                    logger.info("User declined daily report generation")
+                    return
+        
+        # Generate the daily report
+        self._generate_daily_report()
+    
+    def _generate_daily_report(self, save: bool = True):
+        """
+        Generate the daily report with AI enhancement.
+        
+        Args:
+            save: Whether to save the report to a file
+        """
+        if not self.report_generator:
+            logger.error("Report generator not available")
+            return
+        
+        logger.info("📊 Generating AI-enhanced daily report...")
+        
+        # Show progress if TUI available
+        if self.tui:
+            self.tui.show_progress("Collecting activities...")
+        
+        # Generate enhanced report
+        report = self.report_generator.generate_report(
+            style=ReportStyle.PROFESSIONAL if ReportStyle else "professional",
+            include_ai=True
+        )
+        
+        if self.tui:
+            self.tui.show_progress("Analyzing with AI...")
+        
+        # Display preview
+        if self.tui:
+            preview = self.report_generator.get_report_preview(report)
+            print("\n" + preview + "\n")
+            self.tui.show_progress("Report ready!", done=True)
+        
+        # Ask about output options
+        output_choice = "terminal"
+        if self.tui:
+            # Simple approach - show to terminal and offer to save
+            terminal_report = self.report_generator.format_report(
+                report,
+                OutputFormat.TERMINAL if OutputFormat else "terminal"
+            )
+            print("\n" + terminal_report)
+            
+            if save:
+                save_it = self.tui.prompt_yes_no(
+                    "Save this report to a file?",
+                    default=True
+                )
+                
+                if save_it:
+                    saved_path = self.report_generator.save_report(
+                        report,
+                        OutputFormat.MARKDOWN if OutputFormat else "markdown"
+                    )
+                    self.tui.print_success(f"Report saved to: {saved_path}")
+                    
+                    # Also save HTML version
+                    html_path = self.report_generator.save_report(
+                        report,
+                        OutputFormat.HTML if OutputFormat else "html"
+                    )
+                    logger.info(f"HTML report saved to: {html_path}")
+        else:
+            # No TUI - just log the report
+            terminal_report = self.report_generator.format_report(
+                report,
+                OutputFormat.TERMINAL if OutputFormat else "terminal"
+            )
+            logger.info("\n" + terminal_report)
+            
+            if save:
+                saved_path = self.report_generator.save_report(
+                    report,
+                    OutputFormat.TEXT if OutputFormat else "text"
+                )
+                logger.info(f"Report saved to: {saved_path}")
+        
+        # Log summary
+        logger.info("")
+        logger.info("✓ Daily report generation complete")
+        if report.is_ai_enhanced:
+            logger.info("   ✓ AI insights generated")
+        logger.info(f"   ✓ Activities: {len(report.base_report.activities)}")
+        logger.info(f"   ✓ Total hours: {report.base_report.total_hours:.1f}h")
+    
+    def _generate_weekly_report(self, save: bool = True):
+        """
+        Generate the weekly report with AI enhancement.
+        
+        Args:
+            save: Whether to save the report to a file
+        """
+        if not self.report_generator:
+            logger.error("Report generator not available")
+            return
+        
+        logger.info("📊 Generating AI-enhanced weekly report...")
+        
+        # Show progress if TUI available
+        if self.tui:
+            self.tui.show_progress("Collecting week's activities...")
+        
+        # Generate weekly report
+        weekly_report = self.report_generator.generate_weekly_report(
+            include_ai=True
+        )
+        
+        if self.tui:
+            self.tui.show_progress("Analyzing week with AI...")
+        
+        # Display the report
+        if self.tui:
+            terminal_report = self.report_generator.format_weekly_report(
+                weekly_report,
+                OutputFormat.TERMINAL if OutputFormat else "terminal"
+            )
+            print("\n" + terminal_report)
+            self.tui.show_progress("Weekly report ready!", done=True)
+            
+            if save:
+                save_it = self.tui.prompt_yes_no(
+                    "Save this weekly report to a file?",
+                    default=True
+                )
+                
+                if save_it:
+                    # Save as markdown
+                    import os
+                    home_dir = os.path.expanduser("~")
+                    reports_dir = os.path.join(home_dir, ".devtrack", "reports")
+                    os.makedirs(reports_dir, exist_ok=True)
+                    
+                    week_str = weekly_report.week_start.strftime('%Y-%m-%d')
+                    ai_suffix = "_ai" if weekly_report.is_ai_enhanced else ""
+                    md_path = os.path.join(reports_dir, f"weekly-{week_str}{ai_suffix}.md")
+                    
+                    content = self.report_generator.format_weekly_report(
+                        weekly_report,
+                        OutputFormat.MARKDOWN if OutputFormat else "markdown"
+                    )
+                    with open(md_path, 'w') as f:
+                        f.write(content)
+                    
+                    self.tui.print_success(f"Weekly report saved to: {md_path}")
+                    
+                    # Also save HTML version
+                    html_path = os.path.join(reports_dir, f"weekly-{week_str}{ai_suffix}.html")
+                    html_content = self.report_generator.format_weekly_report(
+                        weekly_report,
+                        OutputFormat.HTML if OutputFormat else "html"
+                    )
+                    with open(html_path, 'w') as f:
+                        f.write(html_content)
+                    
+                    logger.info(f"HTML weekly report saved to: {html_path}")
+        else:
+            # No TUI - just log the report
+            terminal_report = self.report_generator.format_weekly_report(
+                weekly_report,
+                OutputFormat.TERMINAL if OutputFormat else "terminal"
+            )
+            logger.info("\n" + terminal_report)
+        
+        # Log summary
+        logger.info("")
+        logger.info("✓ Weekly report generation complete")
+        if weekly_report.is_ai_enhanced:
+            logger.info("   ✓ AI insights generated")
+        logger.info(f"   ✓ Days covered: {len(weekly_report.daily_reports)}")
+        logger.info(f"   ✓ Total hours: {weekly_report.total_hours:.1f}h")
+        logger.info(f"   ✓ Tasks completed: {weekly_report.total_completed}")
     
     def handle_status_query(self, msg: IPCMessage):
         """Handle status query from Go daemon"""
@@ -271,6 +711,38 @@ class DevTrackBridge:
         logger.info("🛑 Shutdown message received")
         self.running = False
     
+    def handle_report_trigger(self, msg: IPCMessage):
+        """Handle report trigger from Go daemon or CLI"""
+        logger.info("="* 60)
+        logger.info("📊 REPORT TRIGGER RECEIVED")
+        logger.info("=" * 60)
+        
+        # Send acknowledgment
+        ack = create_ack_message(msg.id)
+        self.ipc_client.send_message(ack)
+        
+        data = msg.data or {}
+        date_str = data.get('date')  # Optional: specific date YYYY-MM-DD
+        report_type = data.get('type', 'daily')  # 'daily' or 'weekly'
+        save = data.get('save', True)
+        
+        # Parse date if provided
+        from datetime import datetime
+        if date_str:
+            try:
+                datetime.strptime(date_str, '%Y-%m-%d')
+                logger.info(f"Generating report for: {date_str}")
+            except ValueError:
+                logger.warning(f"Invalid date format: {date_str}, using today")
+        
+        # Generate the appropriate report
+        if report_type == 'weekly':
+            logger.info("Generating weekly report...")
+            self._generate_weekly_report(save=save)
+        else:
+            logger.info("Generating daily report...")
+            self._generate_daily_report(save=save)
+    
     def start(self):
         """Start the Python bridge"""
         self.start_time = time.time()
@@ -281,6 +753,7 @@ class DevTrackBridge:
         # Register handlers
         self.ipc_client.register_handler(MessageType.COMMIT_TRIGGER, self.handle_commit_trigger)
         self.ipc_client.register_handler(MessageType.TIMER_TRIGGER, self.handle_timer_trigger)
+        self.ipc_client.register_handler(MessageType.REPORT_TRIGGER, self.handle_report_trigger)
         self.ipc_client.register_handler(MessageType.STATUS_QUERY, self.handle_status_query)
         self.ipc_client.register_handler(MessageType.SHUTDOWN, self.handle_shutdown)
         
