@@ -10,11 +10,12 @@ import sys
 import json
 import sqlite3
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 
-# Add paths
-sys.path.insert(0, os.path.dirname(__file__))
+# Add project root for backend imports
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
 @dataclass
@@ -92,19 +93,37 @@ class EmailReporter:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
-            # Query task updates for the day
-            query = """
-                SELECT timestamp, project, ticket_id, status, update_text, 
-                       time_estimate, source
-                FROM task_updates
-                WHERE timestamp >= ? AND timestamp <= ?
-                ORDER BY timestamp ASC
-            """
-            
+            # Query task updates for the day (schema: Go devtrack uses timestamp, project,
+            # ticket_id, status, update_text; no time_estimate/source - use 0 and 'manual')
+            cursor.execute("PRAGMA table_info(task_updates)")
+            columns = [r[1] for r in cursor.fetchall()]
+            has_time_estimate = "time_estimate" in columns
+            has_source = "source" in columns
+
+            if has_time_estimate and has_source:
+                query = """
+                    SELECT timestamp, project, ticket_id, status, update_text,
+                           time_estimate, source
+                    FROM task_updates
+                    WHERE timestamp >= ? AND timestamp <= ?
+                    ORDER BY timestamp ASC
+                """
+            else:
+                query = """
+                    SELECT timestamp, project, ticket_id, status, update_text
+                    FROM task_updates
+                    WHERE timestamp >= ? AND timestamp <= ?
+                    ORDER BY timestamp ASC
+                """
+
             cursor.execute(query, (start_of_day.isoformat(), end_of_day.isoformat()))
-            
+
             for row in cursor.fetchall():
-                timestamp_str, project, ticket_id, status, description, time_est, source = row
+                if has_time_estimate and has_source:
+                    timestamp_str, project, ticket_id, status, description, time_est, source = row
+                else:
+                    timestamp_str, project, ticket_id, status, description = row
+                    time_est, source = 0, "manual"
                 
                 activities.append(ActivitySummary(
                     timestamp=datetime.fromisoformat(timestamp_str),
@@ -522,8 +541,15 @@ class EmailReporter:
         """
         if output_path is None:
             date_str = report.date.strftime('%Y-%m-%d')
-            home_dir = os.path.expanduser("~")
-            reports_dir = os.path.join(home_dir, ".devtrack", "reports")
+            try:
+                from backend.config import get
+                project_root = get("PROJECT_ROOT")
+                if project_root:
+                    reports_dir = os.path.join(project_root, "Data", "reports")
+                else:
+                    reports_dir = os.path.join(os.path.expanduser("~"), ".devtrack", "reports")
+            except ImportError:
+                reports_dir = os.path.join(os.path.expanduser("~"), ".devtrack", "reports")
             os.makedirs(reports_dir, exist_ok=True)
             output_path = os.path.join(reports_dir, f"report-{date_str}.txt")
         

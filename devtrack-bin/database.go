@@ -597,6 +597,52 @@ func (d *Database) GetStats() (map[string]interface{}, error) {
 	return stats, nil
 }
 
+// GetAnalytics returns analytics: triggers today/week, top projects
+func (d *Database) GetAnalytics() (map[string]interface{}, error) {
+	analytics := make(map[string]interface{})
+
+	// Triggers today
+	var today int
+	err := d.db.QueryRow(`
+		SELECT COUNT(*) FROM triggers
+		WHERE date(timestamp) = date('now')
+	`).Scan(&today)
+	if err == nil {
+		analytics["triggers_today"] = today
+	}
+
+	// Triggers this week
+	var week int
+	err = d.db.QueryRow(`
+		SELECT COUNT(*) FROM triggers
+		WHERE timestamp >= date('now', '-7 days')
+	`).Scan(&week)
+	if err == nil {
+		analytics["triggers_this_week"] = week
+	}
+
+	// Top projects by task update count (last 30 days)
+	rows, err := d.db.Query(`
+		SELECT project, COUNT(*) as cnt FROM task_updates
+		WHERE timestamp >= date('now', '-30 days') AND project != ''
+		GROUP BY project ORDER BY cnt DESC LIMIT 5
+	`)
+	if err == nil {
+		defer rows.Close()
+		var top []map[string]interface{}
+		for rows.Next() {
+			var p string
+			var c int64
+			if rows.Scan(&p, &c) == nil {
+				top = append(top, map[string]interface{}{"project": p, "count": c})
+			}
+		}
+		analytics["top_projects"] = top
+	}
+
+	return analytics, nil
+}
+
 // InsertReport inserts a report record into the database
 func (d *Database) InsertReport(record ReportRecord) (int64, error) {
 	query := `

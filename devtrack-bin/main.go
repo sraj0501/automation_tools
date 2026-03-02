@@ -23,7 +23,7 @@ func main() {
 		if cmd == "start" || cmd == "stop" || cmd == "restart" ||
 			cmd == "status" || cmd == "pause" || cmd == "resume" ||
 			cmd == "logs" || cmd == "version" || cmd == "help" ||
-			cmd == "db-stats" || cmd == "enable-learning" || cmd == "show-profile" ||
+			cmd == "db-stats" || cmd == "stats" || cmd == "enable-learning" || cmd == "show-profile" ||
 			cmd == "test-response" || cmd == "revoke-consent" || cmd == "learning-status" ||
 			cmd == "preview-report" || cmd == "send-report" || cmd == "save-report" ||
 			cmd == "force-trigger" || cmd == "send-summary" || cmd == "skip-next" {

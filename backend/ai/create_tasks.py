@@ -196,6 +196,47 @@ Generate tasks that are specific, measurable, and implementable.
         df = pd.DataFrame(tasks)
         df.to_csv(filename, index=False)
         print(f"Tasks exported to {filename}")
+
+    def import_from_csv(
+        self,
+        filename: str,
+        title_col: str = "Title",
+        description_col: Optional[str] = "Description",
+        state_col: Optional[str] = "State",
+        assignee_col: Optional[str] = "Assigned To",
+    ) -> List[Dict]:
+        """
+        Import tasks from a CSV file.
+
+        Args:
+            filename: Path to CSV file
+            title_col: Column name for task title
+            description_col: Column name for description (optional)
+            state_col: Column name for state (optional)
+            assignee_col: Column name for assignee (optional)
+
+        Returns:
+            List of task dictionaries compatible with generate_tasks output format
+        """
+        df = pd.read_csv(filename)
+        if title_col not in df.columns:
+            raise ValueError(f"CSV must have '{title_col}' column. Found: {list(df.columns)}")
+        tasks = []
+        defaults = _get_task_defaults()
+        for idx, row in df.iterrows():
+            task = {
+                "Work Item Type": "Task",
+                "Title": str(row[title_col]),
+                "Assigned To": str(row.get(assignee_col, defaults.get("assignee", ""))) if assignee_col and assignee_col in df.columns else defaults.get("assignee", ""),
+                "State": str(row.get(state_col, "New")) if state_col and state_col in df.columns else "New",
+                "Tags": "Imported",
+                "Work Item ID": str(1000 + idx),
+                "Description": str(row.get(description_col, "")) if description_col and description_col in df.columns else "",
+                "Category": "import",
+            }
+            tasks.append(task)
+        print(f"Imported {len(tasks)} tasks from {filename}")
+        return tasks
     
     def export_to_markdown(self, tasks: List[Dict], filename: str = "generated_tasks.md"):
         """Export tasks to markdown table format"""

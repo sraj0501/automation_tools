@@ -312,7 +312,6 @@ def main():
     
     # Load env from project root
     try:
-        import sys
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
         from backend.config import _load_env
         _load_env()

@@ -87,6 +87,9 @@
                 <a href="#troubleshooting" class="nav-item" data-tab="troubleshooting">
                     <i class="nav-icon fas fa-wrench"></i> <span class="nav-text">Troubleshooting</span>
                 </a>
+                <a href="#roadmap" class="nav-item" data-tab="roadmap">
+                    <i class="nav-icon fas fa-map"></i> <span class="nav-text">Roadmap</span>
+                </a>
             </div>
 
             <a href="privacy.html" class="nav-item privacy-link">
@@ -2766,6 +2769,117 @@ sqlite3 -header -csv ~/.local/share/devtrack/devtrack.db \
                         <li>Restart daemon: <code>devtrack restart</code></li>
                     </ol>
                 </div>
+            </section>
+
+            <!-- Roadmap Tab -->
+            <section id="roadmap" class="tab-content">
+                <div class="page-header">
+                    <h1>Development Roadmap</h1>
+                    <p class="lead">Phase-wise implementation plan for DevTrack</p>
+                </div>
+
+                <h2>Overall Progress</h2>
+                <p>DevTrack development follows a phased approach. Phase 0 (Verification) must complete before new features.</p>
+
+                <div class="progress-section" style="margin: 1.5rem 0;">
+                    <h3>Phase 1: Python Prototype ✅ 95%</h3>
+                    <ul>
+                        <li>✅ Azure DevOps integration</li>
+                        <li>✅ Microsoft Graph API</li>
+                        <li>✅ OLLAMA AI task generation</li>
+                        <li>✅ CSV/Excel task tracking (import_from_csv, export_to_csv)</li>
+                        <li>✅ Teams chat sentiment analysis (positive/negative/neutral)</li>
+                    </ul>
+                </div>
+
+                <div class="progress-section" style="margin: 1.5rem 0;">
+                    <h3>Phase 2: Go Background Engine ✅ 95%</h3>
+                    <ul>
+                        <li>✅ Git monitoring and commit detection</li>
+                        <li>✅ Time-based scheduler (robfig/cron)</li>
+                        <li>✅ Background daemon process</li>
+                        <li>✅ CLI command interface</li>
+                        <li>✅ IPC communication, SQLite caching</li>
+                    </ul>
+                </div>
+
+                <div class="progress-section" style="margin: 1.5rem 0;">
+                    <h3>Phase 3: AI Intelligence ✅ 90%</h3>
+                    <ul>
+                        <li>✅ NLP task parsing (spaCy)</li>
+                        <li>✅ Personalized AI learning</li>
+                        <li>✅ Task matching and fuzzy logic</li>
+                        <li>✅ Interactive work updates (TUI) – see docs/TUI_FLOWS.md</li>
+                        <li>✅ Automated email report generation</li>
+                    </ul>
+                </div>
+
+                <div class="progress-section" style="margin: 1.5rem 0;">
+                    <h3>Phase 4: Enhanced Integrations ✅ 60%</h3>
+                    <ul>
+                        <li>✅ Azure DevOps (optional test: list projects)</li>
+                        <li>✅ Microsoft Graph (email reports)</li>
+                        <li>✅ GitHub (optional test: list repos)</li>
+                        <li>✅ task_matcher, learning_integration verified</li>
+                        <li>Jira (pending)</li>
+                    </ul>
+                </div>
+
+                <div class="progress-section" style="margin: 1.5rem 0;">
+                    <h3>Phase 5: Advanced Features ✅ 40%</h3>
+                    <ul>
+                        <li>✅ AI-enhanced daily reports (daily_report_generator, Ollama)</li>
+                        <li>✅ Analytics: <code>devtrack stats</code> (triggers today/week, top projects)</li>
+                        <li>✅ docs/ADVANCED_FEATURES.md</li>
+                        <li>Dashboard, mobile notifications, plugin system (planned)</li>
+                    </ul>
+                </div>
+
+                <div class="progress-section" style="margin: 1.5rem 0;">
+                    <h3>Phase 6: Production Ready</h3>
+                    <ul>
+                        <li>Cross-platform testing</li>
+                        <li>Performance optimization</li>
+                        <li>Security hardening</li>
+                        <li>Documentation</li>
+                        <li>Deployment scripts</li>
+                    </ul>
+                </div>
+
+                <h2>Verification First (Phase 0) ✅ Complete</h2>
+                <p>Phase 0 verifies existing basic features before new development. <strong>Status: Complete.</strong></p>
+                <ul>
+                    <li>✅ NLP parsing (spaCy) – unit tests in <code>backend/tests/test_nlp_parser.py</code></li>
+                    <li>✅ Git commit detection and IPC flow – <code>scripts/test_commit_flow.sh</code></li>
+                    <li>✅ Commit message enhancer – <code>scripts/test_commit_enhancer.sh</code></li>
+                    <li>✅ Daemon and Python bridge – <code>scripts/test_ipc_manual.py</code>, <code>scripts/verify_setup.sh</code></li>
+                </ul>
+                <p>Run <code>./scripts/verify_setup.sh</code>, <code>uv run pytest backend/tests/ -v</code>, and the integration scripts. See <code>docs/VERIFICATION.md</code>.</p>
+
+                <h2>Phase 1: Fix Broken Flows ✅ Complete</h2>
+                <p>Phase 1 fixes identified in Phase 0. <strong>Status: Complete.</strong></p>
+                <ul>
+                    <li>✅ GPG signing disabled for test commits (<code>test_commit_flow.sh</code>)</li>
+                    <li>✅ Commit enhancer <code>UnboundLocalError</code> fixed (removed inner <code>import sys</code>)</li>
+                    <li>✅ Empty git template for enhancer test (avoids hooks permission issues)</li>
+                </ul>
+
+                <h2>Phase 2: Core AI Features ✅ Complete</h2>
+                <p>Timer trigger, non-TTY support, force-trigger flow. <strong>Status: Complete.</strong></p>
+                <ul>
+                    <li>✅ <code>devtrack force-trigger</code> fixed: sends SIGUSR2 to daemon (was broken)</li>
+                    <li>✅ <code>scripts/test_force_trigger.sh</code> – verifies trigger reaches Python via IPC</li>
+                    <li>✅ <code>user_prompt.py</code> non-TTY: <code>DEVTRACK_INPUT</code> env for CI/test</li>
+                    <li>✅ Unit tests: <code>backend/tests/test_user_prompt.py</code></li>
+                </ul>
+
+                <h2>Phase 3: Report and CLI Gaps ✅ Complete</h2>
+                <p><code>preview-report</code>, <code>save-report</code>, <code>send-report</code>. <strong>Status: Complete.</strong></p>
+                <ul>
+                    <li>✅ CLI uses config-based paths (<code>GetEmailReporterPath</code>), <code>uv run</code></li>
+                    <li>✅ <code>scripts/test_preview_report.sh</code> – verifies report generation</li>
+                    <li>✅ <code>email_reporter.py</code>: schema compatibility for Go DB, save to <code>Data/reports</code></li>
+                </ul>
             </section>
 
         </div>

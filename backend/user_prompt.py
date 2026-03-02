@@ -10,6 +10,7 @@ This module provides a simple but effective terminal interface for:
 Works in both interactive terminals and non-interactive environments.
 """
 
+import os
 import sys
 import logging
 import select
@@ -197,7 +198,11 @@ class DevTrackTUI:
         prompt_text += f"\n{Colors.YELLOW}>{Colors.RESET} "
         
         if not self.interactive:
-            # Non-interactive mode - return default or empty
+            # Non-interactive mode: use DEVTRACK_INPUT env for CI/test, else default
+            prefill = os.environ.get("DEVTRACK_INPUT", "").strip()
+            if prefill:
+                logger.info("Non-interactive: using DEVTRACK_INPUT from env")
+                return UserResponse(raw_input=prefill, timestamp=timestamp)
             logger.warning("Non-interactive terminal, cannot prompt user")
             return UserResponse(
                 raw_input=default or "",

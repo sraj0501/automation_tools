@@ -276,6 +276,24 @@ func GetPythonBridgePath() string {
 	return path
 }
 
+// GetEmailReporterPath returns the path to backend/email_reporter.py
+func GetEmailReporterPath() string {
+	config, err := LoadEnvConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: Failed to load configuration: %v\n", err)
+		os.Exit(1)
+	}
+
+	path := filepath.Join(config.ProjectRoot, "backend", "email_reporter.py")
+	if !fileExists(path) {
+		fmt.Fprintf(os.Stderr, "ERROR: Email reporter script not found at: %s\n", path)
+		fmt.Fprintf(os.Stderr, "Check PROJECT_ROOT in .env file\n")
+		os.Exit(1)
+	}
+
+	return path
+}
+
 // GetConfigFileName returns the config file name
 func GetConfigFileName() string {
 	config, err := LoadEnvConfig()

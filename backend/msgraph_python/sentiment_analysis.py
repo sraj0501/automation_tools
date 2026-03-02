@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Teams Chat Responsiveness Analysis using OLLAMA
-Analyzes responsiveness patterns and message clarity
+Teams Chat Analysis using OLLAMA
+- Responsiveness: response rate, timing, questions/requests
+- Sentiment: positive/negative/neutral scoring per message and per sender
 """
 
 import duckdb
@@ -134,6 +135,60 @@ class ChatResponsivenessAnalyzer:
             print(f"Error calling OLLAMA: {e}")
             return "Error: Connection failed"
     
+    def _analyze_message_sentiment(self, content: str) -> str:
+        """
+        Analyze message sentiment: positive, negative, or neutral.
+        Uses Ollama when available; falls back to keyword-based heuristics.
+        """
+        if not content or not content.strip():
+            return "neutral"
+        clean = self._clean_html_tags(content).strip()[:500]
+        try:
+            prompt = f"""Classify the sentiment of this message as exactly one word: positive, negative, or neutral.
+Message: "{clean}"
+Reply with only: positive, negative, or neutral"""
+            result = self._call_ollama(prompt).strip().lower()
+            for sent in ("positive", "negative", "neutral"):
+                if sent in result:
+                    return sent
+        except Exception:
+            pass
+        # Fallback: simple keyword heuristics
+        lower = clean.lower()
+        pos = ["thanks", "thank you", "great", "good", "awesome", "excellent", "perfect", "appreciate", "happy", "👍", "✅"]
+        neg = ["sorry", "unfortunately", "failed", "error", "issue", "problem", "concern", "disappointed", "frustrated", "😞", "❌"]
+        if any(p in lower for p in pos):
+            return "positive"
+        if any(n in lower for n in neg):
+            return "negative"
+        return "neutral"
+
+    def get_conversation_sentiment_summary(self, messages: List[Dict]) -> Dict[str, Any]:
+        """
+        Get sentiment summary for a list of messages.
+        Returns counts and percentages of positive/negative/neutral per sender.
+        """
+        by_sender: Dict[str, List[str]] = {}
+        for msg in messages:
+            sender = msg.get("sender", "unknown")
+            content = msg.get("content", "")
+            sent = self._analyze_message_sentiment(content)
+            if sender not in by_sender:
+                by_sender[sender] = []
+            by_sender[sender].append(sent)
+        result = {}
+        for sender, sents in by_sender.items():
+            total = len(sents)
+            result[sender] = {
+                "positive": sents.count("positive"),
+                "negative": sents.count("negative"),
+                "neutral": sents.count("neutral"),
+                "positive_pct": round(100 * sents.count("positive") / total, 1) if total else 0,
+                "negative_pct": round(100 * sents.count("negative") / total, 1) if total else 0,
+                "neutral_pct": round(100 * sents.count("neutral") / total, 1) if total else 0,
+            }
+        return result
+
     def _is_question_or_request(self, message_content: str) -> bool:
         """Check if a message contains a question or request that requires a response"""
         if not message_content:
@@ -428,6 +483,10 @@ class ChatResponsivenessAnalyzer:
         # Get overall conversation analysis
         print("🤖 Getting overall conversation analysis...")
         overall_analysis = self._get_overall_conversation_analysis(all_messages)
+
+        # Get sentiment summary (positive/negative/neutral per sender)
+        print("📊 Analyzing message sentiment...")
+        sentiment_summary = self.get_conversation_sentiment_summary(all_messages)
         
         return {
             'metadata': self.metadata,
@@ -437,6 +496,7 @@ class ChatResponsivenessAnalyzer:
             'total_participants': len(messages_by_sender),
             'sender_analysis': analysis_results,
             'overall_conversation_analysis': overall_analysis,
+            'sentiment_summary': sentiment_summary,
             'summary': self._generate_summary(analysis_results, target_sender)
         }
     
@@ -614,8 +674,11 @@ def main():
             for sender, analysis in results.get('sender_analysis', {}).items():
                 marker = " (TARGET)" if analysis['is_target_sender'] else ""
                 metrics = analysis['responsiveness_metrics']
+                sent = results.get('sentiment_summary', {}).get(sender, {})
                 
                 print(f"\n{sender}{marker}:")
+                if sent:
+                    print(f"  Sentiment: positive {sent.get('positive_pct', 0)}% | negative {sent.get('negative_pct', 0)}% | neutral {sent.get('neutral_pct', 0)}%")
                 print(f"  Messages Sent: {metrics['total_messages']}")
                 print(f"  Messages from Others: {metrics['others_message_count']}")
                 print(f"  Questions/Requests received: {metrics['questions_or_requests_count']}")

@@ -99,7 +99,7 @@ func (cli *CLI) Execute() error {
 		return cli.handleResume()
 	case "logs":
 		return cli.handleLogs()
-	case "db-stats":
+	case "db-stats", "stats":
 		return cli.handleDBStats()
 	case "enable-learning":
 		return cli.handleEnableLearning()
@@ -382,7 +382,7 @@ func (cli *CLI) handleResume() error {
 	return nil
 }
 
-// handleForceTrigger forces an immediate trigger
+// handleForceTrigger forces an immediate trigger by sending SIGUSR2 to the running daemon
 func (cli *CLI) handleForceTrigger() error {
 	if !cli.daemon.IsRunning() {
 		fmt.Println("❌ Daemon is not running")
@@ -391,14 +391,24 @@ func (cli *CLI) handleForceTrigger() error {
 		return nil
 	}
 
-	if cli.daemon.monitor == nil || cli.daemon.monitor.scheduler == nil {
-		fmt.Println("❌ Scheduler not initialized")
-		return fmt.Errorf("scheduler not available")
+	pid, err := cli.daemon.readPID()
+	if err != nil {
+		fmt.Printf("❌ Could not read daemon PID: %v\n", err)
+		return err
 	}
 
 	fmt.Println("⚡ Forcing immediate trigger...")
 
-	cli.daemon.monitor.scheduler.ForceImmediate()
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		fmt.Printf("❌ Could not find daemon process: %v\n", err)
+		return err
+	}
+
+	if err := process.Signal(syscall.SIGUSR2); err != nil {
+		fmt.Printf("❌ Could not send signal to daemon: %v\n", err)
+		return err
+	}
 
 	// Give it a moment to execute
 	time.Sleep(500 * time.Millisecond)
@@ -524,16 +534,12 @@ func (cli *CLI) handleVersion() error {
 	fmt.Println()
 	fmt.Println("Components:")
 	fmt.Println("  • Git monitoring (go-git)")
-	fmt.Println("  • Time-based scheduler (cron)")
-	fmt.Println("  • Background daemon")
-	fmt.Println("  • Configuration management (YAML)")
-	fmt.Println()
-	fmt.Println("Coming soon:")
-	fmt.Println("  • IPC communication")
-	fmt.Println("  • SQLite database")
-	fmt.Println("  • NLP task parsing")
-	fmt.Println("  • Semantic task matching")
-	fmt.Println("  • Email reports")
+	fmt.Println("  • Time-based scheduler (robfig/cron)")
+	fmt.Println("  • Background daemon + Python bridge")
+	fmt.Println("  • IPC communication, SQLite database")
+	fmt.Println("  • NLP task parsing (spaCy)")
+	fmt.Println("  • Task matching, email reports")
+	fmt.Println("  • AI-enhanced daily reports (Ollama)")
 	return nil
 }
 
@@ -556,14 +562,38 @@ func (cli *CLI) handleDBStats() error {
 		return fmt.Errorf("failed to get database stats: %w", err)
 	}
 
+	// Get analytics
+	analytics, _ := db.GetAnalytics()
+
 	// Display stats
 	fmt.Printf("Database Path:    %s\n", stats["database_path"])
 	fmt.Println()
 	fmt.Printf("Total Triggers:   %d\n", stats["triggers"])
+	if today, ok := analytics["triggers_today"].(int); ok {
+		fmt.Printf("  Today:          %d\n", today)
+	}
+	if week, ok := analytics["triggers_this_week"].(int); ok {
+		fmt.Printf("  This week:      %d\n", week)
+	}
 	fmt.Printf("Total Responses:  %d\n", stats["responses"])
 	fmt.Printf("Task Updates:     %d\n", stats["task_updates"])
 	fmt.Printf("Unsynced Updates: %d\n", stats["unsynced_updates"])
 	fmt.Printf("Log Entries:      %d\n", stats["logs"])
+	if top, ok := analytics["top_projects"].([]map[string]interface{}); ok && len(top) > 0 {
+		fmt.Println()
+		fmt.Println("Top Projects (last 30 days):")
+		fmt.Println("─" + strings.Repeat("─", 50))
+		for i, p := range top {
+			if proj, ok := p["project"].(string); ok {
+				switch cnt := p["count"].(type) {
+				case int:
+					fmt.Printf("  %d. %s (%d updates)\n", i+1, proj, cnt)
+				case int64:
+					fmt.Printf("  %d. %s (%d updates)\n", i+1, proj, cnt)
+				}
+			}
+		}
+	}
 	fmt.Println()
 
 	// Get recent triggers
@@ -663,15 +693,25 @@ func (cli *CLI) handlePreviewReport() error {
 	fmt.Println("📊 Generating daily report preview...")
 	fmt.Println()
 
-	homeDir, _ := os.UserHomeDir()
-	scriptPath := filepath.Join(homeDir, "git_apps/personal/automation_tools/backend/email_reporter.py")
+	scriptPath := GetEmailReporterPath()
+	config, _ := LoadEnvConfig()
+	projectRoot := ""
+	if config != nil {
+		projectRoot = config.ProjectRoot
+	}
+	if projectRoot == "" {
+		projectRoot = os.Getenv("PROJECT_ROOT")
+	}
 
-	args := []string{scriptPath, "preview"}
+	args := []string{"run", "--directory", projectRoot, "python", scriptPath, "preview"}
 	if date != "" {
 		args = append(args, date)
 	}
 
-	cmd := exec.Command("python3", args...)
+	cmd := exec.Command("uv", args...)
+	if projectRoot != "" {
+		cmd.Dir = projectRoot
+	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -699,15 +739,25 @@ func (cli *CLI) handleSendReport() error {
 	fmt.Printf("📧 Sending report to %s...\n", email)
 	fmt.Println()
 
-	homeDir, _ := os.UserHomeDir()
-	scriptPath := filepath.Join(homeDir, "git_apps/personal/automation_tools/backend/email_reporter.py")
+	scriptPath := GetEmailReporterPath()
+	config, _ := LoadEnvConfig()
+	projectRoot := ""
+	if config != nil {
+		projectRoot = config.ProjectRoot
+	}
+	if projectRoot == "" {
+		projectRoot = os.Getenv("PROJECT_ROOT")
+	}
 
-	args := []string{scriptPath, "send", email}
+	args := []string{"run", "--directory", projectRoot, "python", scriptPath, "send", email}
 	if date != "" {
 		args = append(args, date)
 	}
 
-	cmd := exec.Command("python3", args...)
+	cmd := exec.Command("uv", args...)
+	if projectRoot != "" {
+		cmd.Dir = projectRoot
+	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -729,15 +779,25 @@ func (cli *CLI) handleSaveReport() error {
 	fmt.Println("💾 Saving report to file...")
 	fmt.Println()
 
-	homeDir, _ := os.UserHomeDir()
-	scriptPath := filepath.Join(homeDir, "git_apps/personal/automation_tools/backend/email_reporter.py")
+	scriptPath := GetEmailReporterPath()
+	config, _ := LoadEnvConfig()
+	projectRoot := ""
+	if config != nil {
+		projectRoot = config.ProjectRoot
+	}
+	if projectRoot == "" {
+		projectRoot = os.Getenv("PROJECT_ROOT")
+	}
 
-	args := []string{scriptPath, "save"}
+	args := []string{"run", "--directory", projectRoot, "python", scriptPath, "save"}
 	if date != "" {
 		args = append(args, date)
 	}
 
-	cmd := exec.Command("python3", args...)
+	cmd := exec.Command("uv", args...)
+	if projectRoot != "" {
+		cmd.Dir = projectRoot
+	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -770,6 +830,7 @@ func (cli *CLI) printUsage() {
 	fmt.Println("INFO COMMANDS:")
 	fmt.Println("  devtrack logs          Show recent log entries")
 	fmt.Println("  devtrack db-stats      Show database statistics")
+	fmt.Println("  devtrack stats         Alias for db-stats (with analytics)")
 	fmt.Println("  devtrack version       Show version information")
 	fmt.Println("  devtrack help          Show this help message")
 	fmt.Println()

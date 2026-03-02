@@ -15,3 +15,10 @@ wheels/
 # Golang Files
 *.exe
 go-cli
+devtrack-bin/devtrack
+
+# Runtime data
+Data/
+
+# Test temp dirs
+.test_commit_enhancer_tmp
