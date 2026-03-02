@@ -43,7 +43,7 @@ Run DevTrack natively on your system without Docker for faster iteration and eas
    cd automation_tools
    
    # Copy and configure environment
-   cp .env.example .env
+   cp .env_sample .env
    # Edit .env - set PROJECT_ROOT to your repo path
    ```
 
@@ -55,11 +55,11 @@ Run DevTrack natively on your system without Docker for faster iteration and eas
 
 3. **Build the Go binary**:
    ```bash
-   cd devtrack
-   go build -o devtrack-cli .
+   cd devtrack-bin
+   go build -o devtrack .
    
    # Optional: Install globally
-   mv devtrack-cli ~/.local/bin/
+   mv devtrack ~/.local/bin/
    # Add to PATH if not already: export PATH="$HOME/.local/bin:$PATH"
    ```
 
@@ -74,34 +74,35 @@ Run DevTrack natively on your system without Docker for faster iteration and eas
    cd ~/path/to/your/project
    
    # Start daemon (runs in background)
-   devtrack-cli start &
+   devtrack start &
    disown
    
    # Check status
-   devtrack-cli status
+   devtrack status
    ```
+
 
 #### Key Configuration (.env file)
 
-All configuration is centralized in `.env` with **no hardcoded defaults**:
+All configuration is centralized in `.env` with **no hardcoded defaults or fallback locations**.
 
-```bash
-# Required settings
-PROJECT_ROOT=/home/user/Documents/GitHub/automation_tools
-DEVTRACK_HOME=/home/user/.devtrack
-DEVTRACK_WORKSPACE=/home/user/Documents/GitHub
+**How DevTrack finds your .env file:**
 
-# IPC Configuration
-IPC_HOST=127.0.0.1
-IPC_PORT=35893
+- If the `DEVTRACK_ENV_FILE` environment variable is set, DevTrack will load the .env file from that path.
+- If not set, DevTrack will only look for `.env` in the current working directory.
+- If neither is found, DevTrack will exit with an error.
 
-# File names (customizable)
-CONFIG_FILE_NAME=config.yaml
-DATABASE_FILE_NAME=devtrack.db
-PID_FILE_NAME=daemon.pid
-LOG_FILE_NAME=daemon.log
+**Example:**
+```sh
+export DEVTRACK_ENV_FILE=/absolute/path/to/your/.env
+~/.local/bin/devtrack
+```
 
-# See .env.example for all 16 required variables
+See `.env_sample` for a template of all required variables.
+
+Validate `.env_sample` matches required runtime env keys:
+```sh
+python validate_env_sample.py
 ```
 
 #### Local Installation Benefits
@@ -117,7 +118,7 @@ LOG_FILE_NAME=daemon.log
 
 This workflow runs the full stack on macOS, Windows (PowerShell, WSL, or Git Bash), and Linux with the same commands.
 
-1. Copy `.env.example` to `.env` and set `DEVTRACK_WORKSPACE` to the host path you want mounted at `/workspace`. Relative paths (default `.`) resolve to the repository root and work on every OS. Use Windows-style paths (e.g., `C:\Users\you\Projects\automation_tools`) when running from PowerShell.
+1. Copy `.env_sample` to `.env` and set `DEVTRACK_WORKSPACE` to the host path you want mounted at `/workspace`. Relative paths (default `.`) resolve to the repository root and work on every OS. Use Windows-style paths (e.g., `C:\Users\you\Projects\automation_tools`) when running from PowerShell.
 2. Enable BuildKit for faster incremental builds:
 
      ```bash
@@ -166,14 +167,14 @@ Choose your installation method above, then use these commands:
 cd ~/path/to/your/project
 
 # Start daemon in background
-devtrack-cli start &
+devtrack start &
 disown
 
 # Check status and view configuration
-devtrack-cli status
+devtrack status
 
 # View recent logs
-devtrack-cli logs
+devtrack logs
 
 # Make a commit with task info for NLP parsing
 git commit -m "Working on #PROJ-123 - Fixed authentication bug (2h)"
@@ -182,7 +183,7 @@ git commit -m "Working on #PROJ-123 - Fixed authentication bug (2h)"
 tail -f ~/.devtrack/daemon.log
 
 # Stop daemon
-devtrack-cli stop
+devtrack stop
 ```
 
 ### Using Docker
@@ -202,22 +203,22 @@ docker compose down
 
 ```bash
 # Daemon Control
-devtrack-cli start              # Start monitoring
-devtrack-cli stop               # Stop daemon
-devtrack-cli restart            # Restart with new config
-devtrack-cli status             # Show running status
+devtrack start              # Start monitoring
+devtrack stop               # Stop daemon
+devtrack restart            # Restart with new config
+devtrack status             # Show running status
 
 # Scheduler Control
-devtrack-cli pause              # Pause scheduled triggers
-devtrack-cli resume             # Resume scheduler
-devtrack-cli force-trigger      # Trigger immediately
-devtrack-cli skip-next          # Skip next scheduled trigger
+devtrack pause              # Pause scheduled triggers
+devtrack resume             # Resume scheduler
+devtrack force-trigger      # Trigger immediately
+devtrack skip-next          # Skip next scheduled trigger
 
 # Information
-devtrack-cli logs               # View recent logs
-devtrack-cli db-stats           # Database statistics
-devtrack-cli version            # Version information
-devtrack-cli help               # Full command list
+devtrack logs               # View recent logs
+devtrack db-stats           # Database statistics
+devtrack version            # Version information
+devtrack help               # Full command list
 ```
 
 ## Technology Stack
@@ -287,7 +288,7 @@ tail -50 ~/.devtrack/daemon.log
 cat .env | grep PROJECT_ROOT
 
 # Ensure binary is in PATH
-which devtrack-cli
+which devtrack
 
 # Check if port is already in use
 lsof -i :35893
@@ -296,7 +297,7 @@ lsof -i :35893
 **Git commits not detected:**
 ```bash
 # Verify daemon is running in correct repository
-devtrack-cli status
+devtrack status
 
 # Check git monitor is active
 tail ~/.devtrack/daemon.log | grep "Git monitor"
@@ -311,7 +312,7 @@ grep IPC .env
 
 # Verify no firewall blocking localhost:35893
 # Restart daemon after .env changes
-devtrack-cli restart
+devtrack restart
 ```
 
 ## Project Status

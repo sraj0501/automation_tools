@@ -25,25 +25,13 @@ func NewCLI() (*CLI, error) {
 		}
 	}
 
-	// Get current working directory as default repo path
-	repoPath, err := os.Getwd()
+	repoPath, err := resolveRepoPath()
 	if err != nil {
-		repoPath = "."
-	}
-
-	// Check if we're in a git repository
-	if !IsGitRepository(repoPath) {
-		// Try parent directory
-		parentPath := filepath.Dir(repoPath)
-		if IsGitRepository(parentPath) {
-			repoPath = parentPath
-		} else {
-			// For status command, still allow but with limited info
-			if len(os.Args) > 1 && os.Args[1] == "status" {
-				return &CLI{}, nil
-			}
-			return nil, fmt.Errorf("not in a git repository. Please run from a git repository or specify one in config")
+		// For status command, still allow but with limited info
+		if len(os.Args) > 1 && os.Args[1] == "status" {
+			return &CLI{}, nil
 		}
+		return nil, err
 	}
 
 	daemon, err := NewDaemon(repoPath)
@@ -52,6 +40,39 @@ func NewCLI() (*CLI, error) {
 	}
 
 	return &CLI{daemon: daemon}, nil
+}
+
+func resolveRepoPath() (string, error) {
+	workspacePath := strings.TrimSpace(os.Getenv("DEVTRACK_WORKSPACE"))
+	if workspacePath != "" {
+		workspacePath = filepath.Clean(workspacePath)
+		if IsGitRepository(workspacePath) {
+			return workspacePath, nil
+		}
+
+		parentPath := filepath.Dir(workspacePath)
+		if IsGitRepository(parentPath) {
+			return parentPath, nil
+		}
+
+		return "", fmt.Errorf("DEVTRACK_WORKSPACE is not a git repository: %s", workspacePath)
+	}
+
+	repoPath, err := os.Getwd()
+	if err != nil {
+		repoPath = "."
+	}
+
+	if IsGitRepository(repoPath) {
+		return repoPath, nil
+	}
+
+	parentPath := filepath.Dir(repoPath)
+	if IsGitRepository(parentPath) {
+		return parentPath, nil
+	}
+
+	return "", fmt.Errorf("not in a git repository and DEVTRACK_WORKSPACE is not set")
 }
 
 // Execute runs the CLI command
@@ -140,7 +161,7 @@ func (cli *CLI) handleStart() error {
 
 	// Parent process - fork to background
 	fmt.Println("🚀 Starting DevTrack daemon...")
-	
+
 	// Get current executable path
 	exe, err := os.Executable()
 	if err != nil {
@@ -150,23 +171,23 @@ func (cli *CLI) handleStart() error {
 	// Start ourselves as a background daemon
 	cmd := exec.Command(exe, "start")
 	cmd.Env = append(os.Environ(), "DEVTRACK_DAEMON=1")
-	
+
 	// Redirect output to log file
-	logPath := filepath.Join(GetDevTrackDir(), GetLogFileName())
+	logPath := GetLogFilePath()
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to open log file: %w", err)
 	}
 	defer logFile.Close()
-	
+
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
-	
+
 	// Detach from parent
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
 	}
-	
+
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start daemon process: %w", err)
 	}
@@ -175,7 +196,7 @@ func (cli *CLI) handleStart() error {
 	fmt.Println("✓ Daemon started successfully")
 	fmt.Printf("   PID: %d\n", cmd.Process.Pid)
 	fmt.Printf("   Log: %s\n", logPath)
-	fmt.Println("\nUse 'devtrack-cli status' to check status")
+	fmt.Println("\nUse 'devtrack status' to check status")
 
 	return nil
 }
@@ -190,7 +211,7 @@ func (cli *CLI) handleStop() error {
 	}
 
 	// Try graceful stop first
-	pidFile := filepath.Join(GetDevTrackDir(), GetPIDFileName())
+	pidFile := GetPIDFilePath()
 
 	if err := KillDaemon(pidFile); err != nil {
 		fmt.Printf("❌ Failed to stop daemon: %v\n", err)
@@ -222,7 +243,7 @@ func (cli *CLI) handleRestart() error {
 func (cli *CLI) handleStatus() error {
 	// Handle case where daemon is nil (status check without repo)
 	if cli.daemon == nil {
-		pidFile := filepath.Join(GetDevTrackDir(), GetPIDFileName())
+		pidFile := GetPIDFilePath()
 
 		// Check if daemon is running by PID file
 		data, err := os.ReadFile(pidFile)
@@ -234,7 +255,7 @@ func (cli *CLI) handleStatus() error {
 			fmt.Println()
 			fmt.Println("Configuration:")
 			fmt.Printf("  Config:   %s\n", GetConfigPath())
-			fmt.Printf("  Logs:     %s\n", filepath.Join(GetDevTrackDir(), GetLogFileName()))
+			fmt.Printf("  Logs:     %s\n", GetLogFilePath())
 			fmt.Printf("  PID file: %s\n", pidFile)
 			fmt.Println()
 			fmt.Println("Commands:")
@@ -470,7 +491,7 @@ func (cli *CLI) handleLogs() error {
 	if len(os.Args) > 2 {
 		if os.Args[2] == "-f" || os.Args[2] == "--follow" {
 			fmt.Println("❌ Follow mode not yet implemented")
-			fmt.Printf("Use: tail -f %s\n", filepath.Join(GetDevTrackDir(), GetLogFileName()))
+			fmt.Printf("Use: tail -f %s\n", GetLogFilePath())
 			return nil
 		}
 	}
@@ -498,8 +519,8 @@ func (cli *CLI) handleLogs() error {
 // handleVersion shows version information
 func (cli *CLI) handleVersion() error {
 	fmt.Println("DevTrack - Developer Automation Tools")
-	fmt.Println("Version: 0.1.0-alpha")
-	fmt.Println("Build date: November 1, 2025")
+	fmt.Printf("Version: %s\n", GetDevTrackVersion())
+	fmt.Printf("Build date: %s\n", GetDevTrackBuildDate())
 	fmt.Println()
 	fmt.Println("Components:")
 	fmt.Println("  • Git monitoring (go-git)")
@@ -586,7 +607,7 @@ func (cli *CLI) handleDBStats() error {
 
 // handleEnableLearning enables personalized AI learning
 func (cli *CLI) handleEnableLearning() error {
-	days := 30
+	days := GetLearningDefaultDays()
 	if len(os.Args) > 2 {
 		fmt.Sscanf(os.Args[2], "%d", &days)
 	}
@@ -775,9 +796,9 @@ func (cli *CLI) printUsage() {
 	fmt.Println("  devtrack help          Show this help message")
 	fmt.Println()
 	fmt.Println("CONFIGURATION:")
-	fmt.Printf("  Config file: %s\n", filepath.Join(GetDevTrackDir(), GetConfigFileName()))
-	fmt.Printf("  Log file:    %s\n", filepath.Join(GetDevTrackDir(), GetLogFileName()))
-	fmt.Printf("  PID file:    %s\n", filepath.Join(GetDevTrackDir(), GetPIDFileName()))
+	fmt.Printf("  Config file: %s\n", GetConfigPath())
+	fmt.Printf("  Log file:    %s\n", GetLogFilePath())
+	fmt.Printf("  PID file:    %s\n", GetPIDFilePath())
 	fmt.Println()
 }
 

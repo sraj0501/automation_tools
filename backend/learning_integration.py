@@ -15,12 +15,9 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'msgraph_python'))
 
-from personalized_ai import PersonalizedAI, CommunicationSample
+from personalized_ai import PersonalizedAI
 from data_collectors import (
-    TeamsDataCollector,
-    AzureDevOpsDataCollector,
-    OutlookDataCollector,
-    DataCollectionOrchestrator
+    TeamsDataCollector
 )
 
 

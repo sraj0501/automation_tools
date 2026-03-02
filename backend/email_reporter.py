@@ -53,9 +53,11 @@ class EmailReporter:
             db_path: Path to SQLite database (auto-detected if None)
         """
         if db_path is None:
-            home_dir = os.path.expanduser("~")
-            db_path = os.path.join(home_dir, ".devtrack", "daemon.db")
-        
+            try:
+                from backend.config import database_path
+                db_path = str(database_path())
+            except ImportError:
+                db_path = os.path.join(os.path.expanduser("~"), ".devtrack", "daemon.db")
         self.db_path = db_path
         self.graph_client = None
     

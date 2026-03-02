@@ -17,14 +17,9 @@ type LearningCommands struct {
 
 // NewLearningCommands creates a new learning commands handler
 func NewLearningCommands() *LearningCommands {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		homeDir = "."
-	}
-
 	return &LearningCommands{
-		pythonPath: "python3",
-		scriptPath: filepath.Join(homeDir, "git_apps/personal/automation_tools/backend/learning_integration.py"),
+		pythonPath: GetLearningPythonPath(),
+		scriptPath: GetLearningScriptPath(),
 	}
 }
 
@@ -100,7 +95,7 @@ func (lc *LearningCommands) RevokeConsent() error {
 
 // GetLearningStatus gets the status of personalized learning
 func (lc *LearningCommands) GetLearningStatus() (*LearningStatus, error) {
-	learningDir := filepath.Join(GetDevTrackDir(), GetLearningDirName())
+	learningDir := GetLearningDirPath()
 	consentFile := filepath.Join(learningDir, "consent.json")
 	profileFile := filepath.Join(learningDir, "profile.json")
 	samplesFile := filepath.Join(learningDir, "samples.json")

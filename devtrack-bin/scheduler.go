@@ -63,10 +63,10 @@ func (s *Scheduler) Start() error {
 		return fmt.Errorf("scheduler config is nil")
 	}
 
-	// Get interval from config (default 180 minutes = 3 hours)
+	// Get interval from config (env-driven)
 	intervalMinutes := s.config.Settings.PromptInterval
 	if intervalMinutes <= 0 {
-		intervalMinutes = 180 // Default 3 hours
+		return fmt.Errorf("invalid prompt interval in configuration: %d", intervalMinutes)
 	}
 
 	log.Printf("Starting scheduler with %d minute interval", intervalMinutes)

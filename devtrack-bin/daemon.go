@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -46,10 +45,12 @@ func NewDaemon(repoPath string) (*Daemon, error) {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Get daemon paths
-	daemonDir := GetDevTrackDir()
-	if err := os.MkdirAll(daemonDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create daemon directory: %w", err)
+	if err := os.MkdirAll(GetPIDDir(), 0755); err != nil {
+		return nil, fmt.Errorf("failed to create PID directory: %w", err)
+	}
+
+	if err := os.MkdirAll(GetLogDir(), 0755); err != nil {
+		return nil, fmt.Errorf("failed to create log directory: %w", err)
 	}
 
 	// Create context for graceful shutdown
@@ -57,8 +58,8 @@ func NewDaemon(repoPath string) (*Daemon, error) {
 
 	daemon := &Daemon{
 		config:  config,
-		pidFile: filepath.Join(daemonDir, GetPIDFileName()),
-		logFile: filepath.Join(daemonDir, GetLogFileName()),
+		pidFile: GetPIDFilePath(),
+		logFile: GetLogFilePath(),
 		ctx:     ctx,
 		cancel:  cancel,
 	}
@@ -374,7 +375,7 @@ func (d *Daemon) startPythonBridge() error {
 
 	// Start Python bridge using uv run to access project dependencies
 	log.Printf("Starting Python bridge: %s", bridgePath)
-	
+
 	var cmd *exec.Cmd
 	projectRoot := os.Getenv("PROJECT_ROOT")
 	if projectRoot != "" {
@@ -387,27 +388,27 @@ func (d *Daemon) startPythonBridge() error {
 		cmd = exec.Command("python3", bridgePath)
 		log.Printf("Warning: PROJECT_ROOT not set, using system python3")
 	}
-	
+
 	// Redirect output to daemon log
 	logFile, err := os.OpenFile(d.logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to open log file: %w", err)
 	}
-	
+
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
-	
+
 	// Start the process
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start Python bridge: %w", err)
 	}
-	
+
 	d.pythonBridge = cmd
 	log.Printf("✓ Python bridge started (PID: %d)", cmd.Process.Pid)
-	
+
 	// Give it a moment to connect to IPC server
 	time.Sleep(time.Second)
-	
+
 	return nil
 }
 

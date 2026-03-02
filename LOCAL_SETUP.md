@@ -13,7 +13,7 @@ go version
 
 # If not installed, download from: https://go.dev/dl/
 # Or on Linux:
-wget https://go.dev/dl/go1.24.0.linux-amd64.tar.gz
+# Edit .env file with your paths
 sudo tar -C /usr/local -xzf go1.24.0.linux-amd64.tar.gz
 echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
 source ~/.bashrc
@@ -30,7 +30,7 @@ python3 --version
 ### 3. **uv Package Manager**
 ```bash
 # Install uv
-curl -LsSf https://astral.sh/uv/install.sh | sh
+CLI_BINARY_NAME=devtrack
 
 # Verify installation
 uv --version
@@ -59,23 +59,19 @@ ollama serve
 ### Step 1: Clone Repository
 ```bash
 cd ~/Documents/GitHub  # or your preferred location
-git clone https://github.com/yourusername/automation_tools.git
-cd automation_tools
 ```
 
 ### Step 2: Configure Environment
-```bash
+~/.local/bin/devtrack
 # Copy example configuration
-cp .env.example .env
-
-# Edit .env file with your paths
+cp .env_sample .env
 nano .env  # or use your preferred editor
 ```
 
 **Required .env Configuration:**
 ```bash
 # Update these paths to match your system
-PROJECT_ROOT=/home/YOUR_USERNAME/Documents/GitHub/automation_tools
+go build -o devtrack .
 DEVTRACK_HOME=/home/YOUR_USERNAME/.devtrack
 DEVTRACK_WORKSPACE=/home/YOUR_USERNAME/Documents/GitHub
 
@@ -84,15 +80,15 @@ IPC_HOST=127.0.0.1
 IPC_PORT=35893
 
 # File names (can usually keep defaults)
-PYTHON_BRIDGE_SCRIPT=python_bridge.py
-CLI_BINARY_NAME=devtrack-cli
+mv devtrack ~/.local/bin/
+CLI_BINARY_NAME=devtrack
 CONFIG_FILE_NAME=config.yaml
 DATABASE_FILE_NAME=devtrack.db
 PID_FILE_NAME=daemon.pid
 LOG_FILE_NAME=daemon.log
 
-# Directory names (can usually keep defaults)
-LEARNING_DIR_NAME=learning
+which devtrack
+devtrack version
 CONFIG_DIR_NAME=.devtrack
 
 # CLI identifiers (can usually keep defaults)
@@ -101,7 +97,31 @@ CLI_DAEMON_NAME=devtrack
 
 # Ollama endpoint (adjust if using custom port)
 OLLAMA_HOST=http://localhost:11434
+devtrack start &
+
+### Step 2: Configure Environment
+```bash
+devtrack status
+cp .env_sample .env
+
+# Edit .env file with your paths
+nano .env  # or use your preferred editor
 ```
+devtrack stop
+**.env File Location and Usage:**
+
+- All configuration is loaded from the `.env` file. There are **no fallback locations or hardcoded defaults**.
+- Set the `DEVTRACK_ENV_FILE` environment variable to the absolute path of your `.env` file before running DevTrack:
+
+devtrack status
+export DEVTRACK_ENV_FILE=/absolute/path/to/your/.env
+~/.local/bin/devtrack
+ps aux | grep devtrack
+
+- If `DEVTRACK_ENV_FILE` is not set, DevTrack will only look for `.env` in the current working directory.
+- If neither is found, DevTrack will exit with an error.
+
+See `.env_sample` for a template of all required variables.
 
 ### Step 3: Install Python Dependencies
 ```bash
@@ -114,11 +134,11 @@ uv run python -c "import spacy; print(spacy.__version__)"
 
 ### Step 4: Build Go Binary
 ```bash
-cd devtrack
-go build -o devtrack-cli .
+cd devtrack-bin
+go build -o devtrack .
 
 # Verify build
-./devtrack-cli version
+./devtrack version
 ```
 
 ### Step 5: Install Binary Globally (Optional but Recommended)
@@ -127,15 +147,14 @@ go build -o devtrack-cli .
 mkdir -p ~/.local/bin
 
 # Move binary to PATH
-mv devtrack-cli ~/.local/bin/
+mv devtrack ~/.local/bin/
 
 # Add to PATH if not already (add to ~/.bashrc or ~/.zshrc)
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
 
 # Verify global installation
-which devtrack-cli
-devtrack-cli version
+which devtrack
+devtrack version
 ```
 
 ### Step 6: Set PROJECT_ROOT Environment Variable
@@ -162,7 +181,6 @@ mkdir -p ~/.devtrack
 ```bash
 # From the project root
 cd ~/Documents/GitHub/automation_tools
-
 # Make script executable (first time only)
 chmod +x run_devtrack_local.sh
 
@@ -183,17 +201,16 @@ This script will:
 cd ~/Documents/GitHub/your-project
 
 # Start daemon (runs in background)
-devtrack-cli start &
+devtrack start &
 disown
 
 # Check status
-devtrack-cli status
+devtrack status
 
 # View logs
 tail -f ~/.devtrack/daemon.log
 
 # Stop daemon
-devtrack-cli stop
 ```
 
 ---
@@ -203,10 +220,10 @@ devtrack-cli stop
 ### Check All Components Are Running
 ```bash
 # 1. Check daemon status
-devtrack-cli status
+devtrack status
 
 # 2. Check processes
-ps aux | grep devtrack-cli
+ps aux | grep devtrack
 ps aux | grep python_bridge.py
 
 # 3. Check logs (should show NLP parser loaded)
@@ -215,7 +232,6 @@ tail -50 ~/.devtrack/daemon.log | grep -E "NLP|spaCy|IPC|Git monitor"
 # Expected output:
 # - ✓ IPC server started
 # - ✓ Git monitor started
-# - Loaded spaCy model: en_core_web_sm
 # - ✓ NLP parser initialized
 # - ✅ Connected to IPC server
 ```
@@ -236,14 +252,9 @@ tail -30 ~/.devtrack/daemon.log
 # You should see:
 # - 🎯 COMMIT TRIGGER
 # - 📝 Parsing commit message with NLP...
-# - Parsed ticket_id, action_verb, status, etc.
 ```
 
 ---
-
-## Troubleshooting
-
-### Issue: "Python 3.14 compatibility error"
 ```bash
 # Check Python version used by uv
 uv run python --version
@@ -280,7 +291,7 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 ls -la .env
 
 # If missing, copy from example
-cp .env.example .env
+cp .env_sample .env
 
 # Edit with your paths
 nano .env
@@ -298,7 +309,7 @@ lsof -i :35893
 ### Issue: "Git commits not detected"
 ```bash
 # 1. Check daemon is running
-devtrack-cli status
+devtrack status
 
 # 2. Verify you're in the monitored repository
 pwd
@@ -309,7 +320,7 @@ tail ~/.devtrack/daemon.log | grep "Git repository"
 
 # 4. Restart daemon in correct directory
 cd ~/path/to/your-project
-devtrack-cli restart
+devtrack restart
 ```
 
 ---
@@ -319,9 +330,9 @@ devtrack-cli restart
 ```
 automation_tools/
 ├── .env                    # Your configuration (DO NOT commit)
-├── .env.example           # Template
-├── devtrack/
-│   └── devtrack-cli       # Built binary (before moving to ~/.local/bin)
+├── .env_sample            # Template
+├── devtrack-bin/
+│   └── devtrack           # Built binary (before moving to ~/.local/bin)
 ├── python_bridge.py       # Python IPC bridge
 ├── backend/               # Python modules
 ├── run_devtrack_local.sh  # Quick start script
@@ -334,7 +345,7 @@ automation_tools/
 └── devtrack.db         # SQLite database
 
 ~/.local/bin/           # Installed binary
-└── devtrack-cli       # Global command
+└── devtrack           # Global command
 ```
 
 ---
@@ -345,27 +356,27 @@ Once setup is complete and daemon is running:
 
 1. **Configure work hours** (optional):
    ```bash
-   devtrack-cli config set work-hours "09:00-17:00"
+   devtrack config set work-hours "09:00-17:00"
    ```
 
 2. **Adjust trigger interval** (optional):
    ```bash
-   devtrack-cli config set interval 120  # 120 minutes
+   devtrack config set interval 120  # 120 minutes
    ```
 
 3. **Enable learning mode** (optional):
    ```bash
-   devtrack-cli enable-learning
+   devtrack enable-learning
    ```
 
 4. **Test manual triggers**:
    ```bash
-   devtrack-cli force-trigger
+   devtrack force-trigger
    ```
 
 5. **View help for all commands**:
    ```bash
-   devtrack-cli help
+   devtrack help
    ```
 
 ---
@@ -375,25 +386,25 @@ Once setup is complete and daemon is running:
 ### Daily Workflow
 ```bash
 # Morning: Check status
-devtrack-cli status
+devtrack status
 
 # During work: Make commits as normal
 git commit -m "Working on #TICKET-123 - Feature description (time estimate)"
 
 # End of day: Generate report (if configured)
-devtrack-cli send-summary
+devtrack send-summary
 
 # Evening: Stop daemon (optional)
-devtrack-cli stop
+devtrack stop
 ```
 
 ### View Activity
 ```bash
 # Recent triggers
-devtrack-cli logs
+devtrack logs
 
 # Database stats
-devtrack-cli db-stats
+devtrack db-stats
 
 # Check parsed tasks
 tail -100 ~/.devtrack/daemon.log | grep "Parsed result"
@@ -413,12 +424,12 @@ git pull origin main
 uv sync
 
 # Rebuild Go binary
-cd devtrack
-go build -o devtrack-cli .
-mv devtrack-cli ~/.local/bin/
+cd devtrack-bin
+go build -o devtrack .
+mv devtrack ~/.local/bin/
 
 # Restart daemon
-devtrack-cli restart
+devtrack restart
 ```
 
 ---
@@ -427,10 +438,10 @@ devtrack-cli restart
 
 ```bash
 # Stop daemon
-devtrack-cli stop
+devtrack stop
 
 # Remove binary
-rm ~/.local/bin/devtrack-cli
+rm ~/.local/bin/devtrack
 
 # Remove runtime data (optional - deletes all logs and database)
 rm -rf ~/.devtrack

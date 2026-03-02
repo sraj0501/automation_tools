@@ -1,23 +1,32 @@
 import requests
 from requests.auth import HTTPBasicAuth
-from dotenv import load_dotenv
 import os
 import sys
 import pandas as pd
 from datetime import datetime
 
-# === LOAD ENVIRONMENT VARIABLES ===
-if os.path.exists("../../.env"):
-    print("✅ .env file found. Loading environment variables.")
-    load_dotenv("../../.env")
-else:
-    print("❌ .env file not found. Please ensure it exists in the correct directory.")
-    sys.exit()
+# Add project root for config
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_project_root = os.path.dirname(os.path.dirname(_script_dir))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
-# === CONFIGURATION ===
-org = os.getenv("ORGANIZATION")
-project = os.getenv("PROJECT")
-pat = os.getenv("AZURE_API_KEY")
+try:
+    from backend.config import _load_env, azure_org, azure_project, azure_pat
+    _load_env()
+    org = azure_org()
+    project = azure_project()
+    pat = azure_pat()
+except ImportError:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(_project_root, ".env"))
+    org = os.getenv("ORGANIZATION")
+    project = os.getenv("PROJECT")
+    pat = os.getenv("AZURE_DEVOPS_PAT") or os.getenv("AZURE_API_KEY")
+
+if not org or not project or not pat:
+    print("❌ Missing ORGANIZATION, PROJECT, or AZURE_DEVOPS_PAT/AZURE_API_KEY in .env")
+    sys.exit(1)
 api_version = os.getenv("API_VERSION", "7.1")
 assigned_to = os.getenv("EMAIL")
 

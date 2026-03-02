@@ -85,7 +85,7 @@ if ($gitRoot -and (Test-Path (Join-Path $gitRoot ".git"))) {
             -w $containerWorkDir `
             -e "TERM=$env:TERM" `
             $CONTAINER_NAME `
-            devtrack-cli $args
+            devtrack $args
         
         # Give it a moment to start
         Start-Sleep -Seconds 1
@@ -94,7 +94,7 @@ if ($gitRoot -and (Test-Path (Join-Path $gitRoot ".git"))) {
         docker exec `
             -w $containerWorkDir `
             $CONTAINER_NAME `
-            devtrack-cli status
+            devtrack status
     } else {
         # Run interactively for other commands
         $env:TERM = if ($env:TERM) { $env:TERM } else { "xterm-256color" }
@@ -102,7 +102,7 @@ if ($gitRoot -and (Test-Path (Join-Path $gitRoot ".git"))) {
             -w $containerWorkDir `
             -e "TERM=$env:TERM" `
             $CONTAINER_NAME `
-            devtrack-cli $args
+            devtrack $args
     }
 } else {
     # No git repo found, use workspace as fallback
@@ -121,21 +121,21 @@ if ($gitRoot -and (Test-Path (Join-Path $gitRoot ".git"))) {
             -w $workDir `
             -e "TERM=$env:TERM" `
             $CONTAINER_NAME `
-            devtrack-cli $args
+            devtrack $args
         
         Start-Sleep -Seconds 1
         
         docker exec `
             -w $workDir `
             $CONTAINER_NAME `
-            devtrack-cli status
+            devtrack status
     } else {
         $env:TERM = if ($env:TERM) { $env:TERM } else { "xterm-256color" }
         docker exec -it `
             -w $workDir `
             -e "TERM=$env:TERM" `
             $CONTAINER_NAME `
-            devtrack-cli $args
+            devtrack $args
     }
 }
 

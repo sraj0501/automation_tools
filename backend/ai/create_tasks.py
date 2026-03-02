@@ -1,58 +1,89 @@
 import ollama
 import json
 import pandas as pd
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import re
 
+
+def _get_task_defaults():
+    """Get task defaults from config (no hardcoded personal data)."""
+    try:
+        import sys
+        from pathlib import Path
+        _root = Path(__file__).resolve().parent.parent.parent
+        if str(_root) not in sys.path:
+            sys.path.insert(0, str(_root))
+        from backend.config import (
+            azure_default_assignee,
+            azure_parent_work_item_id,
+            azure_starting_work_item_id,
+            ollama_model,
+        )
+        return {
+            "assignee": azure_default_assignee(),
+            "parent_id": azure_parent_work_item_id(),
+            "starting_id": azure_starting_work_item_id(),
+            "model": ollama_model(),
+        }
+    except ImportError:
+        return {"assignee": "", "parent_id": "", "starting_id": 0, "model": "llama3.2"}
+
+
 class TaskGenerator:
-    def __init__(self, model_name: str = "llama3.1"):
+    def __init__(self, model_name: Optional[str] = None):
         """
         Initialize the TaskGenerator with an Ollama model
-        
+
         Args:
-            model_name: The name of the Ollama model to use (default: llama3.1)
+            model_name: The name of the Ollama model (from config if None)
         """
-        self.model_name = model_name
+        defaults = _get_task_defaults()
+        self.model_name = model_name or defaults["model"]
         self.client = ollama.Client()
-        
-    def generate_tasks(self, 
-                      requirements: str, 
-                      constraints: str, 
-                      existing_tasks: List[Dict] = None,
-                      assignee: str = "Shashank Raj shashank.raj@latentbridge.com",
-                      parent_work_item_id: str = "9759",
-                      starting_work_item_id: int = 9760) -> List[Dict]:
+
+    def generate_tasks(
+        self,
+        requirements: str,
+        constraints: str,
+        existing_tasks: List[Dict] = None,
+        assignee: Optional[str] = None,
+        parent_work_item_id: Optional[str] = None,
+        starting_work_item_id: Optional[int] = None,
+    ) -> List[Dict]:
         """
         Generate project tasks based on requirements and constraints
-        
+
         Args:
             requirements: The project requirements and component breakdown
             constraints: Project constraints and specifications
             existing_tasks: List of existing tasks (optional)
-            assignee: Who to assign the tasks to
-            parent_work_item_id: Parent work item ID for all tasks
-            starting_work_item_id: Starting ID for new work items
-            
+            assignee: Who to assign the tasks to (from config if None)
+            parent_work_item_id: Parent work item ID (from config if None)
+            starting_work_item_id: Starting ID for new work items (from config if None)
+
         Returns:
             List of dictionaries containing task information
         """
-        
+        defaults = _get_task_defaults()
+        assignee = assignee or defaults["assignee"]
+        parent_work_item_id = parent_work_item_id or defaults["parent_id"]
+        starting_work_item_id = starting_work_item_id if starting_work_item_id is not None else defaults["starting_id"]
+
         # Prepare the prompt for the LLM
         prompt = self._create_prompt(requirements, constraints, existing_tasks)
-        
+
         # Generate response using Ollama
         response = self.client.chat(model=self.model_name, messages=[
-            {
-                'role': 'user',
-                'content': prompt
-            }
+            {'role': 'user', 'content': prompt}
         ])
-        
+
         # Parse the response to extract tasks
-        tasks = self._parse_response(response['message']['content'], 
-                                   assignee, 
-                                   parent_work_item_id, 
-                                   starting_work_item_id)
+        tasks = self._parse_response(
+            response['message']['content'],
+            assignee,
+            parent_work_item_id,
+            starting_work_item_id,
+        )
         
         return tasks
     
@@ -191,8 +222,8 @@ Generate tasks that are specific, measurable, and implementable.
 
 # Example usage
 def main():
-    # Initialize the task generator
-    generator = TaskGenerator(model_name="llama3.1")  # Change model as needed
+    # Initialize the task generator (uses OLLAMA_MODEL from .env)
+    generator = TaskGenerator()
     
     # Define your requirements
     requirements = """
@@ -235,15 +266,12 @@ def main():
         {"title": "Automate end-to-end flow from user input to chatbot response"}
     ]
     
-    # Generate tasks
+    # Generate tasks (assignee, parent_id, starting_id from .env if set)
     print("Generating tasks using Ollama...")
     tasks = generator.generate_tasks(
         requirements=requirements,
         constraints=constraints,
         existing_tasks=existing_tasks,
-        assignee="Shashank Raj shashank.raj@latentbridge.com",
-        parent_work_item_id="9759",
-        starting_work_item_id=9760
     )
     
     # Display results

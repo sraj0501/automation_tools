@@ -1,0 +1,21 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "go-test-devtrack-bin",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"test",
+				"./..."
+			],
+			"isBackground": false
+		},
+		{
+			"label": "go-test-devtrack-bin",
+			"type": "shell",
+			"command": "cd /Users/sraj/git_apps/personal/automation_tools/devtrack-bin && go test ./...",
+			"isBackground": false
+		}
+	]
+}

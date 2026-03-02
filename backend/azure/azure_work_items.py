@@ -1,23 +1,32 @@
 import requests
 from requests.auth import HTTPBasicAuth
-from dotenv import load_dotenv
 import os
 from pydantic import BaseModel
 import sys
 
-if os.path.exists("../../.env"):
-    print("✅ .env file found. Loading environment variables.")
-    load_dotenv("../../.env")
-else:
-    print("❌ .env file not found. Please ensure it exists in the correct directory.")
-    sys.exit()
+# Add project root for config
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_project_root = os.path.dirname(os.path.dirname(_script_dir))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
+try:
+    from backend.config import _load_env, azure_org, azure_pat
+    _load_env()
+    organization = azure_org()
+    pat = azure_pat()
+except ImportError:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(_project_root, ".env"))
+    organization = os.getenv("ORGANIZATION")
+    pat = os.getenv("AZURE_DEVOPS_PAT") or os.getenv("AZURE_API_KEY")
 
-organization = os.getenv("ORGANIZATION")
+if not organization or not pat:
+    print("❌ Missing ORGANIZATION or AZURE_DEVOPS_PAT/AZURE_API_KEY in .env")
+    sys.exit(1)
+
 print(f"Organization: {organization}")
-# project = os.getenv("PROJECT")
 selected_project = ""
-pat = os.getenv("AZURE_API_KEY")
 user_email = os.getenv("EMAIL")
 work_item_id=""
 BASE_URI=f"https://dev.azure.com/{organization}/_apis/projects?api-version=7.1"

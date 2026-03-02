@@ -29,18 +29,16 @@ fi
 
 echo "✓ Prerequisites installed (go, python3, uv, git)"
 
-# Check 2: Verify Python version (3.12 or 3.13, NOT 3.14+)
-PYTHON_VERSION=$(python3 --version | grep -oP '\d+\.\d+' || echo "0.0")
+# Check 2: Verify Python version (3.12 or 3.13)
+PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "0.0")
 PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
 PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
 
 if [ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -ge 12 ] && [ "$PYTHON_MINOR" -le 13 ]; then
     echo "✓ Python version $PYTHON_VERSION (compatible)"
-elif [ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -ge 14 ]; then
-    echo "⚠️  Warning: Python $PYTHON_VERSION detected. spaCy requires Python 3.12 or 3.13"
-    echo "   uv will automatically use a compatible version from pyproject.toml"
 else
     echo "❌ Error: Python $PYTHON_VERSION incompatible. Requires Python 3.12 or 3.13"
+    echo "   Note: spaCy and other dependencies currently require Python 3.12 or 3.13"
     exit 1
 fi
 
@@ -54,7 +52,7 @@ else
     echo "❌ Error: .env file not found at $SCRIPT_DIR/.env"
     echo ""
     echo "Setup steps:"
-    echo "  1. cp .env.example .env"
+    echo "  1. cp .env_sample .env"
     echo "  2. Edit .env with your paths"
     echo "  3. Run this script again"
     exit 1
@@ -81,7 +79,7 @@ if [ ${#MISSING_VARS[@]} -gt 0 ]; then
     echo "❌ Error: Missing required environment variables in .env:"
     printf '  - %s\n' "${MISSING_VARS[@]}"
     echo ""
-    echo "Please update your .env file. See .env.example for reference."
+    echo "Please update your .env file. See .env_sample for reference."
     exit 1
 fi
 
@@ -134,7 +132,7 @@ if [ -z "$BINARY_FOUND" ]; then
     echo "❌ Error: $DEVTRACK_CLI binary not found"
     echo ""
     echo "Build steps:"
-    echo "  cd $WORK_DIR/devtrack"
+    echo "  cd $WORK_DIR/devtrack-bin"
     echo "  go build -o $DEVTRACK_CLI ."
     echo "  mv -f $DEVTRACK_CLI ~/.local/bin/  # Optional: install globally"
     exit 1

@@ -114,7 +114,7 @@ func TestConfig() {
 
 	fmt.Println("Notifications:")
 	fmt.Printf("  Output Type: %s\n", config.Settings.Notifications.OutputType)
-	fmt.Printf("  Daily Report: %s at %s\n",
+	fmt.Printf("  Daily Report: %v at %s\n",
 		config.Settings.Notifications.SendDailySummary,
 		config.Settings.Notifications.DailyReportTime)
 

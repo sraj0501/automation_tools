@@ -19,8 +19,8 @@ Privacy: All data processing happens locally. No data leaves the user's machine.
 import os
 import json
 import logging
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from datetime import datetime
+from typing import Dict, List, Optional
 from dataclasses import dataclass, asdict
 from collections import defaultdict
 import re
@@ -97,7 +97,11 @@ class PersonalizedAI:
         
         # Setup data directory
         if data_dir is None:
-            home = os.path.expanduser("~")
+            try:
+                from backend.config import learning_dir
+                data_dir = str(learning_dir())
+            except ImportError:
+                data_dir = os.path.join(os.path.expanduser("~"), ".devtrack", "learning")
             data_dir = os.path.join(home, ".devtrack", "learning")
         
         self.data_dir = data_dir
@@ -631,8 +635,14 @@ Use their common phrases and vocabulary where appropriate.
 Response:"""
         
         try:
+            model_name = "llama3.2"
+            try:
+                from backend.config import ollama_model
+                model_name = ollama_model()
+            except ImportError:
+                model_name = os.getenv("OLLAMA_MODEL", "llama3.2")
             response = ollama.generate(
-                model='llama3.1',
+                model=model_name,
                 prompt=prompt,
                 options={'temperature': 0.7}
             )

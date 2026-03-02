@@ -72,11 +72,11 @@ cd ~/Documents/GitHub/automation_tools
 
 # Option B: Start manually from your project
 cd ~/Documents/GitHub/your-project
-devtrack-cli start &
+devtrack start &
 disown
 
 # Verify it's running
-devtrack-cli status
+devtrack status
 ```
 
 ### 2. **During Work: Code Normally**
@@ -107,10 +107,10 @@ tail -50 ~/.devtrack/daemon.log
 ### 4. **End of Day: View Summary**
 ```bash
 # Database statistics
-devtrack-cli db-stats
+devtrack db-stats
 
 # Recent activity logs
-devtrack-cli logs
+devtrack logs
 
 # Check specific trigger in logs
 grep "COMMIT TRIGGER" ~/.devtrack/daemon.log
@@ -149,16 +149,16 @@ SELECT COUNT(*) FROM triggers WHERE DATE(created_at) = DATE('now');
 ### CLI Commands
 ```bash
 # Current daemon status
-devtrack-cli status
+devtrack status
 
 # Database statistics
-devtrack-cli db-stats
+devtrack db-stats
 
 # Recent daemon logs (last 50 lines)
-devtrack-cli logs
+devtrack logs
 
 # Help and all commands
-devtrack-cli help
+devtrack help
 ```
 
 ---
@@ -225,34 +225,34 @@ grep "COMMIT TRIGGER" ~/.devtrack/daemon.log | grep "$(date +%Y-%m-%d)"
 
 ### Configure Work Hours (Auto-pause outside work hours)
 ```bash
-devtrack-cli config set work-hours "09:00-17:00"
+devtrack config set work-hours "09:00-17:00"
 ```
 
 ### Adjust Trigger Interval (Timer-based prompts)
 ```bash
 # Prompt every 2 hours instead of default 3
-devtrack-cli config set interval 120
+devtrack config set interval 120
 ```
 
 ### Pause/Resume Scheduler
 ```bash
 # Pause scheduled prompts (keeps git monitoring)
-devtrack-cli pause
+devtrack pause
 
 # Resume
-devtrack-cli resume
+devtrack resume
 ```
 
 ### Force Immediate Trigger
 ```bash
 # Manually trigger without waiting for commit
-devtrack-cli force-trigger
+devtrack force-trigger
 ```
 
 ### Skip Next Scheduled Trigger
 ```bash
 # Skip the next timer trigger once
-devtrack-cli skip-next
+devtrack skip-next
 ```
 
 ---
@@ -262,10 +262,10 @@ devtrack-cli skip-next
 ### Is DevTrack Running?
 ```bash
 # Quick check
-devtrack-cli status
+devtrack status
 
 # Process check
-ps aux | grep devtrack-cli
+ps aux | grep devtrack
 ps aux | grep python_bridge.py
 
 # Port check
@@ -317,12 +317,12 @@ tail -50 ~/.devtrack/daemon.log
 ```bash
 # Daemon must be started from the repository you want to monitor
 cd ~/Documents/GitHub/your-project  # ← Important!
-devtrack-cli start &
+devtrack start &
 ```
 
 **Check if daemon is running:**
 ```bash
-devtrack-cli status
+devtrack status
 # Should show: Status: ✅ RUNNING
 ```
 
@@ -437,7 +437,7 @@ Once configured, DevTrack will automatically:
 ### Email Reports (Coming Soon)
 ```bash
 # Generate daily summary
-devtrack-cli send-summary manager@company.com
+devtrack send-summary manager@company.com
 ```
 
 ---
@@ -458,10 +458,10 @@ devtrack-cli send-summary manager@company.com
 ```bash
 # SETUP
 ./run_devtrack_local.sh              # Start with validation
-devtrack-cli start &                 # Manual start
+devtrack start &                 # Manual start
 
 # DAILY USE
-devtrack-cli status                  # Check running state
+devtrack status                  # Check running state
 tail -f ~/.devtrack/daemon.log       # Watch activity
 
 # COMMIT FORMAT
@@ -473,15 +473,15 @@ git commit -m "Implemented #123 - Feature name (3.5h)"
 git commit -m "Started #TASK-789 - New work item"
 
 # VIEW DATA
-devtrack-cli logs                    # Recent logs
-devtrack-cli db-stats                # Database stats
+devtrack logs                    # Recent logs
+devtrack db-stats                # Database stats
 grep "COMMIT TRIGGER" ~/.devtrack/daemon.log
 
 # CONTROL
-devtrack-cli pause                   # Pause scheduler
-devtrack-cli resume                  # Resume
-devtrack-cli restart                 # Restart daemon
-devtrack-cli stop                    # Stop completely
+devtrack pause                   # Pause scheduler
+devtrack resume                  # Resume
+devtrack restart                 # Restart daemon
+devtrack stop                    # Stop completely
 ```
 
 ---

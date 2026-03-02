@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -91,12 +90,12 @@ type ReportRecord struct {
 func NewDatabase() (*Database, error) {
 	// Get database path
 	// Database location from env config
-	dbDir := GetDevTrackDir()
+	dbDir := GetDatabaseDir()
 	if err := os.MkdirAll(dbDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
-	dbPath := filepath.Join(dbDir, GetDatabaseFileName())
+	dbPath := GetDatabasePath()
 
 	// Open database
 	db, err := sql.Open("sqlite", dbPath)

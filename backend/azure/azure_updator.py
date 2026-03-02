@@ -1,28 +1,46 @@
 import requests
 from requests.auth import HTTPBasicAuth
-from dotenv import load_dotenv
 import os
 import sys
 import pandas as pd
 from datetime import datetime, timedelta
 
-# === LOAD ENVIRONMENT VARIABLES ===
-if os.path.exists(".env"):
-    print("✅ .env file found. Loading environment variables.")
-    load_dotenv(".env")
-else:
-    print("❌ .env file not found. Please ensure it exists in the correct directory.")
-    sys.exit()
+# Add project root for config
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_project_root = os.path.dirname(os.path.dirname(_script_dir))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
-# === CONFIGURATION ===
-org = os.getenv("ORGANIZATION")
-project = os.getenv("PROJECT")
-pat = os.getenv("AZURE_API_KEY")
+# Load env from project root .env
+try:
+    from backend.config import _load_env, azure_org, azure_project, azure_pat
+    _load_env()
+    org = azure_org()
+    project = azure_project()
+    pat = azure_pat()
+    from backend.config import azure_excel_file, azure_excel_sheet, azure_parent_work_item_id
+    excel_file = str(azure_excel_file())
+    sheet_name = azure_excel_sheet()
+    selected_parent_id = azure_parent_work_item_id() or ""
+except ImportError:
+    from dotenv import load_dotenv
+    for env_path in [os.path.join(_project_root, ".env"), ".env"]:
+        if os.path.exists(env_path):
+            load_dotenv(env_path)
+            break
+    org = os.getenv("ORGANIZATION")
+    project = os.getenv("PROJECT")
+    pat = os.getenv("AZURE_DEVOPS_PAT") or os.getenv("AZURE_API_KEY")
+    excel_file = os.getenv("AZURE_EXCEL_FILE") or os.path.join(_project_root, "backend", "data", "tasks.xlsx")
+    sheet_name = os.getenv("AZURE_EXCEL_SHEET", "my_tasks")
+    selected_parent_id = os.getenv("AZURE_PARENT_WORK_ITEM_ID", "")
+
+if not org or not project or not pat:
+    print("❌ Missing ORGANIZATION, PROJECT, or AZURE_DEVOPS_PAT/AZURE_API_KEY in .env")
+    sys.exit(1)
+
 assigned_to = os.getenv("EMAIL")
-excel_file = "../data/tasks.xlsx"
-sheet_name = "my_tasks"
 api_version = os.getenv("API_VERSION", "7.1")
-selected_parent_id = "9759"
 
 api_url = f"https://dev.azure.com/{org}/{project}/_apis/wit/workitems/$Task?api-version={api_version}"
 query_url = f"https://dev.azure.com/{org}/{project}/_apis/wit/wiql?api-version={api_version}"
@@ -51,8 +69,12 @@ def fetch_existing_tasks():
     print("🔍 Checking for existing tasks to prevent duplicates...")
     
     try:
-        # Check a range of recent work item IDs
-        recent_ids = range(max(1, int(selected_parent_id) - 100), int(selected_parent_id) + 100)
+        # Check a range of recent work item IDs (skip if no parent ID configured)
+        if not selected_parent_id or not str(selected_parent_id).strip():
+            print("⚠️ AZURE_PARENT_WORK_ITEM_ID not set - duplicate check limited")
+            return existing_titles
+        parent_id = int(selected_parent_id)
+        recent_ids = range(max(1, parent_id - 100), parent_id + 100)
         
         for wid in list(recent_ids)[:50]:  # Check last 50 work items
             detail_url = f"https://dev.azure.com/{org}/_apis/wit/workitems/{wid}?fields=System.Title,System.WorkItemType&api-version={api_version}"
@@ -145,7 +167,7 @@ for idx, row in df.iterrows():
     ]
 
     # Add parent relationship if specified
-    if selected_parent_id:
+    if selected_parent_id and str(selected_parent_id).strip():
         payload.append({
             "op": "add",
             "path": "/relations/-",
@@ -168,7 +190,7 @@ for idx, row in df.iterrows():
         df.at[idx, "Work Item ID"] = wid
         df.at[idx, "DevOps URL"] = url
         df.at[idx, "Iteration Path"] = selected_iteration
-        if selected_parent_id:
+        if selected_parent_id and str(selected_parent_id).strip():
             df.at[idx, "Parent Work Item ID"] = str(selected_parent_id)
         
         # Add to existing titles to prevent duplicates in current run

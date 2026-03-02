@@ -61,7 +61,7 @@ if [ -d "$GIT_ROOT/.git" ]; then
             -e TERM="$TERM" \
             -e COLORTERM="$COLORTERM" \
             "$CONTAINER_NAME" \
-            devtrack-cli "$@"
+            devtrack "$@"
         
         # Give it a moment to start
         sleep 1
@@ -70,7 +70,7 @@ if [ -d "$GIT_ROOT/.git" ]; then
         docker exec \
             -w "$CONTAINER_WORKDIR" \
             "$CONTAINER_NAME" \
-            devtrack-cli status
+            devtrack status
     else
         # Run interactively for other commands
         docker exec -it \
@@ -78,7 +78,7 @@ if [ -d "$GIT_ROOT/.git" ]; then
             -e TERM="$TERM" \
             -e COLORTERM="$COLORTERM" \
             "$CONTAINER_NAME" \
-            devtrack-cli "$@"
+            devtrack "$@"
     fi
 else
     # No git repo found, use workspace as fallback
@@ -96,7 +96,7 @@ else
             -e TERM="$TERM" \
             -e COLORTERM="$COLORTERM" \
             "$CONTAINER_NAME" \
-            devtrack-cli "$@"
+            devtrack "$@"
         
         # Give it a moment to start
         sleep 1
@@ -105,7 +105,7 @@ else
         docker exec \
             -w "$WORKDIR" \
             "$CONTAINER_NAME" \
-            devtrack-cli status
+            devtrack status
     else
         # Run interactively for other commands
         docker exec -it \
@@ -113,6 +113,6 @@ else
             -e TERM="$TERM" \
             -e COLORTERM="$COLORTERM" \
             "$CONTAINER_NAME" \
-            devtrack-cli "$@"
+            devtrack "$@"
     fi
 fi

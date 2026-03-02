@@ -11,23 +11,42 @@ import os
 import sys
 import re
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 import glob
 
+# Add project root for config import
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+
+def _get_ollama_config():
+    """Get Ollama config from .env"""
+    try:
+        from backend.config import ollama_host, ollama_model
+        return ollama_host(), ollama_model()
+    except ImportError:
+        return os.getenv("OLLAMA_HOST", "http://localhost:11434"), os.getenv("OLLAMA_MODEL", "llama3.2")
+
+
 class ChatResponsivenessAnalyzer:
-    def __init__(self, db_path: str, ollama_url: str = "http://localhost:11434", model: str = "llama3:latest"):
+    def __init__(
+        self,
+        db_path: str,
+        ollama_url: Optional[str] = None,
+        model: Optional[str] = None
+    ):
         """Initialize the responsiveness analyzer"""
         if not os.path.exists(db_path):
             raise FileNotFoundError(f"Database file not found: {db_path}")
-        
+
+        cfg_host, cfg_model = _get_ollama_config()
         self.db_path = db_path
-        self.ollama_url = ollama_url
-        self.model = model
+        self.ollama_url = ollama_url or cfg_host
+        self.model = model or cfg_model
         self.conn = duckdb.connect(db_path, read_only=True)
-        
+
         # Test OLLAMA connection
         self._test_ollama_connection()
-        
+
         # Load metadata
         self._load_metadata()
     
@@ -72,30 +91,17 @@ class ChatResponsivenessAnalyzer:
     
     def _clean_html_tags(self, text: str) -> str:
         """Remove HTML tags and decode common HTML entities"""
-        if not text:
-            return ""
-        
-        # Remove HTML tags
-        text = re.sub(r'<[^>]+>', '', text)
-        
-        # Decode common HTML entities
-        html_entities = {
-            '&nbsp;': ' ',
-            '&amp;': '&',
-            '&lt;': '<',
-            '&gt;': '>',
-            '&quot;': '"',
-            '&#39;': "'",
-            '&apos;': "'"
-        }
-        
-        for entity, replacement in html_entities.items():
-            text = text.replace(entity, replacement)
-        
-        # Clean up extra whitespace
-        text = ' '.join(text.split())
-        return text
-    
+        try:
+            from backend.utils.text_utils import clean_html_tags
+            return clean_html_tags(text)
+        except ImportError:
+            if not text:
+                return ""
+            text = re.sub(r'<[^>]+>', '', text)
+            for entity, replacement in {'&nbsp;': ' ', '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&apos;': "'"}.items():
+                text = text.replace(entity, replacement)
+            return ' '.join(text.split())
+
     def _call_ollama(self, prompt: str) -> str:
         """Call OLLAMA API with a prompt"""
         try:
@@ -350,10 +356,16 @@ class ChatResponsivenessAnalyzer:
             print(f"Warning: Overall analysis failed: {e}")
             return "Overall conversation analysis unavailable due to technical limitations."
     
-    def analyze_conversation(self, target_sender: str = "Shashank Raj") -> Dict:
+    def analyze_conversation(self, target_sender: Optional[str] = None) -> Dict:
         """Analyze the entire conversation for responsiveness"""
+        if target_sender is None:
+            try:
+                from backend.config import sentiment_target_sender
+                target_sender = sentiment_target_sender()
+            except ImportError:
+                target_sender = ""
         print(f"🔍 Analyzing conversation responsiveness...")
-        print(f"📊 Target sender: {target_sender}")
+        print(f"📊 Target sender: {target_sender or '(all senders)'}")
         
         # Get all messages with more details
         result = self.conn.execute("""

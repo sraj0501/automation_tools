@@ -8,11 +8,9 @@ It handles receiving triggers from Go and sending responses back.
 import json
 import os
 import socket
-import sys
 import time
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
 from typing import Callable, Dict, Any, Optional
 import logging
 from threading import Thread, Lock
@@ -108,12 +106,11 @@ class IPCClient:
     
     def _get_socket_path(self) -> str:
         """Get IPC server address"""
-        # Use TCP socket for better container compatibility
-        # Unix sockets can have issues with docker exec -d
-        # Read from environment variables
-        host = os.getenv("IPC_HOST", "127.0.0.1")
-        port = os.getenv("IPC_PORT", "35893")
-        return f"{host}:{port}"
+        try:
+            from backend.config import ipc_host, ipc_port
+            return f"{ipc_host()}:{ipc_port()}"
+        except ImportError:
+            return f"{os.getenv('IPC_HOST', '127.0.0.1')}:{os.getenv('IPC_PORT', '35893')}"
     
     def connect(self, timeout: int = 5, retry_count: int = 3) -> bool:
         """

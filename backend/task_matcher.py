@@ -5,12 +5,10 @@ This module implements semantic similarity matching and fuzzy string matching
 to automatically match user updates to existing tasks in Azure DevOps, GitHub, or Jira.
 """
 
-import os
-import sys
 import re
-from typing import List, Dict, Optional, Tuple
+from typing import List, Optional, Tuple
 from dataclasses import dataclass
-from fuzzywuzzy import fuzz, process
+from fuzzywuzzy import fuzz
 import logging
 
 # Configure logging
@@ -61,7 +59,13 @@ class TaskMatcher:
         if use_semantic:
             try:
                 from sentence_transformers import SentenceTransformer
-                self.semantic_model = SentenceTransformer('all-MiniLM-L6-v2')
+                model_name = 'all-MiniLM-L6-v2'
+                try:
+                    from backend.config import semantic_model_name
+                    model_name = semantic_model_name()
+                except ImportError:
+                    pass
+                self.semantic_model = SentenceTransformer(model_name)
                 logger.info("Loaded semantic similarity model")
             except ImportError:
                 logger.warning("sentence-transformers not installed, falling back to fuzzy matching")

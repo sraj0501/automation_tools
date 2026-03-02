@@ -102,16 +102,17 @@ type JIRAConfig struct {
 
 // GetConfigPath returns the path to the configuration file
 func GetConfigPath() string {
-	return filepath.Join(GetDevTrackDir(), GetConfigFileName())
+	return filepath.Join(GetConfigDirPath(), GetConfigFileName())
 }
 
 // LoadConfig loads the configuration from the YAML file
 func LoadConfig() (*Config, error) {
 	configPath := GetConfigPath()
 
-	// If config doesn't exist, create default
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		return CreateDefaultConfig()
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to check config file: %w", err)
 	}
 
 	data, err := os.ReadFile(configPath)
@@ -119,78 +120,49 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	var config Config
-	if err := yaml.Unmarshal(data, &config); err != nil {
+	config := &Config{}
+	if err := yaml.Unmarshal(data, config); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
-	return &config, nil
+	applyConfigDefaults(config)
+	return config, nil
 }
 
-// SaveConfig saves the configuration to the YAML file
-func (c *Config) Save() error {
-	configPath := GetConfigPath()
-
-	// Ensure directory exists
-	configDir := filepath.Dir(configPath)
-	if err := os.MkdirAll(configDir, 0755); err != nil {
-		return fmt.Errorf("failed to create config directory: %w", err)
-	}
-
-	data, err := yaml.Marshal(c)
-	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
-	}
-
-	if err := os.WriteFile(configPath, data, 0600); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
-	}
-
-	return nil
-}
-
-// CreateDefaultConfig creates a default configuration
+// CreateDefaultConfig creates a default configuration file.
 func CreateDefaultConfig() (*Config, error) {
 	config := &Config{
-		Version: "1.0.0",
-		Repositories: []RepositoryConfig{
-			{
-				Name:    "automation_tools",
-				Path:    "/Users/shashank_raj2/git_apps/personal/automation_tools",
-				Enabled: true,
-				Project: "DevTrack",
-				Ignore:  []string{},
-			},
-		},
+		Version:      GetDevTrackVersion(),
+		Repositories: []RepositoryConfig{},
 		Settings: Settings{
-			PromptInterval: 180, // 3 hours
-			WorkHoursOnly:  false,
-			WorkStartHour:  9,
-			WorkEndHour:    18,
-			Timezone:       "Asia/Kolkata",
-			LogLevel:       "info",
-			AutoSync:       true,
+			PromptInterval: GetPromptInterval(),
+			WorkHoursOnly:  GetWorkHoursOnly(),
+			WorkStartHour:  GetWorkStartHour(),
+			WorkEndHour:    GetWorkEndHour(),
+			Timezone:       GetTimezone(),
+			LogLevel:       GetLogLevel(),
+			AutoSync:       GetAutoSync(),
 			Notifications: NotificationConfig{
-				OutputType:       "email", // "email", "teams", or "both"
-				DailyReportTime:  "18:00", // 6 PM
-				WeeklyReportDay:  "Friday",
-				SendOnTrigger:    false, // Don't send on every trigger
-				SendDailySummary: true,  // Send daily summary
+				OutputType:       GetOutputType(),
+				DailyReportTime:  GetDailyReportTime(),
+				WeeklyReportDay:  GetWeeklyReportDay(),
+				SendOnTrigger:    GetSendOnTrigger(),
+				SendDailySummary: GetSendDailySummary(),
 				Email: EmailOutputConfig{
-					Enabled:      true,
-					ToAddresses:  []string{"your.email@example.com"},
-					CCAddresses:  []string{},
-					Subject:      "DevTrack Daily Report - {{.Date}}",
-					ManagerEmail: "manager@example.com",
+					Enabled:      false,
+					ToAddresses:  GetEmailToAddresses(),
+					CCAddresses:  GetEmailCCAddresses(),
+					Subject:      GetEmailSubject(),
+					ManagerEmail: GetEmailManager(),
 				},
 				Teams: TeamsOutputConfig{
 					Enabled:     false,
-					ChannelID:   "",
-					ChannelName: "DevTrack Updates",
-					ChatID:      "",
-					ChatType:    "channel", // "channel" or "chat"
-					WebhookURL:  "",
-					MentionUser: false,
+					ChannelID:   GetTeamsChannelID(),
+					ChannelName: GetTeamsChannelName(),
+					ChatID:      GetTeamsChatID(),
+					ChatType:    GetTeamsChatType(),
+					WebhookURL:  GetTeamsWebhookURL(),
+					MentionUser: GetTeamsMentionUser(),
 				},
 			},
 		},
@@ -217,13 +189,63 @@ func CreateDefaultConfig() (*Config, error) {
 		},
 	}
 
-	// Save the default config
 	if err := config.Save(); err != nil {
 		return nil, err
 	}
 
 	fmt.Printf("✓ Created default configuration at: %s\n", GetConfigPath())
 	return config, nil
+}
+
+// Save persists the configuration to disk.
+func (c *Config) Save() error {
+	configPath := GetConfigPath()
+	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	data, err := yaml.Marshal(c)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	if err := os.WriteFile(configPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	return nil
+}
+
+func applyConfigDefaults(config *Config) {
+	config.Version = GetDevTrackVersion()
+
+	if config.Repositories == nil {
+		config.Repositories = []RepositoryConfig{}
+	}
+
+	config.Settings.PromptInterval = GetPromptInterval()
+	config.Settings.WorkHoursOnly = GetWorkHoursOnly()
+	config.Settings.WorkStartHour = GetWorkStartHour()
+	config.Settings.WorkEndHour = GetWorkEndHour()
+	config.Settings.Timezone = GetTimezone()
+	config.Settings.LogLevel = GetLogLevel()
+	config.Settings.AutoSync = GetAutoSync()
+	config.Settings.Notifications.OutputType = GetOutputType()
+	config.Settings.Notifications.DailyReportTime = GetDailyReportTime()
+	config.Settings.Notifications.WeeklyReportDay = GetWeeklyReportDay()
+	config.Settings.Notifications.SendOnTrigger = GetSendOnTrigger()
+	config.Settings.Notifications.SendDailySummary = GetSendDailySummary()
+	config.Settings.Notifications.Email.ToAddresses = GetEmailToAddresses()
+	config.Settings.Notifications.Email.CCAddresses = GetEmailCCAddresses()
+	config.Settings.Notifications.Email.ManagerEmail = GetEmailManager()
+	config.Settings.Notifications.Email.Subject = GetEmailSubject()
+	config.Settings.Notifications.Teams.ChannelID = GetTeamsChannelID()
+	config.Settings.Notifications.Teams.ChannelName = GetTeamsChannelName()
+	config.Settings.Notifications.Teams.ChatID = GetTeamsChatID()
+	config.Settings.Notifications.Teams.ChatType = GetTeamsChatType()
+	config.Settings.Notifications.Teams.WebhookURL = GetTeamsWebhookURL()
+	config.Settings.Notifications.Teams.MentionUser = GetTeamsMentionUser()
+
 }
 
 // AddRepository adds a new repository to the configuration

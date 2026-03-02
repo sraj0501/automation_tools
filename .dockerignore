@@ -4,7 +4,7 @@
 .gitattributes
 
 # Build artifacts
-devtrack-bin/devtrack-cli
+devtrack-bin/devtrack
 devtrack-bin/go-cli
 *.exe
 *.so

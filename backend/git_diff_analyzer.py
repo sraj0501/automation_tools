@@ -17,15 +17,21 @@ logger = logging.getLogger(__name__)
 class GitDiffAnalyzer:
     """Analyzes git diffs and generates intelligent summaries using Ollama"""
     
-    def __init__(self, ollama_host: Optional[str] = None):
+    def __init__(self, ollama_host: Optional[str] = None, model: Optional[str] = None):
         """
         Initialize the Git Diff Analyzer
         
         Args:
-            ollama_host: Ollama API endpoint (defaults to env var OLLAMA_HOST)
+            ollama_host: Ollama API endpoint (defaults to config)
+            model: Ollama model (defaults to config)
         """
-        self.ollama_host = ollama_host or os.getenv("OLLAMA_HOST", "http://localhost:11434")
-        self.model = os.getenv("OLLAMA_MODEL", "llama2")  # Default model
+        try:
+            from backend.config import ollama_host as cfg_host, ollama_model as cfg_model
+            self.ollama_host = ollama_host or cfg_host()
+            self.model = model or cfg_model()
+        except ImportError:
+            self.ollama_host = ollama_host or os.getenv("OLLAMA_HOST", "http://localhost:11434")
+            self.model = model or os.getenv("OLLAMA_MODEL", "llama3.2")
         
     def is_project_management_connected(self) -> bool:
         """
@@ -35,13 +41,18 @@ class GitDiffAnalyzer:
             True if Azure DevOps, JIRA, or similar is configured
         """
         # Check for Azure DevOps
-        if os.getenv("AZURE_DEVOPS_ORG") and os.getenv("AZURE_DEVOPS_TOKEN"):
-            return True
-            
+        try:
+            from backend.config import azure_org, azure_pat
+            if azure_org() and azure_pat():
+                return True
+        except ImportError:
+            if os.getenv("ORGANIZATION") and (os.getenv("AZURE_DEVOPS_PAT") or os.getenv("AZURE_API_KEY")):
+                return True
+
         # Check for JIRA
         if os.getenv("JIRA_URL") and os.getenv("JIRA_TOKEN"):
             return True
-            
+
         # Check for GitHub Projects (optional)
         if os.getenv("GITHUB_PROJECT_ENABLED") == "true":
             return True

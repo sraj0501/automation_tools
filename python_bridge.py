@@ -13,22 +13,20 @@ import time
 import logging
 from pathlib import Path
 
-# Load environment variables from .env file
+# Load environment variables from .env at project root (via backend config)
+sys.path.insert(0, os.path.dirname(__file__))
 try:
-    from dotenv import load_dotenv
-    env_paths = [
-        os.getenv("DEVTRACK_ENV_FILE"),
-        Path.home() / ".config" / "devtrack" / ".env",
-        Path.home() / ".devtrack" / ".env",
-        Path.home() / "Documents" / "GitHub" / "automation_tools" / ".env",
-        Path(__file__).parent / ".env",
-    ]
-    for env_path in env_paths:
-        if env_path and Path(env_path).exists():
-            load_dotenv(env_path)
-            break
+    from backend.config import _load_env
+    _load_env()
 except ImportError:
-    pass  # python-dotenv not installed, use system environment variables
+    try:
+        from dotenv import load_dotenv
+        for env_path in [Path(__file__).parent / ".env", Path.home() / ".devtrack" / ".env"]:
+            if env_path.exists():
+                load_dotenv(env_path)
+                break
+    except ImportError:
+        pass
 
 # Set up logging first
 logging.basicConfig(
@@ -40,7 +38,7 @@ logger = logging.getLogger(__name__)
 # Add backend to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
 
-from backend.ipc_client import (
+from backend.ipc_client import (  # noqa: E402
     IPCClient, IPCMessage, MessageType,
     create_ack_message, create_task_update_message,
     create_response_message

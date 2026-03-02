@@ -19,7 +19,7 @@ RUN go mod download
 COPY devtrack-bin/ ./
 
 # Build the binary
-RUN CGO_ENABLED=1 go build -ldflags="-w -s" -o devtrack-cli .
+RUN CGO_ENABLED=1 go build -ldflags="-w -s" -o devtrack .
 
 # Stage 2: Base Python environment with cached apt/uv layers
 FROM python:3.11-slim AS python-base
@@ -66,12 +66,12 @@ RUN useradd -m -u 1000 devtrack && \
 WORKDIR /app
 
 # Copy built binary from builder stage
-COPY --from=go-builder /build/devtrack-cli /usr/local/bin/devtrack-cli
-RUN chmod +x /usr/local/bin/devtrack-cli
+COPY --from=go-builder /build/devtrack /usr/local/bin/devtrack
+RUN chmod +x /usr/local/bin/devtrack
 
 # Copy Python backend and entrypoints
 COPY backend/ /app/backend/
-COPY main.py python_bridge.py entrypoint.sh /app/
+COPY python_bridge.py entrypoint.sh /app/
 COPY pyproject.toml /app/
 
 # Make entrypoint executable
@@ -94,8 +94,8 @@ VOLUME ["/home/devtrack/.local/share/devtrack", "/home/devtrack/.config/devtrack
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD devtrack-cli --version || exit 1
+    CMD devtrack --version || exit 1
 
 # Default command
-ENTRYPOINT ["/usr/local/bin/devtrack-cli"]
+ENTRYPOINT ["/usr/local/bin/devtrack"]
 CMD ["--help"]

@@ -75,28 +75,28 @@ class DailyReportGenerator:
     def __init__(
         self,
         db_path: Optional[str] = None,
-        ollama_url: str = "http://localhost:11434",
-        model: str = "llama3.2"
+        ollama_url: Optional[str] = None,
+        model: Optional[str] = None
     ):
         """
         Initialize the daily report generator.
         
         Args:
             db_path: Path to SQLite database (auto-detected if None)
-            ollama_url: URL for Ollama API
-            model: Ollama model to use for AI insights
+            ollama_url: URL for Ollama API (from config if None)
+            model: Ollama model to use for AI insights (from config if None)
         """
-        self.email_reporter = EmailReporter(db_path)
-        self.ollama_url = ollama_url
-        self.model = model
+        try:
+            from backend.config import ollama_host, ollama_model, database_path
+            self.ollama_url = ollama_url or ollama_host()
+            self.model = model or ollama_model()
+            self.db_path = str(db_path) if db_path else str(database_path())
+        except ImportError:
+            self.ollama_url = ollama_url or os.getenv("OLLAMA_HOST", "http://localhost:11434")
+            self.model = model or os.getenv("OLLAMA_MODEL", "llama3.2")
+            self.db_path = db_path or os.path.join(os.path.expanduser("~"), ".devtrack", "daemon.db")
+        self.email_reporter = EmailReporter(self.db_path)
         self._ollama_available: Optional[bool] = None
-        
-        # Database path for storing reports
-        if db_path is None:
-            home_dir = os.path.expanduser("~")
-            self.db_path = os.path.join(home_dir, ".devtrack", "daemon.db")
-        else:
-            self.db_path = db_path
     
     def is_end_of_day(
         self,
@@ -875,9 +875,12 @@ Keep it professional and constructive. Respond ONLY with valid JSON."""
         """
         if output_path is None:
             date_str = report.base_report.date.strftime('%Y-%m-%d')
-            home_dir = os.path.expanduser("~")
-            reports_dir = os.path.join(home_dir, ".devtrack", "reports")
-            os.makedirs(reports_dir, exist_ok=True)
+            try:
+                from backend.config import reports_dir
+                reports_dir_path = str(reports_dir())
+            except ImportError:
+                reports_dir_path = os.path.join(os.path.expanduser("~"), ".devtrack", "reports")
+            os.makedirs(reports_dir_path, exist_ok=True)
             
             ext = {
                 OutputFormat.TEXT: "txt",
@@ -887,7 +890,7 @@ Keep it professional and constructive. Respond ONLY with valid JSON."""
             }.get(output_format, "txt")
             
             ai_suffix = "_ai" if report.is_ai_enhanced else ""
-            output_path = os.path.join(reports_dir, f"report-{date_str}{ai_suffix}.{ext}")
+            output_path = os.path.join(reports_dir_path, f"report-{date_str}{ai_suffix}.{ext}")
         
         content = self.format_report(report, output_format)
         
@@ -1595,14 +1598,17 @@ Be constructive and highlight patterns. Respond ONLY with valid JSON."""
         # Optionally add file-based reports not in database
         if include_files:
             import glob
-            
-            reports_dir = os.path.join(os.path.expanduser("~"), ".devtrack", "reports")
-            if os.path.exists(reports_dir):
+            try:
+                from backend.config import reports_dir
+                reports_dir_path = str(reports_dir())
+            except ImportError:
+                reports_dir_path = os.path.join(os.path.expanduser("~"), ".devtrack", "reports")
+            if os.path.exists(reports_dir_path):
                 cutoff = datetime.now() - timedelta(days=days)
                 db_dates = {r["date"].strftime('%Y-%m-%d') for r in reports}
                 
                 for pattern in ["report-*.txt", "report-*.md", "report-*.html", "report-*.json"]:
-                    for path in glob.glob(os.path.join(reports_dir, pattern)):
+                    for path in glob.glob(os.path.join(reports_dir_path, pattern)):
                         filename = os.path.basename(path)
                         try:
                             date_str = filename.split("report-")[1].split("_")[0].split(".")[0]

@@ -61,8 +61,13 @@ class DescriptionEnhancer:
             ollama_host: Ollama API endpoint
             model: Model to use for enhancement
         """
-        self.ollama_host = ollama_host or os.getenv("OLLAMA_HOST", "http://localhost:11434")
-        self.model = model or os.getenv("OLLAMA_MODEL", "llama2")
+        try:
+            from backend.config import ollama_host as cfg_host, ollama_model as cfg_model
+            self.ollama_host = ollama_host or cfg_host()
+            self.model = model or cfg_model()
+        except ImportError:
+            self.ollama_host = ollama_host or os.getenv("OLLAMA_HOST", "http://localhost:11434")
+            self.model = model or os.getenv("OLLAMA_MODEL", "llama3.2")
         self._available = None  # Cache availability check
         
     def is_available(self) -> bool:

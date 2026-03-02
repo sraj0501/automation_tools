@@ -22,8 +22,13 @@ class CommitMessageEnhancer:
     """Enhances git commit messages using AI analysis of staged changes"""
     
     def __init__(self, ollama_host: Optional[str] = None, ollama_model: Optional[str] = None):
-        self.ollama_host = ollama_host or os.getenv("OLLAMA_HOST", "http://localhost:11434")
-        self.ollama_model = ollama_model or os.getenv("OLLAMA_MODEL", "gemma3:12b")
+        try:
+            from backend.config import ollama_host as cfg_host, ollama_model as cfg_model
+            self.ollama_host = ollama_host or cfg_host()
+            self.ollama_model = ollama_model or cfg_model()
+        except ImportError:
+            self.ollama_host = ollama_host or os.getenv("OLLAMA_HOST", "http://localhost:11434")
+            self.ollama_model = ollama_model or os.getenv("OLLAMA_MODEL", "llama3.2")
         
     def get_staged_diff(self, repo_path: str) -> Optional[str]:
         """Get diff of staged changes"""
@@ -104,59 +109,61 @@ class CommitMessageEnhancer:
             if is_placeholder:
                 prompt = f"""You are writing a git commit message. Analyze the code changes and write a clear, professional commit message.
 
-Files Changed ({len(files)}):
-{files_list}
+                Files Changed ({len(files)}):
+                {files_list}
 
-Code Changes:
-{diff[:2000]}
+                Code Changes:
+                {diff[:2000]}
 
-REQUIREMENTS:
-1. First line: Brief summary of WHAT changed (under 72 characters)
-2. Blank line
-3. Body (2-4 sentences): Explain WHY this change was made and what problem it solves
+                REQUIREMENTS:
+                1. First line: Brief summary of WHAT changed (under 72 characters)
+                2. Blank line
+                3. Body (2-4 sentences): Explain WHY this change was made and what problem it solves
 
-GOOD EXAMPLE:
-Add interactive feedback prompt after commit
+                GOOD EXAMPLE:
+                Add interactive feedback prompt after commit
 
-Provides immediate confirmation when commits are created, showing users
-what was logged and which systems were updated. This improves user
-confidence and helps track work more effectively.
+                Provides immediate confirmation when commits are created, showing users
+                what was logged and which systems were updated. This improves user
+                confidence and helps track work more effectively.
 
-BAD EXAMPLE (DO NOT DO THIS):
-Update files
+                BAD EXAMPLE (DO NOT DO THIS):
+                Update files
 
-Changed some code.
+                Changed some code.
 
-Write ONLY the commit message. DO NOT include options, explanations, meta-commentary, or anything except the commit message itself."""
+                Write ONLY the commit message. DO NOT include options, explanations, meta-commentary, 
+                or anything except the commit message itself."""
             else:
                 prompt = f"""You are improving a git commit message. Analyze the code changes and rewrite the message to be more informative.
 
-Original Message: {original_message}
+                Original Message: {original_message}
 
-Files Changed ({len(files)}):
-{files_list}
+                Files Changed ({len(files)}):
+                {files_list}
 
-Code Changes:
-{diff[:2000]}
+                Code Changes:
+                {diff[:2000]}
 
-REQUIREMENTS:
-1. First line: Improved summary of WHAT changed (under 72 characters)
-2. Blank line  
-3. Body (2-4 sentences): Explain WHY this change was made and its benefits
+                REQUIREMENTS:
+                1. First line: Improved summary of WHAT changed (under 72 characters)
+                2. Blank line  
+                3. Body (2-4 sentences): Explain WHY this change was made and its benefits
 
-GOOD EXAMPLE:
-Fix authentication timeout in user sessions
+                GOOD EXAMPLE:
+                Fix authentication timeout in user sessions
 
-Resolves issue where users were logged out unexpectedly after 5 minutes
-of inactivity. Updates session timeout to 30 minutes and adds proper
-refresh logic to improve user experience.
+                Resolves issue where users were logged out unexpectedly after 5 minutes
+                of inactivity. Updates session timeout to 30 minutes and adds proper
+                refresh logic to improve user experience.
 
-BAD EXAMPLE (DO NOT DO THIS):
-Fixed bug
+                BAD EXAMPLE (DO NOT DO THIS):
+                Fixed bug
 
-Made some changes to auth.
+                Made some changes to auth.
 
-Write ONLY the improved commit message. DO NOT include options, explanations, meta-commentary, or anything except the commit message itself."""
+                Write ONLY the improved commit message. 
+                DO NOT include options, explanations, meta-commentary, or anything except the commit message itself."""
 
             # Call Ollama
             response = requests.post(
@@ -303,21 +310,22 @@ def main():
     logger.info(f"Working in repository: {repo_path}")
     logger.info(f"Commit source: {commit_source or 'manual'}")
     
-    # Load env vars
+    # Load env from project root
     try:
-        from dotenv import load_dotenv
-        env_paths = [
-            Path.home() / ".devtrack" / ".env",
-            Path.home() / "Documents" / "GitHub" / "automation_tools" / ".env",
-        ]
-        for env_path in env_paths:
-            if env_path.exists():
-                load_dotenv(env_path)
-                logger.info(f"Loaded env from: {env_path}")
-                break
+        import sys
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from backend.config import _load_env
+        _load_env()
     except ImportError:
-        pass
-    
+        try:
+            from dotenv import load_dotenv
+            for env_path in [Path(__file__).parent.parent / ".env", Path.home() / ".devtrack" / ".env"]:
+                if env_path.exists():
+                    load_dotenv(env_path)
+                    break
+        except ImportError:
+            pass
+
     enhancer = CommitMessageEnhancer()
     enhancer.process_commit_message(commit_msg_file, repo_path)
     
