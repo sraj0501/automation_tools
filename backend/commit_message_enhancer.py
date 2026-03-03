@@ -92,12 +92,125 @@ class CommitMessageEnhancer:
         except Exception:
             return []
     
-    def enhance_message_with_ai(self, original_message: str, diff: str, files: list) -> str:
+    def analyze_changes_in_plain_language(self, repo_path: str, files: list) -> str:
+        """Analyze staged changes and describe them in plain language"""
+        try:
+            descriptions = []
+            
+            for file_path in files[:10]:  # Limit to first 10 files
+                # Get diff for this specific file
+                result = subprocess.run(
+                    ["git", "diff", "--cached", "--unified=3", file_path],
+                    cwd=repo_path,
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                
+                if result.returncode != 0:
+                    continue
+                
+                diff_content = result.stdout
+                
+                # Analyze the diff to understand what changed
+                lines_added = diff_content.count('\n+') - diff_content.count('\n+++')
+                lines_removed = diff_content.count('\n-') - diff_content.count('\n---')
+                
+                # Look for function/class definitions being added or modified
+                added_functions = []
+                modified_functions = []
+                removed_functions = []
+                
+                # Simple heuristics to detect what changed
+                if 'def ' in diff_content or 'function ' in diff_content:
+                    # Extract function names being added
+                    for line in diff_content.split('\n'):
+                        if line.startswith('+') and ('def ' in line or 'function ' in line):
+                            func_match = None
+                            if 'def ' in line:
+                                func_match = line.split('def ')[1].split('(')[0].strip()
+                            elif 'function ' in line:
+                                func_match = line.split('function ')[1].split('(')[0].strip()
+                            if func_match and func_match not in added_functions:
+                                added_functions.append(func_match)
+                
+                # Build natural language description
+                file_desc_parts = []
+                
+                # Analyze what actually changed by looking at diff context
+                context_lines = []
+                for line in diff_content.split('\n')[:50]:  # Look at first 50 lines
+                    if line.startswith('+') and not line.startswith('+++'):
+                        context_lines.append(line[1:].strip())
+                
+                # Try to understand the change better
+                change_type = None
+                if any('def ' in line or 'function ' in line for line in context_lines):
+                    change_type = "functions"
+                elif any('class ' in line for line in context_lines):
+                    change_type = "classes"
+                elif any('import ' in line for line in context_lines):
+                    change_type = "imports"
+                elif any('if ' in line or 'for ' in line or 'while ' in line for line in context_lines):
+                    change_type = "logic"
+                
+                if lines_added > 0 and lines_removed == 0:
+                    # New code added
+                    if added_functions:
+                        funcs_str = ', '.join(added_functions[:2])
+                        if len(added_functions) > 2:
+                            funcs_str += f" and {len(added_functions) - 2} more"
+                        file_desc_parts.append(f"added {funcs_str}")
+                    elif change_type:
+                        file_desc_parts.append(f"added new {change_type} ({lines_added} lines)")
+                    else:
+                        file_desc_parts.append(f"added {lines_added} lines of new code")
+                elif lines_removed > 0 and lines_added == 0:
+                    # Code removed
+                    file_desc_parts.append(f"removed {lines_removed} lines")
+                elif lines_added > 0 and lines_removed > 0:
+                    # Modified
+                    if lines_added > lines_removed * 2:
+                        file_desc_parts.append(f"significantly expanded the code (added {lines_added} lines, removed {lines_removed})")
+                    elif lines_removed > lines_added * 2:
+                        file_desc_parts.append(f"removed code and simplified (removed {lines_removed} lines, added {lines_added})")
+                    else:
+                        file_desc_parts.append(f"modified existing code (added {lines_added} lines, removed {lines_removed})")
+                
+                # Add context about what the file does
+                file_name = file_path.split('/')[-1]
+                if file_name.endswith('.py'):
+                    file_type = "Python script"
+                elif file_name.endswith('.sh'):
+                    file_type = "shell script"
+                elif file_name.endswith('.go'):
+                    file_type = "Go file"
+                elif file_name.endswith('.md'):
+                    file_type = "documentation"
+                else:
+                    file_type = "file"
+                
+                if file_desc_parts:
+                    desc = f"In {file_path}: {', '.join(file_desc_parts)}"
+                    descriptions.append(desc)
+            
+            if len(files) > 10:
+                descriptions.append(f"... and {len(files) - 10} more files were modified")
+            
+            return "\n".join(descriptions) if descriptions else "Code changes were made to the staged files."
+            
+        except Exception as e:
+            logger.warning(f"Error analyzing changes: {e}")
+            return "Code changes were made to the staged files."
+    
+    def enhance_message_with_ai(self, original_message: str, diff: str, files: list, repo_path: str = None) -> str:
         """Use AI to enhance/generate commit message"""
         try:
-            files_list = "\n".join([f"  - {f}" for f in files[:10]])
-            if len(files) > 10:
-                files_list += f"\n  ... and {len(files) - 10} more"
+            if repo_path is None:
+                repo_path = os.getcwd()
+            
+            # Get plain language description of changes
+            plain_changes = self.analyze_changes_in_plain_language(repo_path, files)
             
             # Check if original message is meaningful or just placeholder
             is_placeholder = (
@@ -109,11 +222,8 @@ class CommitMessageEnhancer:
             if is_placeholder:
                 prompt = f"""You are writing a git commit message. Analyze the code changes and write a clear, descriptive commit message.
 
-                Files Changed ({len(files)}):
-                {files_list}
-
-                Code Changes:
-                {diff[:2000]}
+                What Changed:
+                {plain_changes}
 
                 REQUIREMENTS:
                 1. First line: Concrete summary naming WHAT changed (under 72 chars). Be specific - e.g. "Fix path resolution in devtrack-git wrapper" not "Fix bug".
@@ -137,6 +247,11 @@ class CommitMessageEnhancer:
                 # Check if this looks like an already-enhanced message (has body paragraph)
                 has_body = '\n\n' in original_message.strip() or original_message.count('\n') >= 2
                 
+                # Get plain language description (repo_path already available from outer scope)
+                if repo_path is None:
+                    repo_path = os.getcwd()
+                plain_changes = self.analyze_changes_in_plain_language(repo_path, files)
+                
                 if has_body:
                     # Improve existing enhanced message - refine and enhance further
                     prompt = f"""You are refining an existing git commit message to make it better. Keep the good parts but improve clarity, add missing details, or enhance the explanation.
@@ -144,11 +259,8 @@ class CommitMessageEnhancer:
                 Current Message:
                 {original_message}
 
-                Files Changed ({len(files)}):
-                {files_list}
-
-                Code Changes:
-                {diff[:2000]}
+                What Changed:
+                {plain_changes}
 
                 REQUIREMENTS:
                 1. First line: Improved summary (under 72 chars). Keep it specific and concrete.
@@ -163,11 +275,8 @@ class CommitMessageEnhancer:
 
                 Original Message: {original_message}
 
-                Files Changed ({len(files)}):
-                {files_list}
-
-                Code Changes:
-                {diff[:2000]}
+                What Changed:
+                {plain_changes}
 
                 REQUIREMENTS:
                 1. First line: Concrete summary of WHAT changed (under 72 chars). Name the specific change - e.g. "Add --dry-run to devtrack git commit" not "Improve commit".
@@ -275,7 +384,7 @@ class CommitMessageEnhancer:
             logger.info(f"Enhancing commit message with AI ({len(files)} files changed)...")
             
             # Enhance with AI
-            enhanced = self.enhance_message_with_ai(original_message, diff, files)
+            enhanced = self.enhance_message_with_ai(original_message, diff, files, repo_path)
             
             if enhanced == original_message:
                 logger.info("No enhancement needed or AI unavailable")

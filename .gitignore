@@ -17,6 +17,7 @@ wheels/
 go-cli
 devtrack-bin/devtrack
 *devtrack
+devtrack
 *.log
 
 
