@@ -26,3 +26,6 @@ Data/
 
 # Test temp dirs
 .test_commit_enhancer_tmp
+
+#Claude Files and Folders
+*.claude*
