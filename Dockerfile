@@ -22,7 +22,7 @@ COPY devtrack-bin/ ./
 RUN CGO_ENABLED=1 go build -ldflags="-w -s" -o devtrack .
 
 # Stage 2: Base Python environment with cached apt/uv layers
-FROM python:3.11-slim AS python-base
+FROM python:3.12-slim AS python-base
 
 ENV PATH="/root/.local/bin:${PATH}"
 

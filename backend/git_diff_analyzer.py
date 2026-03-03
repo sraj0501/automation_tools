@@ -8,30 +8,28 @@ It uses Ollama to generate intelligent commit message summaries based on code ch
 import os
 import subprocess
 import logging
-import requests
 from typing import Dict, Optional, List
 
 logger = logging.getLogger(__name__)
 
 
 class GitDiffAnalyzer:
-    """Analyzes git diffs and generates intelligent summaries using Ollama"""
-    
-    def __init__(self, ollama_host: Optional[str] = None, model: Optional[str] = None):
-        """
-        Initialize the Git Diff Analyzer
-        
+    """Analyzes git diffs and generates intelligent summaries using the configured LLM provider."""
+
+    def __init__(self, provider=None):
+        """Initialize the Git Diff Analyzer.
+
         Args:
-            ollama_host: Ollama API endpoint (defaults to config)
-            model: Ollama model (defaults to config)
+            provider: Optional LLM provider instance (injected for testing).
+                      Defaults to the global provider chain from get_provider().
         """
-        try:
-            from backend.config import ollama_host as cfg_host, ollama_model as cfg_model
-            self.ollama_host = ollama_host or cfg_host()
-            self.model = model or cfg_model()
-        except ImportError:
-            self.ollama_host = ollama_host or os.getenv("OLLAMA_HOST", "http://localhost:11434")
-            self.model = model or os.getenv("OLLAMA_MODEL", "llama3.2")
+        self._provider = provider  # None = lazy init on first use
+
+    def _get_provider(self):
+        if self._provider is None:
+            from backend.llm import get_provider
+            self._provider = get_provider()
+        return self._provider
         
     def is_project_management_connected(self) -> bool:
         """
@@ -154,42 +152,27 @@ class GitDiffAnalyzer:
                     IMPACT: <impact>
                 """
 
-            # Call Ollama API
-            response = requests.post(
-                f"{self.ollama_host}/api/generate",
-                json={
-                    "model": self.model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": 0.3,  # Lower temperature for more factual responses
-                        "num_predict": 200   # Limit response length
-                    }
-                },
-                timeout=30
+            from backend.llm.base import LLMOptions
+            analysis_text = self._get_provider().generate(
+                prompt=prompt,
+                options=LLMOptions(temperature=0.3, max_tokens=200),
+                timeout=30,
             )
-            
-            if response.status_code != 200:
-                logger.error(f"Ollama API error: {response.status_code}")
+
+            if not analysis_text:
                 return self._fallback_analysis(commit_message, files_changed)
-            
-            result = response.json()
-            analysis_text = result.get("response", "")
-            
+
             # Parse the response
             analysis = self._parse_ollama_response(analysis_text)
-            
+
             # Add original commit message for reference
             analysis["original_message"] = commit_message
             analysis["files_count"] = len(files_changed)
-            
+
             return analysis
-            
-        except requests.exceptions.Timeout:
-            logger.warning("Ollama request timed out, using fallback")
-            return self._fallback_analysis(commit_message, files_changed)
+
         except Exception as e:
-            logger.error(f"Error analyzing diff with Ollama: {e}")
+            logger.error(f"Error analyzing diff with LLM: {e}")
             return self._fallback_analysis(commit_message, files_changed)
     
     def _parse_ollama_response(self, response_text: str) -> Dict[str, str]:

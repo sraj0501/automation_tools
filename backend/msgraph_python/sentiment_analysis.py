@@ -7,7 +7,6 @@ Teams Chat Analysis using OLLAMA
 
 import duckdb
 import json
-import requests
 import os
 import sys
 import re
@@ -19,57 +18,35 @@ import glob
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 
-def _get_ollama_config():
-    """Get Ollama config from .env"""
-    try:
-        from backend.config import ollama_host, ollama_model
-        return ollama_host(), ollama_model()
-    except ImportError:
-        return os.getenv("OLLAMA_HOST", "http://localhost:11434"), os.getenv("OLLAMA_MODEL", "llama3.2")
-
-
 class ChatResponsivenessAnalyzer:
     def __init__(
         self,
         db_path: str,
+        provider=None,
+        # Legacy params kept for backwards compatibility but ignored:
         ollama_url: Optional[str] = None,
-        model: Optional[str] = None
+        model: Optional[str] = None,
     ):
-        """Initialize the responsiveness analyzer"""
+        """Initialize the responsiveness analyzer."""
         if not os.path.exists(db_path):
             raise FileNotFoundError(f"Database file not found: {db_path}")
 
-        cfg_host, cfg_model = _get_ollama_config()
         self.db_path = db_path
-        self.ollama_url = ollama_url or cfg_host
-        self.model = model or cfg_model
+        self._provider = provider  # None = lazy init on first use
         self.conn = duckdb.connect(db_path, read_only=True)
-
-        # Test OLLAMA connection
-        self._test_ollama_connection()
 
         # Load metadata
         self._load_metadata()
-    
-    def _test_ollama_connection(self):
-        """Test if OLLAMA is running and accessible"""
-        try:
-            response = requests.get(f"{self.ollama_url}/api/tags", timeout=5)
-            if response.status_code == 200:
-                models = response.json().get('models', [])
-                available_models = [model['name'] for model in models]
-                print(f"✅ OLLAMA connection successful. Available models: {available_models}")
-                
-                if not any(self.model in model for model in available_models):
-                    print(f"⚠️  Model '{self.model}' not found. Available: {available_models}")
-                    print(f"💡 Run: ollama pull {self.model}")
-                    sys.exit(1)
-            else:
-                raise Exception(f"HTTP {response.status_code}")
-        except Exception as e:
-            print(f"❌ OLLAMA connection failed: {e}")
-            print("💡 Make sure OLLAMA is running: ollama serve")
-            sys.exit(1)
+
+    def _get_provider(self):
+        if self._provider is None:
+            try:
+                from backend.llm import get_provider
+                self._provider = get_provider()
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"LLM provider unavailable: {e}")
+        return self._provider
     
     def _load_metadata(self):
         """Load chat metadata"""
@@ -104,35 +81,20 @@ class ChatResponsivenessAnalyzer:
             return ' '.join(text.split())
 
     def _call_ollama(self, prompt: str) -> str:
-        """Call OLLAMA API with a prompt"""
+        """Call the configured LLM provider with a prompt."""
         try:
-            payload = {
-                "model": self.model,
-                "prompt": prompt,
-                "stream": False,
-                "options": {
-                    "temperature": 0.2,
-                    "num_predict": 300
-                }
-            }
-            
-            response = requests.post(
-                f"{self.ollama_url}/api/generate",
-                json=payload,
-                timeout=60
+            from backend.llm.base import LLMOptions
+            provider = self._get_provider()
+            if provider is None:
+                return "Error: LLM provider unavailable"
+            result = provider.generate(
+                prompt=prompt,
+                options=LLMOptions(temperature=0.2, max_tokens=300),
+                timeout=60,
             )
-            
-            if response.status_code == 200:
-                return response.json()['response'].strip()
-            else:
-                print(f"OLLAMA API error: {response.status_code}")
-                return "Error: API call failed"
-                
-        except requests.exceptions.Timeout:
-            print("OLLAMA request timed out - continuing without this analysis")
-            return "Error: Request timed out"
+            return result if result else "Error: No response"
         except Exception as e:
-            print(f"Error calling OLLAMA: {e}")
+            print(f"Error calling LLM: {e}")
             return "Error: Connection failed"
     
     def _analyze_message_sentiment(self, content: str) -> str:
@@ -644,10 +606,16 @@ def main():
             print("❌ Invalid input.")
             return
     
-    # Get target sender
-    target_sender = input("\n🎯 Enter target sender name (default: Shashank Raj): ").strip()
+    # Get target sender (from config or user input)
+    try:
+        from backend.config import sentiment_target_sender
+        default_sender = sentiment_target_sender()
+    except ImportError:
+        default_sender = ""
+    prompt_default = f" (default: {default_sender})" if default_sender else ""
+    target_sender = input(f"\n🎯 Enter target sender name{prompt_default}: ").strip()
     if not target_sender:
-        target_sender = "Shashank Raj"
+        target_sender = default_sender
     
     # Get OLLAMA model
     model = input("🤖 Enter OLLAMA model (default: llama3:latest): ").strip()

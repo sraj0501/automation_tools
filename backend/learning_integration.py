@@ -188,7 +188,11 @@ class LearningIntegration:
                 print(f"📧 Using email: {self.user_email}")
             except Exception as e:
                 print(f"⚠️  Could not get user email: {e}")
-                self.user_email = "user@example.com"
+                try:
+                    from backend.config import get
+                    self.user_email = get("EMAIL", "") or get("USER_EMAIL", "")
+                except ImportError:
+                    self.user_email = ""
         
         # Initialize PersonalizedAI
         self.ai = PersonalizedAI(self.user_email)

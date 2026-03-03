@@ -75,25 +75,21 @@ class DailyReportGenerator:
     def __init__(
         self,
         db_path: Optional[str] = None,
+        provider=None,
+        # Legacy params kept for backwards compatibility but ignored:
         ollama_url: Optional[str] = None,
-        model: Optional[str] = None
+        model: Optional[str] = None,
     ):
-        """
-        Initialize the daily report generator.
-        
+        """Initialize the daily report generator.
+
         Args:
             db_path: Path to SQLite database (auto-detected if None)
-            ollama_url: URL for Ollama API (from config if None)
-            model: Ollama model to use for AI insights (from config if None)
+            provider: Optional LLM provider instance (injected for testing).
         """
         try:
-            from backend.config import ollama_host, ollama_model, database_path
-            self.ollama_url = ollama_url or ollama_host()
-            self.model = model or ollama_model()
+            from backend.config import database_path
             self.db_path = str(db_path) if db_path else str(database_path())
         except ImportError:
-            self.ollama_url = ollama_url or os.getenv("OLLAMA_HOST", "http://localhost:11434")
-            self.model = model or os.getenv("OLLAMA_MODEL", "llama3.2")
             if db_path:
                 self.db_path = str(db_path)
             else:
@@ -104,8 +100,8 @@ class DailyReportGenerator:
                     from pathlib import Path
                     cur = Path(__file__).resolve().parent.parent
                     self.db_path = str(cur / "Data" / "db" / "devtrack.db")
+        self._provider = provider  # None = lazy init on first use
         self.email_reporter = EmailReporter(self.db_path)
-        self._ollama_available: Optional[bool] = None
     
     def is_end_of_day(
         self,
@@ -134,20 +130,19 @@ class DailyReportGenerator:
         
         return window_start <= now <= window_end
     
+    def _get_provider(self):
+        if self._provider is None:
+            from backend.llm import get_provider
+            self._provider = get_provider()
+        return self._provider
+
     def check_ollama_available(self) -> bool:
-        """Check if Ollama is available and responsive."""
-        if self._ollama_available is not None:
-            return bool(self._ollama_available)
-        
+        """Check if the LLM provider is available and responsive."""
         try:
-            import urllib.request
-            req = urllib.request.Request(f"{self.ollama_url}/api/tags")
-            with urllib.request.urlopen(req, timeout=2) as response:
-                self._ollama_available = response.status == 200
+            return self._get_provider().primary.is_available()
         except Exception:
-            self._ollama_available = False
-        
-        return bool(self._ollama_available)
+            return False
+
     
     def generate_ai_insights(self, report: DailyReport) -> Optional[AIInsights]:
         """
@@ -202,32 +197,15 @@ Provide a JSON response with these exact fields:
 Keep it professional and constructive. Respond ONLY with valid JSON."""
 
         try:
-            import urllib.request
-            import json
-            
-            data = json.dumps({
-                "model": self.model,
-                "prompt": prompt,
-                "stream": False,
-                "options": {
-                    "temperature": 0.3,
-                    "top_p": 0.9
-                }
-            }).encode()
-            
-            req = urllib.request.Request(
-                f"{self.ollama_url}/api/generate",
-                data=data,
-                headers={"Content-Type": "application/json"}
+            from backend.llm.base import LLMOptions
+            response_text = self._get_provider().generate(
+                prompt=prompt,
+                options=LLMOptions(temperature=0.3, max_tokens=500),
+                timeout=30,
             )
-            
-            with urllib.request.urlopen(req, timeout=30) as response:
-                result = json.loads(response.read().decode())
-                response_text = result.get("response", "")
-                
-                # Parse JSON from response
+
+            if response_text:
                 insights_data = self._parse_ai_response(response_text)
-                
                 if insights_data:
                     return AIInsights(
                         executive_summary=insights_data.get("executive_summary", ""),
@@ -238,10 +216,10 @@ Keep it professional and constructive. Respond ONLY with valid JSON."""
                         productivity_score=int(insights_data.get("productivity_score", 5)),
                         focus_areas=insights_data.get("focus_areas", [])
                     )
-        
+
         except Exception as e:
             print(f"AI insights generation failed: {e}")
-        
+
         return None
     
     def _format_activities_for_ai(self, report: DailyReport) -> str:
@@ -1093,25 +1071,13 @@ Provide a JSON response with these exact fields:
 Be constructive and highlight patterns. Respond ONLY with valid JSON."""
 
         try:
-            import urllib.request
-            import json
-            
-            data = json.dumps({
-                "model": self.model,
-                "prompt": prompt,
-                "stream": False,
-                "options": {"temperature": 0.3}
-            }).encode()
-            
-            req = urllib.request.Request(
-                f"{self.ollama_url}/api/generate",
-                data=data,
-                headers={"Content-Type": "application/json"}
+            from backend.llm.base import LLMOptions
+            response_text = self._get_provider().generate(
+                prompt=prompt,
+                options=LLMOptions(temperature=0.3, max_tokens=600),
+                timeout=45,
             )
-            
-            with urllib.request.urlopen(req, timeout=45) as response:
-                result = json.loads(response.read().decode())
-                response_text = result.get("response", "")
+            if response_text:
                 insights_data = self._parse_ai_response(response_text)
                 
                 if insights_data:

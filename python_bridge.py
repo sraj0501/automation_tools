@@ -99,6 +99,16 @@ except ImportError as e:
     OutputFormat = None
     WeeklyReport = None
 
+# Import Task Repository and Jira client (Phase 4)
+try:
+    from backend.task_matcher import TaskRepository
+    from backend.config import jira_url, jira_api_token
+    task_repo_available = True
+except ImportError as e:
+    logger.warning(f"Task repository not available: {e}")
+    task_repo_available = False
+    TaskRepository = None
+
 
 class DevTrackBridge:
     """Main bridge between Go daemon and Python AI layer"""
@@ -158,6 +168,20 @@ class DevTrackBridge:
                     logger.info("✓ Daily report generator initialized (basic mode)")
             except Exception as e:
                 logger.warning(f"Could not initialize daily report generator: {e}")
+
+        # Initialize Task Repository with Jira (Phase 4)
+        self.task_repo = None
+        if task_repo_available:
+            try:
+                self.task_repo = TaskRepository()
+                if jira_url() and jira_api_token():
+                    from backend.jira import JiraClient
+                    self.task_repo.initialize_jira(JiraClient())
+                    logger.info("✓ Jira integration initialized")
+                else:
+                    logger.info("✓ Task repository initialized (Jira not configured)")
+            except Exception as e:
+                logger.warning(f"Could not initialize task repository: {e}")
     
     def handle_commit_trigger(self, msg: IPCMessage):
         """Handle commit trigger from Go daemon"""

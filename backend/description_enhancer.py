@@ -5,9 +5,7 @@ This module takes raw user input describing their work and enhances it
 to be more professional, clear, and suitable for task tracking systems.
 """
 
-import os
 import logging
-import requests
 from typing import Dict, Optional, List
 from dataclasses import dataclass
 
@@ -36,8 +34,8 @@ class EnhancedDescription:
 
 
 class DescriptionEnhancer:
-    """Enhances task descriptions using Ollama LLM"""
-    
+    """Enhances task descriptions using the configured LLM provider."""
+
     CATEGORIES = [
         "feature",      # New functionality
         "bugfix",       # Bug fixes
@@ -53,63 +51,50 @@ class DescriptionEnhancer:
         "other"         # General work
     ]
     
-    def __init__(self, ollama_host: Optional[str] = None, model: Optional[str] = None):
-        """
-        Initialize the description enhancer
-        
+    def __init__(self, provider=None):
+        """Initialize the description enhancer.
+
         Args:
-            ollama_host: Ollama API endpoint
-            model: Model to use for enhancement
+            provider: Optional LLM provider instance (injected for testing).
+                      Defaults to the global provider chain from get_provider().
         """
-        try:
-            from backend.config import ollama_host as cfg_host, ollama_model as cfg_model
-            self.ollama_host = ollama_host or cfg_host()
-            self.model = model or cfg_model()
-        except ImportError:
-            self.ollama_host = ollama_host or os.getenv("OLLAMA_HOST", "http://localhost:11434")
-            self.model = model or os.getenv("OLLAMA_MODEL", "llama3.2")
-        self._available = None  # Cache availability check
-        
+        self._provider = provider  # None = lazy init on first use
+
+    def _get_provider(self):
+        if self._provider is None:
+            from backend.llm import get_provider
+            self._provider = get_provider()
+        return self._provider
+
     def is_available(self) -> bool:
-        """Check if Ollama is available"""
-        if self._available is not None:
-            return self._available
-            
-        try:
-            response = requests.get(f"{self.ollama_host}/api/tags", timeout=2)
-            self._available = response.status_code == 200
-        except Exception:
-            self._available = False
-            
-        return self._available
+        """Check if the LLM provider is available."""
+        return self._get_provider().primary.is_available()
     
     def enhance(self, raw_input: str, context: Optional[Dict] = None) -> EnhancedDescription:
-        """
-        Enhance a raw user description
-        
+        """Enhance a raw user description.
+
         Args:
             raw_input: The raw user input describing their work
             context: Optional context (project name, recent tickets, etc.)
-            
+
         Returns:
             EnhancedDescription object with enhanced text
         """
         if not raw_input or not raw_input.strip():
             return self._create_empty_result(raw_input)
-            
-        # Try Ollama enhancement
-        if self.is_available():
-            try:
-                return self._enhance_with_ollama(raw_input, context)
-            except Exception as e:
-                logger.warning(f"Ollama enhancement failed: {e}")
-                
+
+        # Try LLM enhancement
+        try:
+            return self._enhance_with_llm(raw_input, context)
+        except Exception as e:
+            logger.warning(f"LLM enhancement failed: {e}")
+
         # Fallback to basic enhancement
         return self._basic_enhance(raw_input, context)
     
-    def _enhance_with_ollama(self, raw_input: str, context: Optional[Dict] = None) -> EnhancedDescription:
-        """Use Ollama to enhance the description"""
-        
+    def _enhance_with_llm(self, raw_input: str, context: Optional[Dict] = None) -> EnhancedDescription:
+        """Use the configured LLM provider to enhance the description."""
+
         # Build context string
         context_str = ""
         if context:
@@ -119,7 +104,7 @@ class DescriptionEnhancer:
                 context_str += f"Ticket: {context['ticket_id']}\n"
             if context.get("recent_work"):
                 context_str += f"Recent work: {context['recent_work']}\n"
-        
+
         prompt = f"""You are a technical writer helping a developer describe their work for task tracking.
 
 Take this raw description of work done and enhance it to be:
@@ -152,37 +137,17 @@ KEYWORDS: API, REST, endpoints, user-management
 
 Now enhance this input:"""
 
-        try:
-            response = requests.post(
-                f"{self.ollama_host}/api/generate",
-                json={
-                    "model": self.model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": 0.3,
-                        "num_predict": 300
-                    }
-                },
-                timeout=30
-            )
-            
-            if response.status_code != 200:
-                logger.warning(f"Ollama returned status {response.status_code}")
-                return self._basic_enhance(raw_input, context)
-            
-            result = response.json()
-            response_text = result.get("response", "")
-            
-            # Parse the response
-            return self._parse_ollama_response(raw_input, response_text)
-            
-        except requests.exceptions.Timeout:
-            logger.warning("Ollama timeout")
+        from backend.llm.base import LLMOptions
+        response_text = self._get_provider().generate(
+            prompt=prompt,
+            options=LLMOptions(temperature=0.3, max_tokens=300),
+            timeout=30,
+        )
+
+        if not response_text:
             return self._basic_enhance(raw_input, context)
-        except Exception as e:
-            logger.error(f"Ollama error: {e}")
-            return self._basic_enhance(raw_input, context)
+
+        return self._parse_ollama_response(raw_input, response_text)
     
     def _parse_ollama_response(self, raw_input: str, response_text: str) -> EnhancedDescription:
         """Parse the structured response from Ollama"""
@@ -363,7 +328,7 @@ if __name__ == "__main__":
     
     print("Description Enhancer Examples")
     print("=" * 60)
-    print(f"Ollama available: {enhancer.is_available()}")
+    print(f"LLM available: {enhancer.is_available()}")
     print()
     
     for text in examples:

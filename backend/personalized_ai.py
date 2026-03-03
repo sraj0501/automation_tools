@@ -26,13 +26,6 @@ from dataclasses import dataclass, asdict
 from collections import defaultdict
 import re
 
-# Ollama for local AI (as per requirement)
-try:
-    import ollama
-    ollama_available = True
-except ImportError:
-    ollama_available = False
-    logging.warning("Ollama not available. Install: pip install ollama")
 
 logger = logging.getLogger(__name__)
 
@@ -640,19 +633,13 @@ Use their common phrases and vocabulary where appropriate.
 Response:"""
         
         try:
-            model_name = "llama3.2"
-            try:
-                from backend.config import ollama_model
-                model_name = ollama_model()
-            except ImportError:
-                model_name = os.getenv("OLLAMA_MODEL", "llama3.2")
-            response = ollama.generate(
-                model=model_name,
+            from backend.llm import get_provider
+            from backend.llm.base import LLMOptions
+            result = get_provider().generate(
                 prompt=prompt,
-                options={'temperature': 0.7}
+                options=LLMOptions(temperature=0.7, max_tokens=300),
             )
-            
-            return response['response']
+            return result if result else "Error: LLM unavailable"
         except Exception as e:
             logger.error(f"Error generating response: {e}")
             return f"Error generating response: {e}"
