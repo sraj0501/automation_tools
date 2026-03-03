@@ -450,8 +450,13 @@ def main():
             pass
 
     enhancer = CommitMessageEnhancer()
-    enhancer.process_commit_message(commit_msg_file, repo_path)
-    
+    success = enhancer.process_commit_message(commit_msg_file, repo_path)
+
+    # Print to stdout so wrapper script can detect success
+    if success:
+        print("enhanced", file=sys.stdout)
+        sys.stdout.flush()
+
     sys.exit(0)
 
 
