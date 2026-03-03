@@ -10,7 +10,6 @@ import os
 import sys
 import subprocess
 import logging
-import requests
 from pathlib import Path
 from typing import Optional
 
@@ -19,16 +18,16 @@ logger = logging.getLogger(__name__)
 
 
 class CommitMessageEnhancer:
-    """Enhances git commit messages using AI analysis of staged changes"""
-    
-    def __init__(self, ollama_host: Optional[str] = None, ollama_model: Optional[str] = None):
-        try:
-            from backend.config import ollama_host as cfg_host, ollama_model as cfg_model
-            self.ollama_host = ollama_host or cfg_host()
-            self.ollama_model = ollama_model or cfg_model()
-        except ImportError:
-            self.ollama_host = ollama_host or os.getenv("OLLAMA_HOST", "http://localhost:11434")
-            self.ollama_model = ollama_model or os.getenv("OLLAMA_MODEL", "llama3.2")
+    """Enhances git commit messages using AI analysis of staged changes."""
+
+    def __init__(self, provider=None):
+        self._provider = provider  # None = lazy init on first use
+
+    def _get_provider(self):
+        if self._provider is None:
+            from backend.llm import get_provider
+            self._provider = get_provider()
+        return self._provider
         
     def get_staged_diff(self, repo_path: str) -> Optional[str]:
         """Get diff of staged changes"""
@@ -297,29 +296,15 @@ class CommitMessageEnhancer:
 
                 Write ONLY the improved commit message. No meta-commentary, nothing else."""
 
-            # Call Ollama
-            response = requests.post(
-                f"{self.ollama_host}/api/generate",
-                json={
-                    "model": self.ollama_model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": 0.2,  # Lower temperature for more focused output
-                        "num_predict": 200   # Allow space for body paragraphs
-                    }
-                },
-                timeout=30
+            from backend.llm.base import LLMOptions
+            enhanced = self._get_provider().generate(
+                prompt=prompt,
+                options=LLMOptions(temperature=0.2, max_tokens=200),
+                timeout=30,
             )
-            
-            if response.status_code != 200:
-                logger.error(f"Ollama API error: {response.status_code}")
+
+            if not enhanced:
                 return original_message
-            
-            result = response.json()
-            enhanced = result.get("response", "").strip()
-            
-            # Clean up response - remove markdown, meta-commentary, and formatting
             enhanced = enhanced.replace("```", "").strip()
             
             # Remove common meta-commentary patterns
@@ -342,9 +327,6 @@ class CommitMessageEnhancer:
             
             return enhanced
             
-        except requests.exceptions.Timeout:
-            logger.warning("Ollama timeout, using original message")
-            return original_message
         except Exception as e:
             logger.error(f"Error enhancing message: {e}")
             return original_message

@@ -252,3 +252,61 @@ def azure_excel_file() -> Path:
 def azure_excel_sheet() -> str:
     """Sheet name in Excel file."""
     return get("AZURE_EXCEL_SHEET", "my_tasks")
+
+
+# --- Multi-Provider LLM ---
+def llm_provider() -> str:
+    """Primary LLM provider: 'ollama' | 'openai' | 'anthropic'. Default: ollama."""
+    return get("LLM_PROVIDER", "ollama").lower().strip()
+
+
+def openai_api_key() -> str:
+    """OpenAI API key. Optional - only needed if LLM_PROVIDER=openai or as fallback."""
+    return get("OPENAI_API_KEY", "")
+
+
+def openai_model() -> str:
+    """OpenAI model name."""
+    return get("OPENAI_MODEL", "gpt-4o-mini")
+
+
+def anthropic_api_key() -> str:
+    """Anthropic API key. Optional - only needed if LLM_PROVIDER=anthropic or as fallback."""
+    return get("ANTHROPIC_API_KEY", "")
+
+
+def anthropic_model() -> str:
+    """Anthropic model name."""
+    return get("ANTHROPIC_MODEL", "claude-haiku-4-5")
+
+
+# --- Jira ---
+def jira_url() -> str:
+    """Jira base URL, e.g. https://yourorg.atlassian.net"""
+    return get("JIRA_URL", "")
+
+
+def jira_email() -> str:
+    """Jira account email (used with API token for Basic auth)."""
+    return get("JIRA_EMAIL", "")
+
+
+def jira_api_token() -> str:
+    """Jira API token."""
+    return get("JIRA_API_TOKEN", "")
+
+
+def jira_project_key() -> str:
+    """Default Jira project key (e.g. PROJ)."""
+    return get("JIRA_PROJECT_KEY", "")
+
+
+# --- GitHub PR Analysis ---
+def github_owner() -> str:
+    """GitHub org/user name (for PR queries)."""
+    return get("GITHUB_OWNER", "")
+
+
+def github_repo() -> str:
+    """Default GitHub repo name (for PR queries). Leave empty to query all repos."""
+    return get("GITHUB_REPO", "")

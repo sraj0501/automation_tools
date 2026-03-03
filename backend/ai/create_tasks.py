@@ -1,4 +1,3 @@
-import ollama
 import json
 import pandas as pd
 from typing import List, Dict, Any, Optional
@@ -17,29 +16,36 @@ def _get_task_defaults():
             azure_default_assignee,
             azure_parent_work_item_id,
             azure_starting_work_item_id,
-            ollama_model,
         )
         return {
             "assignee": azure_default_assignee(),
             "parent_id": azure_parent_work_item_id(),
             "starting_id": azure_starting_work_item_id(),
-            "model": ollama_model(),
         }
     except ImportError:
-        return {"assignee": "", "parent_id": "", "starting_id": 0, "model": "llama3.2"}
+        return {"assignee": "", "parent_id": "", "starting_id": 0}
 
 
 class TaskGenerator:
-    def __init__(self, model_name: Optional[str] = None):
-        """
-        Initialize the TaskGenerator with an Ollama model
+    def __init__(self, provider=None):
+        """Initialize the TaskGenerator.
 
         Args:
-            model_name: The name of the Ollama model (from config if None)
+            provider: Optional LLM provider instance (injected for testing).
+                      Defaults to the global provider chain from get_provider().
         """
-        defaults = _get_task_defaults()
-        self.model_name = model_name or defaults["model"]
-        self.client = ollama.Client()
+        self._provider = provider  # None = lazy init on first use
+
+    def _get_provider(self):
+        if self._provider is None:
+            import sys
+            from pathlib import Path
+            _root = Path(__file__).resolve().parent.parent.parent
+            if str(_root) not in sys.path:
+                sys.path.insert(0, str(_root))
+            from backend.llm import get_provider
+            self._provider = get_provider()
+        return self._provider
 
     def generate_tasks(
         self,
@@ -72,14 +78,20 @@ class TaskGenerator:
         # Prepare the prompt for the LLM
         prompt = self._create_prompt(requirements, constraints, existing_tasks)
 
-        # Generate response using Ollama
-        response = self.client.chat(model=self.model_name, messages=[
-            {'role': 'user', 'content': prompt}
-        ])
+        # Generate response using the configured LLM provider
+        from backend.llm.base import LLMOptions
+        response_text = self._get_provider().generate(
+            prompt=prompt,
+            options=LLMOptions(temperature=0.3, max_tokens=1000),
+            timeout=60,
+        )
+
+        if not response_text:
+            return []
 
         # Parse the response to extract tasks
         tasks = self._parse_response(
-            response['message']['content'],
+            response_text,
             assignee,
             parent_work_item_id,
             starting_work_item_id,

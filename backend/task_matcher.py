@@ -411,10 +411,28 @@ class TaskRepository:
         return []
     
     def _get_jira_tasks(self) -> List[Task]:
-        """Fetch tasks from Jira"""
-        # Placeholder - would use actual Jira API
+        """Fetch tasks from Jira using the configured JiraClient."""
+        if not self.jira_client:
+            return []
         logger.info("Fetching tasks from Jira...")
-        return []
+        try:
+            issues = self.jira_client.get_my_issues()
+            return [
+                Task(
+                    id=issue.key,
+                    title=issue.summary,
+                    description=issue.description,
+                    status=issue.status,
+                    project=issue.key.split("-")[0] if "-" in issue.key else issue.key,
+                    assignee=issue.assignee or "",
+                    tags=issue.labels,
+                    source="jira",
+                )
+                for issue in issues
+            ]
+        except Exception as e:
+            logger.warning(f"Failed to fetch Jira tasks: {e}")
+            return []
 
 
 # CLI interface
