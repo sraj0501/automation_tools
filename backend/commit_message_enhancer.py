@@ -134,7 +134,32 @@ class CommitMessageEnhancer:
 
                 Write ONLY the commit message. No meta-commentary, no options, nothing else."""
             else:
-                prompt = f"""You are improving a git commit message. Analyze the code changes and rewrite to be more descriptive.
+                # Check if this looks like an already-enhanced message (has body paragraph)
+                has_body = '\n\n' in original_message.strip() or original_message.count('\n') >= 2
+                
+                if has_body:
+                    # Improve existing enhanced message - refine and enhance further
+                    prompt = f"""You are refining an existing git commit message to make it better. Keep the good parts but improve clarity, add missing details, or enhance the explanation.
+
+                Current Message:
+                {original_message}
+
+                Files Changed ({len(files)}):
+                {files_list}
+
+                Code Changes:
+                {diff[:2000]}
+
+                REQUIREMENTS:
+                1. First line: Improved summary (under 72 chars). Keep it specific and concrete.
+                2. Blank line
+                3. Body (2-3 sentences): Enhance the explanation - add missing context, clarify WHY, or improve wording. Keep what's good, improve what's not.
+
+                Make the message MORE descriptive and informative than the current version.
+                Write ONLY the improved commit message. No meta-commentary."""
+                else:
+                    # Improve a basic message - make it more descriptive
+                    prompt = f"""You are improving a git commit message. Analyze the code changes and rewrite to be more descriptive.
 
                 Original Message: {original_message}
 
