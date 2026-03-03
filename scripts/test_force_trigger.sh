@@ -18,9 +18,9 @@ echo "=========================================="
 echo "Test: Force Trigger Flow"
 echo "=========================================="
 
-# Find devtrack binary
+# Find devtrack binary (use devtrack-bin)
 DEVTRACK_BIN=""
-for loc in "$PROJECT_ROOT/devtrack-bin/devtrack" "$HOME/.local/bin/devtrack" "/usr/local/bin/devtrack"; do
+for loc in "$PROJECT_ROOT/devtrack-bin/devtrack"; do
     if [ -f "$loc" ]; then
         DEVTRACK_BIN="$loc"
         break
@@ -39,7 +39,7 @@ if ! git rev-parse --git-dir >/dev/null 2>&1; then
 fi
 
 LOG_DIR="${LOG_DIR:-$PROJECT_ROOT/Data/logs}"
-LOG_PATH="$LOG_DIR/daemon.log"
+LOG_PATH="${LOG_DIR}/${LOG_FILE_NAME:-daemon.log}"
 [ -f "$LOG_PATH" ] && : > "$LOG_PATH"
 
 # Stop any existing daemon and free port 35893
@@ -61,7 +61,7 @@ export PROJECT_ROOT
 export DEVTRACK_WORKSPACE="$PROJECT_ROOT"
 "$DEVTRACK_BIN" start &
 DAEMON_PID=$!
-trap "kill $DAEMON_PID 2>/dev/null; $DEVTRACK_BIN stop 2>/dev/null; exit" EXIT
+trap 'EXIT_CODE=$?; kill $DAEMON_PID 2>/dev/null; $DEVTRACK_BIN stop 2>/dev/null || true; exit $EXIT_CODE' EXIT
 
 # Wait for IPC
 echo "  Waiting for IPC server..."

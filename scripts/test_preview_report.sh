@@ -19,7 +19,7 @@ echo "Test: Preview Report"
 echo "=========================================="
 
 DEVTRACK_BIN=""
-for loc in "$PROJECT_ROOT/devtrack-bin/devtrack" "$HOME/.local/bin/devtrack" "/usr/local/bin/devtrack"; do
+for loc in "$PROJECT_ROOT/devtrack-bin/devtrack"; do
     if [ -f "$loc" ]; then
         DEVTRACK_BIN="$loc"
         break

@@ -19,6 +19,7 @@ Privacy: All data processing happens locally. No data leaves the user's machine.
 import os
 import json
 import logging
+from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional
 from dataclasses import dataclass, asdict
@@ -95,14 +96,18 @@ class PersonalizedAI:
         """
         self.user_email = user_email
         
-        # Setup data directory
+        # Setup data directory - use config, else derive from project root
         if data_dir is None:
             try:
                 from backend.config import learning_dir
                 data_dir = str(learning_dir())
             except ImportError:
-                data_dir = os.path.join(os.path.expanduser("~"), ".devtrack", "learning")
-            data_dir = os.path.join(home, ".devtrack", "learning")
+                try:
+                    from backend.utils.paths import fallback_path
+                    data_dir = fallback_path("Data", "learning")
+                except ImportError:
+                    _cur = Path(__file__).resolve().parent.parent
+                    data_dir = str(_cur / "Data" / "learning")
         
         self.data_dir = data_dir
         os.makedirs(self.data_dir, exist_ok=True)

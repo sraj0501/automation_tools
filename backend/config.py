@@ -60,8 +60,6 @@ def _load_env() -> None:
     env_paths = [
         project_root / ".env",
         project_root / ".env_sample",
-        Path.home() / ".devtrack" / ".env",
-        Path.home() / ".config" / "devtrack" / ".env",
     ]
 
     for env_path in env_paths:
@@ -113,41 +111,51 @@ def project_root() -> Path:
 
 
 def database_path() -> Path:
-    """Full path to SQLite database."""
+    """Full path to SQLite database. From .env: DATABASE_DIR, DATA_DIR, or PROJECT_ROOT/Data/db."""
     db_dir = get("DATABASE_DIR")
     db_file = get("DATABASE_FILE_NAME") or "devtrack.db"
     if db_dir:
         return get_path("DATABASE_DIR") / db_file
-    # Fallback: DATA_DIR/db or ~/.devtrack
     data_dir = get("DATA_DIR")
     if data_dir:
         return get_path("DATA_DIR") / "db" / db_file
-    # Backward compat: Python code historically used daemon.db
-    return Path.home() / ".devtrack" / db_file
+    proot = get("PROJECT_ROOT")
+    if proot:
+        return get_path("PROJECT_ROOT") / "Data" / "db" / db_file
+    return project_root() / "Data" / "db" / db_file
 
 
 def reports_dir() -> Path:
-    """Directory for saved reports."""
+    """Directory for saved reports. From .env: DATA_DIR or PROJECT_ROOT/Data."""
     data_dir = get("DATA_DIR")
     if data_dir:
         return get_path("DATA_DIR") / "reports"
-    return Path.home() / ".devtrack" / "reports"
+    proot = get("PROJECT_ROOT")
+    if proot:
+        return get_path("PROJECT_ROOT") / "Data" / "reports"
+    return project_root() / "Data" / "reports"
 
 
 def learning_dir() -> Path:
-    """Directory for learning data."""
+    """Directory for learning data. From .env: LEARNING_DIR_PATH or PROJECT_ROOT/Data/learning."""
     learning_path = get("LEARNING_DIR_PATH")
     if learning_path:
         return get_path("LEARNING_DIR_PATH")
-    return Path.home() / ".devtrack" / "learning"
+    proot = get("PROJECT_ROOT")
+    if proot:
+        return get_path("PROJECT_ROOT") / "Data" / "learning"
+    return project_root() / "Data" / "learning"
 
 
 def log_dir() -> Path:
-    """Directory for log files."""
+    """Directory for log files. From .env: LOG_DIR or PROJECT_ROOT/Data/logs."""
     log_path = get("LOG_DIR")
     if log_path:
         return get_path("LOG_DIR")
-    return Path.home() / ".devtrack" / "logs"
+    proot = get("PROJECT_ROOT")
+    if proot:
+        return get_path("PROJECT_ROOT") / "Data" / "logs"
+    return project_root() / "Data" / "logs"
 
 
 # --- Ollama ---

@@ -94,7 +94,16 @@ class DailyReportGenerator:
         except ImportError:
             self.ollama_url = ollama_url or os.getenv("OLLAMA_HOST", "http://localhost:11434")
             self.model = model or os.getenv("OLLAMA_MODEL", "llama3.2")
-            self.db_path = db_path or os.path.join(os.path.expanduser("~"), ".devtrack", "daemon.db")
+            if db_path:
+                self.db_path = str(db_path)
+            else:
+                try:
+                    from backend.utils.paths import fallback_path
+                    self.db_path = fallback_path("Data", "db", "devtrack.db")
+                except ImportError:
+                    from pathlib import Path
+                    cur = Path(__file__).resolve().parent.parent
+                    self.db_path = str(cur / "Data" / "db" / "devtrack.db")
         self.email_reporter = EmailReporter(self.db_path)
         self._ollama_available: Optional[bool] = None
     
@@ -879,7 +888,13 @@ Keep it professional and constructive. Respond ONLY with valid JSON."""
                 from backend.config import reports_dir
                 reports_dir_path = str(reports_dir())
             except ImportError:
-                reports_dir_path = os.path.join(os.path.expanduser("~"), ".devtrack", "reports")
+                try:
+                    from backend.utils.paths import fallback_path
+                    reports_dir_path = fallback_path("Data", "reports")
+                except ImportError:
+                    from pathlib import Path
+                    cur = Path(__file__).resolve().parent.parent
+                    reports_dir_path = str(cur / "Data" / "reports")
             os.makedirs(reports_dir_path, exist_ok=True)
             
             ext = {
@@ -1602,7 +1617,13 @@ Be constructive and highlight patterns. Respond ONLY with valid JSON."""
                 from backend.config import reports_dir
                 reports_dir_path = str(reports_dir())
             except ImportError:
-                reports_dir_path = os.path.join(os.path.expanduser("~"), ".devtrack", "reports")
+                try:
+                    from backend.utils.paths import fallback_path
+                    reports_dir_path = fallback_path("Data", "reports")
+                except ImportError:
+                    from pathlib import Path
+                    cur = Path(__file__).resolve().parent.parent
+                    reports_dir_path = str(cur / "Data" / "reports")
             if os.path.exists(reports_dir_path):
                 cutoff = datetime.now() - timedelta(days=days)
                 db_dates = {r["date"].strftime('%Y-%m-%d') for r in reports}

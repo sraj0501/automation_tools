@@ -19,9 +19,9 @@ if [ -f ".env" ]; then
     set +a
 fi
 
-# Find devtrack binary
+# Find devtrack binary (use devtrack-bin, no install to ~/.local/bin)
 DEVTRACK_BIN=""
-for loc in "$PROJECT_ROOT/devtrack-bin/devtrack" "$HOME/.local/bin/devtrack" "/usr/local/bin/devtrack"; do
+for loc in "$PROJECT_ROOT/devtrack-bin/devtrack"; do
     if [ -f "$loc" ]; then
         DEVTRACK_BIN="$loc"
         break
@@ -43,14 +43,11 @@ fi
 "$DEVTRACK_BIN" stop 2>/dev/null || true
 sleep 2
 
-# Determine log path
+# Log path from .env (LOG_DIR, LOG_FILE_NAME)
 LOG_DIR="${LOG_DIR:-$PROJECT_ROOT/Data/logs}"
 mkdir -p "$LOG_DIR"
 LOG_FILE="${LOG_FILE_NAME:-daemon.log}"
 LOG_PATH="$LOG_DIR/$LOG_FILE"
-if [ -z "$LOG_DIR" ] || [ ! -d "$LOG_DIR" ]; then
-    LOG_PATH="$HOME/.devtrack/daemon.log"
-fi
 [ -f "$LOG_PATH" ] && : > "$LOG_PATH"
 
 # Start daemon in background
@@ -59,7 +56,7 @@ export PROJECT_ROOT
 export DEVTRACK_WORKSPACE="$PROJECT_ROOT"
 "$DEVTRACK_BIN" start &
 DAEMON_PID=$!
-trap "kill $DAEMON_PID 2>/dev/null; $DEVTRACK_BIN stop 2>/dev/null; exit" EXIT
+trap 'EXIT_CODE=$?; kill $DAEMON_PID 2>/dev/null; $DEVTRACK_BIN stop 2>/dev/null || true; exit $EXIT_CODE' EXIT
 
 # Wait for IPC server (max 15s)
 echo "  Waiting for IPC server..."

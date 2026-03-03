@@ -643,8 +643,17 @@ class DevTrackBridge:
                 if save_it:
                     # Save as markdown
                     import os
-                    home_dir = os.path.expanduser("~")
-                    reports_dir = os.path.join(home_dir, ".devtrack", "reports")
+                    try:
+                        from backend.config import reports_dir as get_reports_dir
+                        reports_dir = str(get_reports_dir())
+                    except ImportError:
+                        try:
+                            from backend.utils.paths import fallback_path
+                            reports_dir = fallback_path("Data", "reports")
+                        except ImportError:
+                            from pathlib import Path
+                            cur = Path(__file__).resolve().parent
+                            reports_dir = str(cur / "Data" / "reports")
                     os.makedirs(reports_dir, exist_ok=True)
                     
                     week_str = weekly_report.week_start.strftime('%Y-%m-%d')

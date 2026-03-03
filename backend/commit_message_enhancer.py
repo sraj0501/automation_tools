@@ -107,7 +107,7 @@ class CommitMessageEnhancer:
             )
             
             if is_placeholder:
-                prompt = f"""You are writing a git commit message. Analyze the code changes and write a clear, professional commit message.
+                prompt = f"""You are writing a git commit message. Analyze the code changes and write a clear, descriptive commit message.
 
                 Files Changed ({len(files)}):
                 {files_list}
@@ -116,26 +116,25 @@ class CommitMessageEnhancer:
                 {diff[:2000]}
 
                 REQUIREMENTS:
-                1. First line: Brief summary of WHAT changed (under 72 characters)
+                1. First line: Concrete summary naming WHAT changed (under 72 chars). Be specific - e.g. "Fix path resolution in devtrack-git wrapper" not "Fix bug".
                 2. Blank line
-                3. Body (2-4 sentences): Explain WHY this change was made and what problem it solves
+                3. Body (2-3 sentences): Briefly explain WHAT was changed and WHY. Include the key files/areas affected and the benefit.
 
                 GOOD EXAMPLE:
-                Add interactive feedback prompt after commit
+                Replace ~/.devtrack fallbacks with project-root path resolution
 
-                Provides immediate confirmation when commits are created, showing users
-                what was logged and which systems were updated. This improves user
-                confidence and helps track work more effectively.
+                All backend modules now resolve paths from PROJECT_ROOT/Data instead of
+                hardcoded ~/.devtrack. Fixes path mismatches when running from different
+                directories and keeps config centralized in .env.
 
                 BAD EXAMPLE (DO NOT DO THIS):
                 Update files
 
                 Changed some code.
 
-                Write ONLY the commit message. DO NOT include options, explanations, meta-commentary, 
-                or anything except the commit message itself."""
+                Write ONLY the commit message. No meta-commentary, no options, nothing else."""
             else:
-                prompt = f"""You are improving a git commit message. Analyze the code changes and rewrite the message to be more informative.
+                prompt = f"""You are improving a git commit message. Analyze the code changes and rewrite to be more descriptive.
 
                 Original Message: {original_message}
 
@@ -146,24 +145,23 @@ class CommitMessageEnhancer:
                 {diff[:2000]}
 
                 REQUIREMENTS:
-                1. First line: Improved summary of WHAT changed (under 72 characters)
-                2. Blank line  
-                3. Body (2-4 sentences): Explain WHY this change was made and its benefits
+                1. First line: Concrete summary of WHAT changed (under 72 chars). Name the specific change - e.g. "Add --dry-run to devtrack git commit" not "Improve commit".
+                2. Blank line
+                3. Body (2-3 sentences): Explain WHAT was changed and WHY. Reference key files or areas. Keep it concise.
 
                 GOOD EXAMPLE:
-                Fix authentication timeout in user sessions
+                Add --dry-run flag to devtrack git commit
 
-                Resolves issue where users were logged out unexpectedly after 5 minutes
-                of inactivity. Updates session timeout to 30 minutes and adds proper
-                refresh logic to improve user experience.
+                Allows previewing the AI-enhanced commit message without committing.
+                Useful for verifying enhancement before pushing. Wrapper now accepts
+                --dry-run and skips git commit when present.
 
                 BAD EXAMPLE (DO NOT DO THIS):
                 Fixed bug
 
-                Made some changes to auth.
+                Made some changes.
 
-                Write ONLY the improved commit message. 
-                DO NOT include options, explanations, meta-commentary, or anything except the commit message itself."""
+                Write ONLY the improved commit message. No meta-commentary, nothing else."""
 
             # Call Ollama
             response = requests.post(
@@ -318,10 +316,20 @@ def main():
     except ImportError:
         try:
             from dotenv import load_dotenv
-            for env_path in [Path(__file__).parent.parent / ".env", Path.home() / ".devtrack" / ".env"]:
+            # Walk up from script to find project root .env
+            cur = Path(__file__).resolve().parent.parent
+            for _ in range(5):
+                env_path = cur / ".env"
                 if env_path.exists():
                     load_dotenv(env_path)
                     break
+                if (cur / ".env_sample").exists():
+                    load_dotenv(cur / ".env_sample")
+                    break
+                parent = cur.parent
+                if parent == cur:
+                    break
+                cur = parent
         except ImportError:
             pass
 

@@ -16,6 +16,9 @@ wheels/
 *.exe
 go-cli
 devtrack-bin/devtrack
+*devtrack
+*.log
+
 
 # Runtime data
 Data/

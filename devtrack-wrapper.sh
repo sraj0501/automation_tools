@@ -51,7 +51,7 @@ done
 
 # If we found a git repo, calculate its path in the container (/home/host prefix)
 if [ -d "$GIT_ROOT/.git" ]; then
-    # Map host path to container path: /home/sraj/... -> /home/host/...
+    # Map host path to container path: $HOME/... -> /home/host/...
     CONTAINER_WORKDIR="${GIT_ROOT/#$HOME/\/home\/host}"
     
     # For 'start' command, run detached so daemon persists

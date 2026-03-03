@@ -4,17 +4,11 @@
 		{
 			"label": "go-test-devtrack-bin",
 			"type": "shell",
-			"command": "go",
-			"args": [
-				"test",
-				"./..."
-			],
-			"isBackground": false
-		},
-		{
-			"label": "go-test-devtrack-bin",
-			"type": "shell",
-			"command": "cd /Users/sraj/git_apps/personal/automation_tools/devtrack-bin && go test ./...",
+			"options": {
+				"cwd": "${workspaceFolder}/devtrack-bin"
+			},
+			"command": "go test ./...",
+			"args": [],
 			"isBackground": false
 		}
 	]

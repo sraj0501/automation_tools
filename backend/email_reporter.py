@@ -58,7 +58,12 @@ class EmailReporter:
                 from backend.config import database_path
                 db_path = str(database_path())
             except ImportError:
-                db_path = os.path.join(os.path.expanduser("~"), ".devtrack", "daemon.db")
+                try:
+                    from backend.utils.paths import fallback_path
+                    db_path = fallback_path("Data", "db", "devtrack.db")
+                except ImportError:
+                    cur = Path(__file__).resolve().parent.parent
+                    db_path = str(cur / "Data" / "db" / "devtrack.db")
         self.db_path = db_path
         self.graph_client = None
     
@@ -542,14 +547,15 @@ class EmailReporter:
         if output_path is None:
             date_str = report.date.strftime('%Y-%m-%d')
             try:
-                from backend.config import get
-                project_root = get("PROJECT_ROOT")
-                if project_root:
-                    reports_dir = os.path.join(project_root, "Data", "reports")
-                else:
-                    reports_dir = os.path.join(os.path.expanduser("~"), ".devtrack", "reports")
+                from backend.config import reports_dir as get_reports_dir
+                reports_dir = str(get_reports_dir())
             except ImportError:
-                reports_dir = os.path.join(os.path.expanduser("~"), ".devtrack", "reports")
+                try:
+                    from backend.utils.paths import fallback_path
+                    reports_dir = fallback_path("Data", "reports")
+                except ImportError:
+                    cur = Path(__file__).resolve().parent.parent
+                    reports_dir = str(cur / "Data" / "reports")
             os.makedirs(reports_dir, exist_ok=True)
             output_path = os.path.join(reports_dir, f"report-{date_str}.txt")
         

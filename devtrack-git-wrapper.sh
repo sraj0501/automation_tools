@@ -1,10 +1,27 @@
 #!/bin/bash
 # DevTrack Git Wrapper
 # Enhances git commands with AI-powered features while maintaining git compatibility
+# All paths from .env - no hardcoded fallbacks
 
 set -e
 
-PROJECT_ROOT="${PROJECT_ROOT:-$HOME/Documents/GitHub/automation_tools}"
+# Load .env: DEVTRACK_ENV_FILE, PROJECT_ROOT/.env, or relative to script (when in PROJECT_ROOT/bin)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+for env_candidate in "$DEVTRACK_ENV_FILE" "$PROJECT_ROOT/.env" "$SCRIPT_DIR/../.env"; do
+    if [ -n "$env_candidate" ] && [ -f "$env_candidate" ]; then
+        set -a
+        source "$env_candidate"
+        set +a
+        break
+    fi
+done
+
+# PROJECT_ROOT must be set from .env
+if [ -z "$PROJECT_ROOT" ]; then
+    echo "Error: PROJECT_ROOT not set. Ensure .env exists and defines PROJECT_ROOT."
+    echo "  Set DEVTRACK_ENV_FILE or run from automation_tools/bin/"
+    exit 1
+fi
 
 # Colors
 GREEN='\033[0;32m'
@@ -12,22 +29,21 @@ BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Check if this is a git command
-if [ "$1" != "git" ]; then
-    echo "Usage: devtrack git <command> [args...]"
-    echo ""
-    echo "Examples:"
-    echo "  devtrack git add file.js"
-    echo "  devtrack git commit    (AI-enhanced commit message)"
-    echo "  devtrack git push"
-    echo "  devtrack git status"
-    exit 1
+# Support both: devtrack git commit ... and devtrack-git commit ...
+if [ "$1" = "git" ]; then
+    shift  # Remove 'git' from args
 fi
 
-shift  # Remove 'git' from args
-
 GIT_COMMAND="$1"
-shift  # Remove the git subcommand
+if [ -z "$GIT_COMMAND" ]; then
+    echo "Usage: devtrack git commit [args...]  OR  devtrack-git commit [args...]"
+    echo ""
+    echo "Examples:"
+    echo "  devtrack git commit -m 'message'   (AI-enhanced)"
+    echo "  devtrack-git commit -m 'message'   (AI-enhanced)"
+    exit 1
+fi
+shift  # Remove the subcommand (commit, add, etc.)
 
 # Handle git commit with AI enhancement
 if [ "$GIT_COMMAND" = "commit" ]; then
@@ -44,10 +60,11 @@ if [ "$GIT_COMMAND" = "commit" ]; then
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
     
-    # Parse commit args to extract user message if provided
+    # Parse commit args to extract user message and --dry-run
     USER_MESSAGE=""
     COMMIT_ARGS=()
     SKIP_NEXT=false
+    DRY_RUN=false
     
     for arg in "$@"; do
         if [ "$SKIP_NEXT" = true ]; then
@@ -55,10 +72,17 @@ if [ "$GIT_COMMAND" = "commit" ]; then
             SKIP_NEXT=false
         elif [ "$arg" = "-m" ] || [ "$arg" = "--message" ]; then
             SKIP_NEXT=true
+        elif [ "$arg" = "--dry-run" ] || [ "$arg" = "-n" ]; then
+            DRY_RUN=true
         else
             COMMIT_ARGS+=("$arg")
         fi
     done
+    
+    if [ "$DRY_RUN" = true ]; then
+        echo -e "${YELLOW}(dry-run: no actual commit will be made)${NC}"
+        echo ""
+    fi
     
     # Show what's being committed
     echo -e "${YELLOW}Staged changes:${NC}"
@@ -90,9 +114,30 @@ if [ "$GIT_COMMAND" = "commit" ]; then
         echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         echo ""
         
-        # Commit with enhanced message
+        if [ "$DRY_RUN" = true ]; then
+            echo -e "${YELLOW}✓ Dry run complete. No commit made.${NC}"
+            echo -e "${YELLOW}  Run without --dry-run to commit.${NC}"
+            rm -f "$TEMP_MSG"
+            exit 0
+        fi
+        
+        # Commit with enhanced message (commit only, no auto-push)
+        # When DEVTRACK_COMMIT_ONLY=true, temporarily disable post-commit hook (often does push)
+        POST_COMMIT_HOOK=""
+        if [ "${DEVTRACK_COMMIT_ONLY:-false}" = "true" ]; then
+            GIT_DIR_REAL="$(cd "$REPO_ROOT" && git rev-parse --git-dir)"
+            POST_COMMIT_HOOK="$GIT_DIR_REAL/hooks/post-commit"
+            if [ -f "$POST_COMMIT_HOOK" ] && [ -x "$POST_COMMIT_HOOK" ]; then
+                chmod -x "$POST_COMMIT_HOOK"
+            else
+                POST_COMMIT_HOOK=""
+            fi
+        fi
         git commit -F "$TEMP_MSG" "${COMMIT_ARGS[@]}"
         COMMIT_RESULT=$?
+        if [ -n "$POST_COMMIT_HOOK" ] && [ -f "$POST_COMMIT_HOOK" ]; then
+            chmod +x "$POST_COMMIT_HOOK"
+        fi
         
         if [ $COMMIT_RESULT -eq 0 ]; then
             echo ""
@@ -143,10 +188,30 @@ if [ "$GIT_COMMAND" = "commit" ]; then
         fi
     else
         echo -e "${YELLOW}⚠️  AI enhancement failed, using original message${NC}"
+        if [ "$DRY_RUN" = true ]; then
+            echo ""
+            echo -e "${YELLOW}✓ Dry run complete. No commit made.${NC}"
+            echo -e "${YELLOW}  Would have committed with: ${USER_MESSAGE:-'(original message)'}${NC}"
+            rm -f "$TEMP_MSG"
+            exit 0
+        fi
+        POST_COMMIT_HOOK=""
+        if [ "${DEVTRACK_COMMIT_ONLY:-false}" = "true" ]; then
+            GIT_DIR_REAL="$(cd "$REPO_ROOT" && git rev-parse --git-dir)"
+            POST_COMMIT_HOOK="$GIT_DIR_REAL/hooks/post-commit"
+            if [ -f "$POST_COMMIT_HOOK" ] && [ -x "$POST_COMMIT_HOOK" ]; then
+                chmod -x "$POST_COMMIT_HOOK"
+            else
+                POST_COMMIT_HOOK=""
+            fi
+        fi
         if [ -n "$USER_MESSAGE" ]; then
             git commit -m "$USER_MESSAGE" "${COMMIT_ARGS[@]}"
         else
             git commit "${COMMIT_ARGS[@]}"
+        fi
+        if [ -n "$POST_COMMIT_HOOK" ] && [ -f "$POST_COMMIT_HOOK" ]; then
+            chmod +x "$POST_COMMIT_HOOK"
         fi
     fi
     

@@ -13,7 +13,6 @@ go version
 
 # If not installed, download from: https://go.dev/dl/
 # Or on Linux:
-# Edit .env file with your paths
 sudo tar -C /usr/local -xzf go1.24.0.linux-amd64.tar.gz
 echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
 source ~/.bashrc
@@ -29,8 +28,8 @@ python3 --version
 
 ### 3. **uv Package Manager**
 ```bash
-# Install uv
-CLI_BINARY_NAME=devtrack
+# Install uv (https://github.com/astral-sh/uv)
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Verify installation
 uv --version
@@ -38,7 +37,6 @@ uv --version
 
 ### 4. **Git**
 ```bash
-# Should already be installed
 git --version
 ```
 
@@ -59,165 +57,137 @@ ollama serve
 ### Step 1: Clone Repository
 ```bash
 cd ~/Documents/GitHub  # or your preferred location
+git clone https://github.com/yourusername/automation_tools.git
+cd automation_tools
 ```
 
 ### Step 2: Configure Environment
-~/.local/bin/devtrack
+```bash
 # Copy example configuration
 cp .env_sample .env
+
+# Edit with your paths
 nano .env  # or use your preferred editor
 ```
 
-**Required .env Configuration:**
-```bash
-# Update these paths to match your system
-go build -o devtrack .
-DEVTRACK_HOME=/home/YOUR_USERNAME/.devtrack
-DEVTRACK_WORKSPACE=/home/YOUR_USERNAME/Documents/GitHub
+**Required .env variables** (update paths for your system):
 
-# IPC Configuration (can usually keep defaults)
-IPC_HOST=127.0.0.1
-IPC_PORT=35893
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `PROJECT_ROOT` | Absolute path to automation_tools | `/home/user/automation_tools` |
+| `DEVTRACK_HOME` | DevTrack config directory | `${PROJECT_ROOT}/devtrack-bin` |
+| `DEVTRACK_WORKSPACE` | Git repo to monitor | Same as PROJECT_ROOT or your project |
+| `DATA_DIR` | Runtime data (db, logs, pids) | `${PROJECT_ROOT}/Data` |
+| `IPC_HOST` | IPC server host | `127.0.0.1` |
+| `IPC_PORT` | IPC server port | `35893` |
 
-# File names (can usually keep defaults)
-mv devtrack ~/.local/bin/
-CLI_BINARY_NAME=devtrack
-CONFIG_FILE_NAME=config.yaml
-DATABASE_FILE_NAME=devtrack.db
-PID_FILE_NAME=daemon.pid
-LOG_FILE_NAME=daemon.log
+**All paths are driven by .env** – no hardcoded `$HOME` or `~/.devtrack` fallbacks.
 
-which devtrack
-devtrack version
-CONFIG_DIR_NAME=.devtrack
+**.env file location:**
+- DevTrack loads from `.env` in the current directory, or
+- Set `DEVTRACK_ENV_FILE` to the absolute path of your `.env` before running
+- If neither is found, DevTrack exits with an error
 
-# CLI identifiers (can usually keep defaults)
-CLI_APP_NAME=DevTrack
-CLI_DAEMON_NAME=devtrack
-
-# Ollama endpoint (adjust if using custom port)
-OLLAMA_HOST=http://localhost:11434
-devtrack start &
-
-### Step 2: Configure Environment
-```bash
-devtrack status
-cp .env_sample .env
-
-# Edit .env file with your paths
-nano .env  # or use your preferred editor
-```
-devtrack stop
-**.env File Location and Usage:**
-
-- All configuration is loaded from the `.env` file. There are **no fallback locations or hardcoded defaults**.
-- Set the `DEVTRACK_ENV_FILE` environment variable to the absolute path of your `.env` file before running DevTrack:
-
-devtrack status
-export DEVTRACK_ENV_FILE=/absolute/path/to/your/.env
-~/.local/bin/devtrack
-ps aux | grep devtrack
-
-- If `DEVTRACK_ENV_FILE` is not set, DevTrack will only look for `.env` in the current working directory.
-- If neither is found, DevTrack will exit with an error.
-
-See `.env_sample` for a template of all required variables.
+See `.env_sample` for the full list of variables.
 
 ### Step 3: Install Python Dependencies
 ```bash
-# uv automatically creates virtual environment and installs dependencies
+# From project root
+cd automation_tools
+
+# uv creates virtual environment and installs dependencies
 uv sync
 
-# Verify spaCy installation
+# Verify spaCy
 uv run python -c "import spacy; print(spacy.__version__)"
 ```
 
-### Step 4: Build Go Binary
+### Step 4: Install spaCy Model
+```bash
+uv run python -m spacy download en_core_web_sm
+
+# Verify
+uv run python -c "import spacy; spacy.load('en_core_web_sm')"
+```
+
+### Step 5: Build Go Binary
 ```bash
 cd devtrack-bin
 go build -o devtrack .
 
-# Verify build
+# Verify
 ./devtrack version
 ```
 
-### Step 5: Install Binary Globally (Optional but Recommended)
+Use devtrack from `devtrack-bin/` directly (no install to ~/.local/bin).
+
+### Step 6: Verify Setup
 ```bash
-# Create ~/.local/bin if it doesn't exist
-mkdir -p ~/.local/bin
-
-# Move binary to PATH
-mv devtrack ~/.local/bin/
-
-# Add to PATH if not already (add to ~/.bashrc or ~/.zshrc)
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-
-# Verify global installation
-which devtrack
-devtrack version
-```
-
-### Step 6: Set PROJECT_ROOT Environment Variable
-```bash
-# Add to ~/.bashrc or ~/.zshrc
-echo 'export PROJECT_ROOT="/home/YOUR_USERNAME/Documents/GitHub/automation_tools"' >> ~/.bashrc
-source ~/.bashrc
-
-# Verify
-echo $PROJECT_ROOT
-```
-
-### Step 7: Create DevTrack Home Directory
-```bash
-# Create configuration directory (will also be created automatically on first run)
-mkdir -p ~/.devtrack
+# From project root - runs all checks
+./scripts/verify_setup.sh
 ```
 
 ---
 
 ## Running DevTrack
 
-### Method 1: Using run_devtrack_local.sh Script
+### Method 1: Using run_devtrack_local.sh
 ```bash
-# From the project root
-cd ~/Documents/GitHub/automation_tools
-# Make script executable (first time only)
+# From project root
+cd automation_tools
 chmod +x run_devtrack_local.sh
-
-# Run the script
 ./run_devtrack_local.sh
 ```
 
 This script will:
-- ✅ Load configuration from `.env`
-- ✅ Validate all required variables
-- ✅ Stop any existing instances
-- ✅ Start the daemon in background
-- ✅ Show status and logs
+- Load configuration from `.env`
+- Validate required variables
+- Stop any existing instances
+- Start the daemon in background
+- Show status and logs
 
-### Method 2: Manual Daemon Control
+### Method 2: Manual Start
 ```bash
-# Navigate to the repository you want to monitor
-cd ~/Documents/GitHub/your-project
+# Load .env and start from project root
+cd automation_tools
+set -a && source .env && set +a
+export PROJECT_ROOT="$PWD"
+export DEVTRACK_WORKSPACE="$PWD"
 
 # Start daemon (runs in background)
-devtrack start &
-disown
+./devtrack-bin/devtrack start
 
-# Check status
+# Or if installed globally:
+devtrack start
+```
+
+### Check Status
+```bash
 devtrack status
-
-# View logs
-tail -f ~/.devtrack/daemon.log
-
-# Stop daemon
+# or
+./devtrack-bin/devtrack status
 ```
 
 ---
 
-## Verification
+## Verification & Testing
 
-### Check All Components Are Running
+### Run Test Scripts
+```bash
+# Full commit flow (daemon + IPC + Python)
+./scripts/test_commit_flow.sh
+
+# Force trigger (timer via IPC)
+./scripts/test_force_trigger.sh
+
+# IPC connectivity only (daemon must be running first)
+devtrack start &
+sleep 5
+uv run python scripts/test_ipc_manual.py
+devtrack stop
+```
+
+### Manual Verification
 ```bash
 # 1. Check daemon status
 devtrack status
@@ -226,158 +196,105 @@ devtrack status
 ps aux | grep devtrack
 ps aux | grep python_bridge.py
 
-# 3. Check logs (should show NLP parser loaded)
-tail -50 ~/.devtrack/daemon.log | grep -E "NLP|spaCy|IPC|Git monitor"
+# 3. Check logs (path from .env: DATA_DIR/logs/daemon.log)
+tail -50 Data/logs/daemon.log | grep -E "NLP|spaCy|IPC|Git monitor"
 
-# Expected output:
+# Expected:
 # - ✓ IPC server started
 # - ✓ Git monitor started
-# - ✓ NLP parser initialized
+# - ✓ Python bridge started
 # - ✅ Connected to IPC server
 ```
 
 ### Test Commit Detection
 ```bash
 # In your monitored repository
-cd ~/Documents/GitHub/your-project
+cd $DEVTRACK_WORKSPACE
 
-# Make a test commit with NLP-rich message
-echo "test" >> README.md
-git add README.md
-git commit -m "Working on #PROJ-123 - Fixed authentication bug (2h)"
+# Make a test commit
+git commit --allow-empty -m "Working on #PROJ-123 - Fixed auth bug (2h)"
 
-# Check logs for NLP parsing
-tail -30 ~/.devtrack/daemon.log
-
-# You should see:
-# - 🎯 COMMIT TRIGGER
-# - 📝 Parsing commit message with NLP...
+# Check logs
+tail -30 Data/logs/daemon.log
+# Should see: COMMIT TRIGGER, Parsing commit message with NLP...
 ```
 
 ---
-```bash
-# Check Python version used by uv
-uv run python --version
 
-# Should be 3.12 or 3.13
-# If 3.14, pyproject.toml already restricts to <3.14
-# Re-run: uv sync
-```
+## Troubleshooting
 
-### Issue: "spaCy model not found"
+### "spaCy model not found"
 ```bash
-# Download English model
 uv run python -m spacy download en_core_web_sm
-
-# Verify
-uv run python -c "import spacy; spacy.load('en_core_web_sm')"
 ```
 
-### Issue: "Binary not found in PATH"
+### "Binary not found"
 ```bash
-# Check PATH
-echo $PATH | grep -o ~/.local/bin
+# Build from devtrack-bin
+cd devtrack-bin && go build -o devtrack .
 
-# If not there, add to PATH
-export PATH="$HOME/.local/bin:$PATH"
-
-# Make permanent
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+# Or add to PATH
+export PATH="$PWD/devtrack-bin:$PATH"
 ```
 
-### Issue: ".env file not found"
+### ".env file not found"
 ```bash
-# Verify .env exists
-ls -la .env
-
-# If missing, copy from example
 cp .env_sample .env
-
-# Edit with your paths
-nano .env
+# Edit .env with your paths
 ```
 
-### Issue: "IPC connection failed"
+### "IPC connection failed" / Port 35893 in use
 ```bash
-# Check if port is already in use
+# Check what's using the port
 lsof -i :35893
 
-# If occupied, change IPC_PORT in .env
-# Then rebuild and restart
+# Kill stale processes
+lsof -ti :35893 | xargs kill -9
+sleep 2
+devtrack start
 ```
 
-### Issue: "Git commits not detected"
+### "Git commits not detected"
 ```bash
-# 1. Check daemon is running
+# 1. Verify daemon is running
 devtrack status
 
-# 2. Verify you're in the monitored repository
+# 2. Ensure you're in the monitored repo (DEVTRACK_WORKSPACE)
 pwd
-# Should match DEVTRACK_WORKSPACE or be a subdirectory
 
-# 3. Check daemon was started from that directory
-tail ~/.devtrack/daemon.log | grep "Git repository"
-
-# 4. Restart daemon in correct directory
-cd ~/path/to/your-project
-devtrack restart
+# 3. Check daemon log
+tail Data/logs/daemon.log | grep "Git repository"
 ```
+
+### "Daemon is not running" when stopping
+This is normal if the daemon was already stopped (e.g. by the test script trap). The test scripts now handle this correctly.
 
 ---
 
-## Directory Structure After Setup
+## Directory Structure
 
 ```
 automation_tools/
 ├── .env                    # Your configuration (DO NOT commit)
-├── .env_sample            # Template
+├── .env_sample             # Template
 ├── devtrack-bin/
-│   └── devtrack           # Built binary (before moving to ~/.local/bin)
-├── python_bridge.py       # Python IPC bridge
-├── backend/               # Python modules
-├── run_devtrack_local.sh  # Quick start script
-└── pyproject.toml        # Python dependencies
+│   └── devtrack            # Build with: go build -o devtrack .
+├── python_bridge.py        # Python IPC bridge
+├── backend/                # Python modules
+├── scripts/                # Test and verification scripts
+│   ├── verify_setup.sh
+│   ├── test_commit_flow.sh
+│   ├── test_force_trigger.sh
+│   └── test_ipc_manual.py
+├── run_devtrack_local.sh   # Quick start script
+└── pyproject.toml
 
-~/.devtrack/              # Runtime data
-├── config.yaml          # User configuration
-├── daemon.log          # Daemon logs
-├── daemon.pid          # Process ID
-└── devtrack.db         # SQLite database
-
-~/.local/bin/           # Installed binary
-└── devtrack           # Global command
+Data/                       # Runtime data (from .env DATA_DIR)
+├── db/                     # SQLite database
+├── logs/                   # Daemon logs
+├── pids/                   # Process ID file
+└── configs/                # User configuration
 ```
-
----
-
-## Next Steps
-
-Once setup is complete and daemon is running:
-
-1. **Configure work hours** (optional):
-   ```bash
-   devtrack config set work-hours "09:00-17:00"
-   ```
-
-2. **Adjust trigger interval** (optional):
-   ```bash
-   devtrack config set interval 120  # 120 minutes
-   ```
-
-3. **Enable learning mode** (optional):
-   ```bash
-   devtrack enable-learning
-   ```
-
-4. **Test manual triggers**:
-   ```bash
-   devtrack force-trigger
-   ```
-
-5. **View help for all commands**:
-   ```bash
-   devtrack help
-   ```
 
 ---
 
@@ -385,40 +302,38 @@ Once setup is complete and daemon is running:
 
 ### Daily Workflow
 ```bash
-# Morning: Check status
-devtrack status
+# Morning: Start daemon
+./run_devtrack_local.sh
+# or: devtrack start
 
 # During work: Make commits as normal
-git commit -m "Working on #TICKET-123 - Feature description (time estimate)"
+git commit -m "Working on #TICKET-123 - Feature (2h)"
 
-# End of day: Generate report (if configured)
-devtrack send-summary
+# Check status
+devtrack status
 
 # Evening: Stop daemon (optional)
 devtrack stop
 ```
 
-### View Activity
+### Useful Commands
 ```bash
-# Recent triggers
-devtrack logs
-
-# Database stats
-devtrack db-stats
-
-# Check parsed tasks
-tail -100 ~/.devtrack/daemon.log | grep "Parsed result"
+./devtrack-bin/devtrack status    # Check if running
+./devtrack-bin/devtrack stop      # Stop daemon
+./devtrack-bin/devtrack git commit -m "msg"   # AI-enhanced commit
+./devtrack-bin/devtrack force-trigger         # Manual timer trigger
+tail -f Data/logs/daemon.log      # Watch logs
 ```
+
+**Note:** Use devtrack from `devtrack-bin/` directly (no install to ~/.local/bin). Run `./devtrack-bin/devtrack start`, `./devtrack-bin/devtrack git commit -m 'msg'`, etc.
 
 ---
 
 ## Updating DevTrack
 
 ```bash
-cd ~/Documents/GitHub/automation_tools
-
-# Pull latest changes
-git pull origin main
+cd automation_tools
+git pull origin dev
 
 # Update Python dependencies
 uv sync
@@ -426,38 +341,16 @@ uv sync
 # Rebuild Go binary
 cd devtrack-bin
 go build -o devtrack .
-mv devtrack ~/.local/bin/
 
 # Restart daemon
-devtrack restart
-```
-
----
-
-## Uninstalling
-
-```bash
-# Stop daemon
 devtrack stop
-
-# Remove binary
-rm ~/.local/bin/devtrack
-
-# Remove runtime data (optional - deletes all logs and database)
-rm -rf ~/.devtrack
-
-# Remove project files
-rm -rf ~/Documents/GitHub/automation_tools
-
-# Remove environment variable from shell config
-# Edit ~/.bashrc or ~/.zshrc and remove PROJECT_ROOT export
+devtrack start
 ```
 
 ---
 
 ## Getting Help
 
-- **Documentation**: See [README.md](README.md)
-- **Wiki**: [Full documentation](wiki/index.html)
-- **Issues**: [GitHub Issues](https://github.com/yourusername/automation_tools/issues)
-- **Logs**: Check `~/.devtrack/daemon.log` for detailed error messages
+- **Usage**: [USAGE_GUIDE.md](USAGE_GUIDE.md)
+- **Wiki**: [wiki/index.html](wiki/index.html)
+- **Logs**: `Data/logs/daemon.log` (or path from `LOG_DIR` in .env)

@@ -113,32 +113,21 @@ else
     echo "✓ spaCy model installed"
 fi
 
-# Check 7: Verify Go binary is built
-BINARY_LOCATIONS=(
-    "$HOME/.local/bin/$DEVTRACK_CLI"
-    "$WORK_DIR/devtrack-bin/$DEVTRACK_CLI"
-    "/usr/local/bin/$DEVTRACK_CLI"
-)
-
-BINARY_FOUND=""
-for LOCATION in "${BINARY_LOCATIONS[@]}"; do
-    if [ -f "$LOCATION" ]; then
-        BINARY_FOUND="$LOCATION"
-        break
+# Check 7: Build Go binary if needed, verify it exists
+if [ ! -f "$WORK_DIR/devtrack-bin/$DEVTRACK_CLI" ]; then
+    echo "Building DevTrack binary..."
+    cd "$WORK_DIR/devtrack-bin"
+    if ! go build -o "$DEVTRACK_CLI" .; then
+        echo "❌ Error: go build failed"
+        exit 1
     fi
-done
-
-if [ -z "$BINARY_FOUND" ]; then
-    echo "❌ Error: $DEVTRACK_CLI binary not found"
-    echo ""
-    echo "Build steps:"
-    echo "  cd $WORK_DIR/devtrack-bin"
-    echo "  go build -o $DEVTRACK_CLI ."
-    echo "  mv -f $DEVTRACK_CLI ~/.local/bin/  # Optional: install globally"
-    exit 1
-else
-    echo "✓ Binary found at: $BINARY_FOUND"
+    cd "$WORK_DIR"
+    echo "✓ Binary built"
 fi
+
+# Use devtrack from devtrack-bin (no install to ~/.local/bin)
+BINARY_FOUND="$WORK_DIR/devtrack-bin/$DEVTRACK_CLI"
+echo "✓ Binary at: $BINARY_FOUND"
 
 # Check 8: Create .devtrack directory if it doesn't exist
 if [ ! -d "$DEVTRACK_DIR" ]; then
@@ -147,19 +136,7 @@ if [ ! -d "$DEVTRACK_DIR" ]; then
 fi
 echo "✓ DevTrack home directory exists"
 
-# Check 9: Install DevTrack Git wrapper
-if [ -f "$WORK_DIR/devtrack-git-wrapper.sh" ]; then
-    echo "Installing DevTrack Git wrapper..."
-    mkdir -p "$HOME/.local/bin"
-    cp "$WORK_DIR/devtrack-git-wrapper.sh" "$HOME/.local/bin/devtrack"
-    chmod +x "$HOME/.local/bin/devtrack"
-    echo "✓ Git wrapper installed at ~/.local/bin/devtrack"
-    echo "  Use: devtrack git commit -m 'message' for AI-enhanced commits"
-else
-    echo "⚠️  Warning: devtrack-git-wrapper.sh not found"
-fi
-
-# Check 10: Verify repository path exists
+# Check 9: Verify repository path exists
 if [ ! -d "$REPO_PATH" ]; then
     echo "⚠️  Warning: Repository path does not exist: $REPO_PATH"
     echo "   The daemon will monitor this path when it's created."
@@ -177,12 +154,12 @@ echo "======================================"
 # Kill any existing processes
 echo ""
 echo "Stopping any existing DevTrack instances..."
-pkill -f "$DEVTRACK_CLI" 2>/dev/null
-pkill -f "python_bridge.py" 2>/dev/null
+pkill -f "$DEVTRACK_CLI" 2>/dev/null || true
+pkill -f "python_bridge.py" 2>/dev/null || true
 sleep 1
 
-# Clear old logs
-LOG_PATH="$DEVTRACK_DIR/$LOG_FILE"
+# Log path: daemon writes to LOG_DIR from .env (Data/logs), not DEVTRACK_DIR
+LOG_PATH="${LOG_DIR:-$DEVTRACK_DIR}/$LOG_FILE"
 if [ -f "$LOG_PATH" ]; then
     > "$LOG_PATH"
     echo "✓ Cleared old logs"
@@ -192,6 +169,9 @@ fi
 echo ""
 echo "Starting daemon..."
 cd "$REPO_PATH"  # Start in the repository to monitor
+
+# Daemon must find .env - set path since cwd is the repo, not project root
+export DEVTRACK_ENV_FILE="$WORK_DIR/.env"
 
 # Use the found binary location
 "$BINARY_FOUND" start >> "$LOG_PATH" 2>&1 &
@@ -245,19 +225,20 @@ echo "======================================"
 echo "✅ DevTrack running locally!"
 echo "======================================"
 echo ""
-echo "Quick Commands:"
-echo "  $DEVTRACK_CLI status              - Check status"
-echo "  $DEVTRACK_CLI stop                - Stop daemon"
-echo "  tail -f $LOG_PATH    - Watch logs"
+echo "Quick Commands (run from project root or use full path):"
+echo "  $BINARY_FOUND status    - Check status"
+echo "  $BINARY_FOUND stop      - Stop daemon"
+echo "  $BINARY_FOUND git commit -m 'msg'  - AI-enhanced commit"
+echo "  tail -f $LOG_PATH       - Watch logs"
 echo ""
 echo "Test commit detection:"
 echo "  cd $REPO_PATH"
 echo "  git commit -m 'Working on #PROJ-123 - Feature (2h)'"
 echo "  tail -30 $LOG_PATH  # Check NLP parsing"
 echo ""
-echo "Configuration:"
+echo "Configuration (from .env):"
 echo "  IPC: $IPC_HOST:$IPC_PORT"
 echo "  Log: $LOG_PATH"
-echo "  PID: $DEVTRACK_DIR/$PID_FILE"
-echo "  DB:  $DEVTRACK_DIR/${DATABASE_FILE_NAME:-devtrack.db}"
+echo "  PID: ${PID_DIR:-$DEVTRACK_DIR}/$PID_FILE"
+echo "  DB:  ${DATABASE_DIR:-$DEVTRACK_DIR}/${DATABASE_FILE_NAME:-devtrack.db}"
 echo ""

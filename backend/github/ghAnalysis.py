@@ -32,7 +32,7 @@ class GitHubBranchAnalyzer:
             load_dotenv(os.path.join(_project_root, ".env"))
             self.token = token or os.getenv("GITHUB_TOKEN")
             tz_name = os.getenv("TIMEZONE", "Asia/Kolkata")
-            log_path = os.getenv("GITHUB_LOG_PATH", "github_branch_analysis.log")
+            log_path = os.getenv("GITHUB_LOG_PATH") or os.path.join(_project_root, "Data", "logs", "github_branch_analysis.log")
 
         if not self.token:
             raise ValueError("GitHub Personal Access Token is required (GITHUB_TOKEN in .env)")
