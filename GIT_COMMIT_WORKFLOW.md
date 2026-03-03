@@ -35,11 +35,11 @@ If accepted → Create commit with final message
 Ask: Log this work? (optional logging)
 ```
 
-### 2. Explicit Dry-Run Mode (Preview Only)
+### 2. Explicit Dry-Run Mode (AI Preview Only)
 
 **Command:** `devtrack git commit -m "message" --dry-run`
 
-This is a **preview-only mode** that skips AI enhancement and never creates a commit.
+This is a **preview-only mode** that shows AI enhancement capability without creating a commit or requiring interaction.
 
 ```bash
 $ devtrack git commit -m "message" --dry-run
@@ -49,10 +49,19 @@ $ devtrack git commit -m "message" --dry-run
 ```
 Staged changes preview
     ↓
-Message preview
+AI analysis and enhancement
     ↓
-Exit without interaction or AI processing
+Show AI-enhanced message suggestion
+    ↓
+Exit without interaction or commit
 ```
+
+**Key difference from default:**
+- Shows AI enhancement in action (demonstrates capability)
+- No interactive options (Accept/Enhance/Regenerate)
+- No commit created
+- No user input required
+- Perfect for reviewing what AI would suggest before committing
 
 ---
 
@@ -189,20 +198,31 @@ Choice (A/E/R/C): e
 ✗ Commit cancelled.
 ```
 
-### Example 5: Explicit Dry-Run (Preview Only)
+### Example 5: Explicit Dry-Run (AI Preview)
 
 ```bash
 $ devtrack git commit -m "test message" --dry-run
 
 Staged changes: [test.txt added]
 
-(preview mode: no AI enhancement, no commit)
+(preview mode: AI enhancement only, no commit, no interaction)
 
-Preview message: test message
+🔍 Analyzing with AI...
+✓ AI-enhanced message:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Add test functionality
+
+  Introduced test.txt to demonstrate new feature.
+  This allows users to verify the system works correctly.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✓ Preview complete. No commit made.
+Run without --dry-run to commit with interactive refinement.
 
-# File is still staged, ready for actual commit when needed
+# File is still staged. User can now:
+# - Decide if they like the AI enhancement
+# - Run without --dry-run to enter interactive loop
+# - Or use git directly to skip AI entirely
 ```
 
 ---
@@ -217,7 +237,7 @@ Preview message: test message
 | Cancel (C) | ❌ Exit without committing (files remain staged) |
 | Reach attempt 5 without accepting | ❌ Process fails with error message |
 | Invalid input (wrong key) | ⚠️ Shows error, doesn't count as attempt |
-| Explicit `--dry-run` flag | 🔍 Preview only, exit immediately |
+| Explicit `--dry-run` flag | 🔍 Shows AI enhancement, no commit, no interaction |
 | AI enhancement fails | ⚠️ Shows fallback message, allows accept/enhance/regenerate anyway |
 
 ---
