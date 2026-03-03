@@ -24,6 +24,7 @@ if [ -z "$PROJECT_ROOT" ]; then
 fi
 
 # Colors
+RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
@@ -60,19 +61,19 @@ if [ "$GIT_COMMAND" = "commit" ]; then
         echo "Use 'devtrack git add <files>' to stage changes first."
         exit 1
     fi
-    
+
     REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-    
+
     echo -e "${BLUE}🤖 DevTrack AI-Enhanced Commit${NC}"
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
-    
+
     # Parse commit args to extract user message and --dry-run
     USER_MESSAGE=""
     COMMIT_ARGS=()
     SKIP_NEXT=false
-    QUICK_DRY_RUN=false  # --dry-run flag for quick check without interaction
-    
+    EXPLICIT_DRY_RUN=false  # Explicit --dry-run flag (preview only, no interaction)
+
     for arg in "$@"; do
         if [ "$SKIP_NEXT" = true ]; then
             USER_MESSAGE="$arg"
@@ -80,137 +81,148 @@ if [ "$GIT_COMMAND" = "commit" ]; then
         elif [ "$arg" = "-m" ] || [ "$arg" = "--message" ]; then
             SKIP_NEXT=true
         elif [ "$arg" = "--dry-run" ] || [ "$arg" = "-n" ]; then
-            QUICK_DRY_RUN=true
+            EXPLICIT_DRY_RUN=true
         else
             COMMIT_ARGS+=("$arg")
         fi
     done
-    
-    if [ "$QUICK_DRY_RUN" = true ]; then
-        echo -e "${YELLOW}(quick dry-run: preview only, no interaction)${NC}"
-        echo ""
-    fi
-    
+
     # Show what's being committed
     echo -e "${YELLOW}Staged changes:${NC}"
     git diff --cached --stat | head -10
     echo ""
-    
+
+    # If explicit --dry-run, just preview and exit (no AI enhancement)
+    if [ "$EXPLICIT_DRY_RUN" = true ]; then
+        echo -e "${YELLOW}(preview mode: no AI enhancement, no commit)${NC}"
+        echo ""
+        echo -e "${YELLOW}Preview message: ${YELLOW}$USER_MESSAGE${NC}"
+        echo ""
+        echo -e "${GREEN}✓ Preview complete. No commit made.${NC}"
+        exit 0
+    fi
+
+    # Normal flow: AI enhancement with up to 5 attempts
+    echo -e "${BLUE}✨ AI-Enhanced Commit Flow (up to 5 attempts)${NC}"
+    echo ""
+
     # Create temp file for message
     TEMP_MSG=$(mktemp)
     if [ -n "$USER_MESSAGE" ]; then
         echo "$USER_MESSAGE" > "$TEMP_MSG"
-        echo -e "${BLUE}📝 Your message: ${YELLOW}$USER_MESSAGE${NC}"
     else
         echo "auto-generated" > "$TEMP_MSG"
     fi
-    echo -e "${BLUE}🔍 Analyzing code changes with AI...${NC}"
-    echo ""
-    
+
     # Run enhancer
     cd "$REPO_ROOT"
     export GIT_DIR="$REPO_ROOT/.git"
-    
-    # Interactive loop for message refinement
+
+    # Interactive loop for message refinement (max 5 attempts)
     COMMIT_CONFIRMED=false
-    REGENERATION_COUNT=0
-    MAX_REGENERATIONS=5
+    ATTEMPT=0
+    MAX_ATTEMPTS=5
     
-    while [ "$COMMIT_CONFIRMED" = false ] && [ $REGENERATION_COUNT -lt $MAX_REGENERATIONS ]; do
+    while [ "$COMMIT_CONFIRMED" = false ] && [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+        ATTEMPT=$((ATTEMPT + 1))
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${BLUE}Attempt $ATTEMPT/$MAX_ATTEMPTS${NC}"
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+
         # Generate/enhance message
+        echo -e "${BLUE}🔍 Analyzing with AI...${NC}"
         ENHANCEMENT_OUTPUT=$(uv run --directory "$PROJECT_ROOT" python "$PROJECT_ROOT/backend/commit_message_enhancer.py" "$TEMP_MSG" auto 2>&1)
-        
+
         if echo "$ENHANCEMENT_OUTPUT" | grep -q "enhanced"; then
             # Read enhanced message (remove comment lines)
             ENHANCED_MESSAGE=$(grep -v "^#" "$TEMP_MSG" | sed '/^$/d')
-            
-            echo -e "${GREEN}✓ AI-enhanced commit message:${NC}"
+
+            echo -e "${GREEN}✓ AI-generated message:${NC}"
             echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
             echo "$ENHANCED_MESSAGE" | sed 's/^/  /'
             echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
             echo ""
-            
-            # Quick dry-run mode: just show and exit
-            if [ "$QUICK_DRY_RUN" = true ]; then
-                echo -e "${YELLOW}✓ Quick dry-run complete. No commit made.${NC}"
-                echo -e "${YELLOW}  Run without --dry-run for interactive commit.${NC}"
-                rm -f "$TEMP_MSG"
-                exit 0
+        else
+            # AI enhancement failed - use original or generated message
+            ENHANCED_MESSAGE=$(grep -v "^#" "$TEMP_MSG" | sed '/^$/d')
+            if [ -z "$ENHANCED_MESSAGE" ]; then
+                ENHANCED_MESSAGE="$USER_MESSAGE"
             fi
-            
-            # Interactive prompt
-            echo -e "${BLUE}What would you like to do?${NC}"
-            echo -e "  ${GREEN}[L]${NC}ock in and commit"
-            echo -e "  ${YELLOW}[R]${NC}egenerate message"
-            echo -e "  ${YELLOW}[I]${NC}mprove current message"
+
+            echo -e "${YELLOW}⚠️  AI enhancement unavailable${NC}"
+            echo -e "${YELLOW}Generated message:${NC}"
+            echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo "$ENHANCED_MESSAGE" | sed 's/^/  /'
+            echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo ""
+        fi
+
+        # Interactive options
+        echo -e "${BLUE}What would you like to do?${NC}"
+        echo -e "  ${GREEN}[A]${NC}ccept and commit"
+        echo -e "  ${YELLOW}[E]${NC}nhance/improve message"
+        echo -e "  ${YELLOW}[R]${NC}egenerate from scratch"
+        if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
             echo -e "  ${YELLOW}[C]${NC}ancel"
-            echo ""
-            echo -ne "${BLUE}Choice (L/R/I/C): ${NC}"
-            read -r -n 1 CHOICE
-            echo ""
-            echo ""
-            
-            case "$CHOICE" in
-                [Ll])
-                    COMMIT_CONFIRMED=true
-                    ;;
-                [Rr])
-                    REGENERATION_COUNT=$((REGENERATION_COUNT + 1))
-                    echo -e "${YELLOW}🔄 Regenerating message...${NC}"
+        else
+            echo -e "  ${YELLOW}[C]${NC}ancel (last attempt)"
+        fi
+        echo ""
+        echo -ne "${BLUE}Choice (A/E/R/C): ${NC}"
+        read -r -n 1 CHOICE
+        echo ""
+        echo ""
+
+        case "$CHOICE" in
+            [Aa])
+                # Accept the message
+                COMMIT_CONFIRMED=true
+                ;;
+            [Ee])
+                # Enhance current message (use it as input for next iteration)
+                if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+                    echo "$ENHANCED_MESSAGE" > "$TEMP_MSG"
+                else
+                    echo -e "${YELLOW}✗ Maximum attempts reached. Cannot enhance further.${NC}"
                     echo ""
-                    # Reset temp file with original message for fresh generation
+                fi
+                ;;
+            [Rr])
+                # Regenerate from scratch (use original message as input)
+                if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+                    echo -e "${YELLOW}🔄 Regenerating from scratch...${NC}"
+                    echo ""
                     if [ -n "$USER_MESSAGE" ]; then
                         echo "$USER_MESSAGE" > "$TEMP_MSG"
                     else
                         echo "auto-generated" > "$TEMP_MSG"
                     fi
-                    ;;
-                [Ii])
-                    REGENERATION_COUNT=$((REGENERATION_COUNT + 1))
-                    echo -e "${YELLOW}✨ Improving current message...${NC}"
+                else
+                    echo -e "${YELLOW}✗ Maximum attempts reached. Cannot regenerate.${NC}"
                     echo ""
-                    # Use current enhanced message as input for further improvement
-                    echo "$ENHANCED_MESSAGE" > "$TEMP_MSG"
-                    ;;
-                [Cc])
-                    echo -e "${YELLOW}✗ Commit cancelled.${NC}"
-                    rm -f "$TEMP_MSG"
-                    exit 0
-                    ;;
-                *)
-                    echo -e "${YELLOW}Invalid choice. Please enter L, R, I, or C.${NC}"
-                    echo ""
-                    ;;
-            esac
-        else
-            # AI enhancement failed
-            echo -e "${YELLOW}⚠️  AI enhancement failed${NC}"
-            
-            if [ "$QUICK_DRY_RUN" = true ]; then
-                echo ""
-                echo -e "${YELLOW}✓ Dry run complete. No commit made.${NC}"
-                echo -e "${YELLOW}  Would have committed with: ${USER_MESSAGE:-'(original message)'}${NC}"
-                rm -f "$TEMP_MSG"
-                exit 0
-            fi
-            
-            # Show original message and ask to proceed
-            ORIGINAL_MSG=$(grep -v "^#" "$TEMP_MSG" | sed '/^$/d' || echo "${USER_MESSAGE:-'(no message)'}")
-            echo -e "${YELLOW}Original message: ${ORIGINAL_MSG}${NC}"
-            echo ""
-            echo -e "${BLUE}Proceed with original message? (y/n)${NC}"
-            read -r -n 1 PROCEED
-            echo ""
-            
-            if [[ "$PROCEED" =~ ^[Yy]$ ]]; then
-                COMMIT_CONFIRMED=true
-            else
+                fi
+                ;;
+            [Cc])
                 echo -e "${YELLOW}✗ Commit cancelled.${NC}"
                 rm -f "$TEMP_MSG"
                 exit 0
-            fi
-        fi
+                ;;
+            *)
+                echo -e "${YELLOW}Invalid choice. Please enter A, E, R, or C.${NC}"
+                echo ""
+                ATTEMPT=$((ATTEMPT - 1))  # Don't count invalid input as attempt
+                ;;
+        esac
     done
+
+    # Check if confirmed or max attempts reached
+    if [ "$COMMIT_CONFIRMED" = false ]; then
+        echo -e "${RED}✗ Maximum attempts ($MAX_ATTEMPTS) reached without acceptance.${NC}"
+        echo -e "${RED}Commit cancelled.${NC}"
+        rm -f "$TEMP_MSG"
+        exit 1
+    fi
     
     # Commit if confirmed
     if [ "$COMMIT_CONFIRMED" = true ]; then
