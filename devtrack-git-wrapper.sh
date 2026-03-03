@@ -92,13 +92,48 @@ if [ "$GIT_COMMAND" = "commit" ]; then
     git diff --cached --stat | head -10
     echo ""
 
-    # If explicit --dry-run, just preview and exit (no AI enhancement)
+    # If explicit --dry-run, show AI enhancement but don't commit
     if [ "$EXPLICIT_DRY_RUN" = true ]; then
-        echo -e "${YELLOW}(preview mode: no AI enhancement, no commit)${NC}"
+        echo -e "${YELLOW}(preview mode: AI enhancement only, no commit, no interaction)${NC}"
         echo ""
-        echo -e "${YELLOW}Preview message: ${YELLOW}$USER_MESSAGE${NC}"
+
+        # Create temp file for message
+        TEMP_MSG=$(mktemp)
+        if [ -n "$USER_MESSAGE" ]; then
+            echo "$USER_MESSAGE" > "$TEMP_MSG"
+        else
+            echo "auto-generated" > "$TEMP_MSG"
+        fi
+
+        # Run enhancer to show AI capability
+        cd "$REPO_ROOT"
+        export GIT_DIR="$REPO_ROOT/.git"
+
+        echo -e "${BLUE}🔍 Analyzing with AI...${NC}"
+        ENHANCEMENT_OUTPUT=$(uv run --directory "$PROJECT_ROOT" python "$PROJECT_ROOT/backend/commit_message_enhancer.py" "$TEMP_MSG" auto 2>&1)
+
+        if echo "$ENHANCEMENT_OUTPUT" | grep -q "enhanced"; then
+            ENHANCED_MESSAGE=$(grep -v "^#" "$TEMP_MSG" | sed '/^$/d')
+            echo -e "${GREEN}✓ AI-enhanced message:${NC}"
+            echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo "$ENHANCED_MESSAGE" | sed 's/^/  /'
+            echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        else
+            GENERATED_MESSAGE=$(grep -v "^#" "$TEMP_MSG" | sed '/^$/d')
+            if [ -z "$GENERATED_MESSAGE" ]; then
+                GENERATED_MESSAGE="$USER_MESSAGE"
+            fi
+            echo -e "${YELLOW}Generated message:${NC}"
+            echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo "$GENERATED_MESSAGE" | sed 's/^/  /'
+            echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        fi
+
         echo ""
         echo -e "${GREEN}✓ Preview complete. No commit made.${NC}"
+        echo -e "${BLUE}Run without --dry-run to commit with interactive refinement.${NC}"
+
+        rm -f "$TEMP_MSG"
         exit 0
     fi
 
