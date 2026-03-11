@@ -80,10 +80,11 @@ class TaskGenerator:
 
         # Generate response using the configured LLM provider
         from backend.llm.base import LLMOptions
+        from backend.config import http_timeout_long
         response_text = self._get_provider().generate(
             prompt=prompt,
             options=LLMOptions(temperature=0.3, max_tokens=1000),
-            timeout=60,
+            timeout=http_timeout_long(),
         )
 
         if not response_text:

@@ -16,6 +16,15 @@ from typing import Optional
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Try to import git-sage utilities
+try:
+    from backend.git_sage import GitOperations, PRFinder
+    HAS_GIT_SAGE = True
+except ImportError:
+    HAS_GIT_SAGE = False
+    GitOperations = None
+    PRFinder = None
+
 
 class CommitMessageEnhancer:
     """Enhances git commit messages using AI analysis of staged changes."""
@@ -33,27 +42,30 @@ class CommitMessageEnhancer:
         """Get diff of staged changes"""
         try:
             # Get stats
+            from backend.config import http_timeout_short
+            timeout_secs = http_timeout_short()
+
             result = subprocess.run(
                 ["git", "diff", "--cached", "--stat"],
                 cwd=repo_path,
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=timeout_secs
             )
-            
+
             if result.returncode != 0:
                 logger.error(f"Failed to get diff stats: {result.stderr}")
                 return None
-            
+
             stats = result.stdout.strip()
-            
+
             # Get actual diff (limited)
             result = subprocess.run(
                 ["git", "diff", "--cached", "--unified=3"],
                 cwd=repo_path,
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=timeout_secs
             )
             
             if result.returncode != 0:
@@ -75,13 +87,14 @@ class CommitMessageEnhancer:
     
     def get_staged_files(self, repo_path: str) -> list:
         """Get list of staged files"""
+        from backend.config import http_timeout_short
         try:
             result = subprocess.run(
                 ["git", "diff", "--cached", "--name-only"],
                 cwd=repo_path,
                 capture_output=True,
                 text=True,
-                timeout=5
+                timeout=http_timeout_short()
             )
             
             if result.returncode == 0:
@@ -91,11 +104,56 @@ class CommitMessageEnhancer:
         except Exception:
             return []
     
+    def get_git_context(self, repo_path: str) -> Optional[str]:
+        """Get enhanced git context using git-sage utilities"""
+        if not HAS_GIT_SAGE:
+            return None
+
+        try:
+            ops = GitOperations(cwd=repo_path)
+            pr = PRFinder(cwd=repo_path)
+
+            context_parts = []
+
+            # Get current branch info
+            current_branch = ops.get_current_branch()
+            if current_branch and current_branch != "HEAD":
+                context_parts.append(f"Branch: {current_branch}")
+
+            # Get PR metadata
+            metadata = pr.suggest_pr_metadata()
+            if metadata.get("issue_number"):
+                context_parts.append(f"Issue/PR: #{metadata['issue_number']}")
+
+            # Get recent commits for context
+            try:
+                recent = ops.get_commit_log(n=3)
+                if recent:
+                    context_parts.append("Recent commits:")
+                    for commit in recent:
+                        context_parts.append(f"  - {commit['sha']}: {commit['message'][:50]}")
+            except Exception as e:
+                logger.debug(f"Error getting recent commits: {e}")
+
+            # Get diff stats
+            try:
+                stats = pr.get_diff_stats()
+                if stats.get('files'):
+                    context_parts.append(f"Changes: {stats['files']} files, +{stats['additions']} -{stats['deletions']}")
+            except Exception as e:
+                logger.debug(f"Error getting diff stats: {e}")
+
+            return "\n".join(context_parts) if context_parts else None
+        except Exception as e:
+            logger.debug(f"Error getting git context: {e}")
+            return None
+
     def analyze_changes_in_plain_language(self, repo_path: str, files: list) -> str:
         """Analyze staged changes and describe them in plain language"""
         try:
             descriptions = []
             
+            from backend.config import http_timeout_short
             for file_path in files[:10]:  # Limit to first 10 files
                 # Get diff for this specific file
                 result = subprocess.run(
@@ -103,7 +161,7 @@ class CommitMessageEnhancer:
                     cwd=repo_path,
                     capture_output=True,
                     text=True,
-                    timeout=5
+                    timeout=http_timeout_short()
                 )
                 
                 if result.returncode != 0:
@@ -207,7 +265,10 @@ class CommitMessageEnhancer:
         try:
             if repo_path is None:
                 repo_path = os.getcwd()
-            
+
+            # Get enhanced git context (branch, PR, recent commits, diff stats)
+            git_context = self.get_git_context(repo_path)
+
             # Get plain language description of changes
             plain_changes = self.analyze_changes_in_plain_language(repo_path, files)
             
@@ -221,6 +282,7 @@ class CommitMessageEnhancer:
             if is_placeholder:
                 prompt = f"""You are writing a git commit message. Analyze the code changes and write a clear, descriptive commit message.
 
+                {f"Git Context:\n{git_context}\n" if git_context else ""}
                 What Changed:
                 {plain_changes}
 
@@ -255,6 +317,7 @@ class CommitMessageEnhancer:
                     # Improve existing enhanced message - refine and enhance further
                     prompt = f"""You are refining an existing git commit message to make it better. Keep the good parts but improve clarity, add missing details, or enhance the explanation.
 
+                {f"Git Context:\n{git_context}\n" if git_context else ""}
                 Current Message:
                 {original_message}
 
@@ -272,6 +335,7 @@ class CommitMessageEnhancer:
                     # Improve a basic message - make it more descriptive
                     prompt = f"""You are improving a git commit message. Analyze the code changes and rewrite to be more descriptive.
 
+                {f"Git Context:\n{git_context}\n" if git_context else ""}
                 Original Message: {original_message}
 
                 What Changed:
@@ -297,10 +361,11 @@ class CommitMessageEnhancer:
                 Write ONLY the improved commit message. No meta-commentary, nothing else."""
 
             from backend.llm.base import LLMOptions
+            from backend.config import http_timeout
             enhanced = self._get_provider().generate(
                 prompt=prompt,
                 options=LLMOptions(temperature=0.2, max_tokens=200),
-                timeout=30,
+                timeout=http_timeout(),
             )
 
             if not enhanced:

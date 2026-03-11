@@ -48,10 +48,11 @@ def get_ollama_model(model_override: Optional[str] = None) -> str:
 def is_available(host: Optional[str] = None) -> bool:
     """Check if Ollama is available and responsive."""
     import urllib.request
+    from backend.config import http_timeout_short
     h = host or get_ollama_host()
     try:
         req = urllib.request.Request(f"{h}/api/tags")
-        with urllib.request.urlopen(req, timeout=2) as response:
+        with urllib.request.urlopen(req, timeout=http_timeout_short()) as response:
             return response.status == 200
     except Exception:
         return False

@@ -252,11 +252,12 @@ class AzureDevOpsDataCollector:
             base_url = f"https://dev.azure.com/{org}"
 
             # Try to get projects first
+            from backend.config import http_timeout_short
             projects_url = f"{base_url}/_apis/projects?api-version=7.1"
             projects_resp = requests.get(
                 projects_url,
                 auth=HTTPBasicAuth('', pat),
-                timeout=10
+                timeout=http_timeout_short()
             )
 
             if projects_resp.status_code != 200:
@@ -278,7 +279,7 @@ class AzureDevOpsDataCollector:
                 wiql_url,
                 json=wiql_query,
                 auth=HTTPBasicAuth('', pat),
-                timeout=10
+                timeout=http_timeout_short()
             )
 
             if wiql_resp.status_code == 200:
@@ -329,13 +330,14 @@ class AzureDevOpsDataCollector:
                 return []
 
             # Get projects to find which one contains this work item
+            from backend.config import http_timeout_short
             base_url = f"https://dev.azure.com/{org}"
             projects_url = f"{base_url}/_apis/projects?api-version=7.1"
 
             projects_resp = requests.get(
                 projects_url,
                 auth=HTTPBasicAuth('', pat),
-                timeout=10
+                timeout=http_timeout_short()
             )
 
             if projects_resp.status_code != 200:
@@ -355,7 +357,7 @@ class AzureDevOpsDataCollector:
                 comments_resp = requests.get(
                     comments_url,
                     auth=HTTPBasicAuth('', pat),
-                    timeout=10
+                    timeout=http_timeout_short()
                 )
 
                 if comments_resp.status_code == 200:
