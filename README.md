@@ -24,6 +24,7 @@ Start here to find what you need:
 ## Quick Overview
 
 DevTrack combines background process automation with AI intelligence to:
+
 - Monitor your Git activity and trigger smart prompts at key moments
 - Parse natural language updates into structured task data
 - Learn your communication style from Teams, Azure DevOps, and Outlook
@@ -44,6 +45,7 @@ nano .env  # Edit with YOUR paths and settings
 ```
 
 **Required variables** (no defaults - must be set):
+
 - Timeouts: `IPC_CONNECT_TIMEOUT_SECS`, `HTTP_TIMEOUT_SHORT`, `HTTP_TIMEOUT`, `HTTP_TIMEOUT_LONG`
 - Hosts: `OLLAMA_HOST`, `LMSTUDIO_HOST`
 - Model: `GIT_SAGE_DEFAULT_MODEL`
@@ -87,18 +89,21 @@ For detailed setup, see [Installation Guide](docs/INSTALLATION.md) and [Configur
 ## Core Features
 
 ### Git Workflow Enhancement (Phases 1-3)
+
 - **Enhanced Commit Messages**: AI-powered context-aware commit messages with branch/PR information
 - **Conflict Resolution**: Automatic merge conflict detection and smart resolution
 - **Work Update Parsing**: Natural language work updates with PR/issue auto-detection
 - **Daily Reports**: AI-enhanced daily and weekly report generation
 
 ### AI-Powered Processing
+
 - **Local-First**: 100% offline-capable with Ollama (no external AI required)
 - **Hybrid LLM**: Optional integration with OpenAI, Anthropic, or custom LLMs
 - **NLP Parsing**: spaCy-based natural language processing for task extraction
 - **Learning**: Personalized AI that learns from your communication style
 
 ### Integrations
+
 - **Project Management**: Azure DevOps, GitHub, Jira
 - **Communication**: Microsoft Teams, Outlook
 - **Task Tracking**: Automatic updates to linked tasks and stories
@@ -108,6 +113,7 @@ For detailed setup, see [Installation Guide](docs/INSTALLATION.md) and [Configur
 ## Technology Stack
 
 ### Backend (Go)
+
 - Go 1.20+ daemon for monitoring and triggers
 - fsnotify for real-time Git repository monitoring
 - Cron-based scheduling with configurable intervals
@@ -115,6 +121,7 @@ For detailed setup, see [Installation Guide](docs/INSTALLATION.md) and [Configur
 - TCP-based IPC for Go ↔ Python communication
 
 ### Intelligence (Python 3.12+)
+
 - **uv** for fast dependency management
 - **spaCy** (en_core_web_sm) for NLP and entity recognition
 - **OLLAMA** for local LLM processing (privacy-first)
@@ -123,6 +130,7 @@ For detailed setup, see [Installation Guide](docs/INSTALLATION.md) and [Configur
 - Microsoft Graph SDK for Teams/Outlook integrations
 
 ### Integrations
+
 - Azure DevOps REST API
 - Microsoft Graph API (Teams, Email, Lists)
 - GitHub API
@@ -136,11 +144,13 @@ For detailed setup, see [Installation Guide](docs/INSTALLATION.md) and [Configur
 **Overall Progress**: ~85% Complete
 
 ### Completed Phases
+
 - **Phase 1**: Enhanced Commit Messages ✅
 - **Phase 2**: Conflict Resolution & PR-Aware Parsing ✅
 - **Phase 3**: Event-Driven Integration ✅
 
 ### Current Phase (Phase 4+)
+
 - Enhanced Integrations and advanced features
 - Dashboard and analytics
 - Mobile notifications
@@ -157,12 +167,14 @@ For detailed phase information, see [Roadmap & Phases](docs/PHASES.md).
 Run DevTrack natively on your system without Docker for faster iteration and easier debugging.
 
 **Prerequisites**:
+
 - Go 1.20+ ([Download](https://go.dev/dl/))
 - Python 3.12+ with uv package manager ([Install uv](https://github.com/astral-sh/uv))
 - Git (for repository monitoring)
 - Ollama (optional, for AI features) ([Download](https://ollama.com/download))
 
 **Setup**:
+
 ```bash
 git clone https://github.com/yourusername/automation_tools.git
 cd automation_tools
@@ -196,6 +208,7 @@ DOCKER_BUILDKIT=1 docker compose up devtrack
 ## Privacy & Security
 
 DevTrack is built with privacy as a core principle:
+
 - All data stored locally on your machine
 - No cloud AI services by default (uses local Ollama)
 - Explicit consent required for AI learning features
@@ -231,6 +244,7 @@ devtrack help               # Full command list
 ## Troubleshooting
 
 ### Python Version Issues
+
 ```bash
 # DevTrack requires Python 3.12 or 3.13 (not 3.14+)
 python3 --version
@@ -239,11 +253,13 @@ python3 --version
 ```
 
 ### spaCy NLP Model Not Found
+
 ```bash
 uv run python -m spacy download en_core_web_sm
 ```
 
 ### Daemon Won't Start
+
 ```bash
 # Check logs for errors
 tail -50 ~/.devtrack/daemon.log

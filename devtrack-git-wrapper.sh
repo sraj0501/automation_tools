@@ -300,14 +300,14 @@ if [ "$GIT_COMMAND" = "commit" ]; then
                 COMMIT_SHORT=$(git rev-parse --short HEAD)
                 
                 # Extract ticket ID if present (common patterns: AB-234, PROJ-123, #234)
-                TICKET_ID=$(echo "$FINAL_MESSAGE" | grep -oE '([A-Z]+-[0-9]+|#[0-9]+)' | head -1)
+                TICKET_ID=$(echo "$FINAL_MESSAGE" | grep -oE '([A-Z]+-[0-9]+|#[0-9]+)' | head -1 || true)
                 
                 # Show logged message (first line only)
                 FIRST_LINE=$(echo "$FINAL_MESSAGE" | head -1)
                 echo -e "${GREEN}✓ Logged work: ${FIRST_LINE}${NC}"
                 
                 # Detect and show git provider
-                REPO_URL=$(git config --get remote.origin.url 2>/dev/null)
+                REPO_URL=$(git config --get remote.origin.url 2>/dev/null || true)
                 if [ -n "$REPO_URL" ]; then
                     if echo "$REPO_URL" | grep -q "github.com"; then
                         echo -e "${GREEN}✓ Logged to GitHub commit ${COMMIT_SHORT}${NC}"

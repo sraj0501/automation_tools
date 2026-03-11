@@ -7,6 +7,7 @@ Complete step-by-step instructions for running DevTrack locally from scratch (wi
 Before you begin, ensure you have these installed:
 
 ### 1. **Go 1.20+**
+
 ```bash
 # Check if Go is installed
 go version
@@ -19,6 +20,7 @@ source ~/.bashrc
 ```
 
 ### 2. **Python 3.12 or 3.13** (NOT 3.14+)
+
 ```bash
 # Check Python version
 python3 --version
@@ -27,6 +29,7 @@ python3 --version
 ```
 
 ### 3. **uv Package Manager**
+
 ```bash
 # Install uv (https://github.com/astral-sh/uv)
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -36,11 +39,13 @@ uv --version
 ```
 
 ### 4. **Git**
+
 ```bash
 git --version
 ```
 
 ### 5. **Ollama** (Optional - for AI features)
+
 ```bash
 # Download from: https://ollama.com/download
 # Or on Linux:
@@ -55,6 +60,7 @@ ollama serve
 ## Setup Steps
 
 ### Step 1: Clone Repository
+
 ```bash
 cd ~/Documents/GitHub  # or your preferred location
 git clone https://github.com/yourusername/automation_tools.git
@@ -62,6 +68,7 @@ cd automation_tools
 ```
 
 ### Step 2: Configure Environment
+
 ```bash
 # Copy example configuration
 cp .env_sample .env
@@ -75,17 +82,20 @@ nano .env  # or use your preferred editor
 Copy `.env_sample` to `.env` and set all variables. Missing any variable causes daemon to fail at startup with clear error message.
 
 **System paths** (required):
+
 - `PROJECT_ROOT` - Absolute path to automation_tools
 - `DEVTRACK_WORKSPACE` - Git repo to monitor
 - `DATA_DIR` - Runtime data directory
 
 **IPC configuration** (required):
+
 - `IPC_HOST` - IPC server host (usually `127.0.0.1`)
 - `IPC_PORT` - IPC server port (usually `35893`)
 - `IPC_CONNECT_TIMEOUT_SECS` - IPC timeout in seconds (e.g., `5`)
 - `IPC_RETRY_DELAY_MS` - IPC retry delay in milliseconds (e.g., `2000`)
 
 **Timeout configuration** (required - all must be set):
+
 - `HTTP_TIMEOUT_SHORT` - Fast operations (e.g., `10` seconds)
 - `HTTP_TIMEOUT` - Standard operations (e.g., `30` seconds)
 - `HTTP_TIMEOUT_LONG` - Long operations (e.g., `60` seconds)
@@ -96,6 +106,7 @@ Copy `.env_sample` to `.env` and set all variables. Missing any variable causes 
 - `SENTIMENT_ANALYSIS_WINDOW_MINUTES` - Analysis window (e.g., `120` minutes)
 
 **Host configuration** (required):
+
 - `OLLAMA_HOST` - Ollama server URL (e.g., `http://localhost:11434`)
 - `LMSTUDIO_HOST` - LM Studio URL (e.g., `http://localhost:1234/v1`)
 - `GIT_SAGE_DEFAULT_MODEL` - Default model (e.g., `llama3`)
@@ -103,6 +114,7 @@ Copy `.env_sample` to `.env` and set all variables. Missing any variable causes 
 **See [CONFIGURATION.md](docs/CONFIGURATION.md)** for complete reference with all variables and descriptions.
 
 ### Step 3: Install Python Dependencies
+
 ```bash
 # From project root
 cd automation_tools
@@ -115,6 +127,7 @@ uv run python -c "import spacy; print(spacy.__version__)"
 ```
 
 ### Step 4: Install spaCy Model
+
 ```bash
 uv run python -m spacy download en_core_web_sm
 
@@ -123,6 +136,7 @@ uv run python -c "import spacy; spacy.load('en_core_web_sm')"
 ```
 
 ### Step 5: Build Go Binary
+
 ```bash
 cd devtrack-bin
 go build -o devtrack .
@@ -134,6 +148,7 @@ go build -o devtrack .
 Use devtrack from `devtrack-bin/` directly (no install to ~/.local/bin).
 
 ### Step 6: Verify Setup
+
 ```bash
 # From project root - runs all checks
 ./scripts/verify_setup.sh
@@ -144,6 +159,7 @@ Use devtrack from `devtrack-bin/` directly (no install to ~/.local/bin).
 ## Running DevTrack
 
 ### Method 1: Using run_devtrack_local.sh
+
 ```bash
 # From project root
 cd automation_tools
@@ -152,6 +168,7 @@ chmod +x run_devtrack_local.sh
 ```
 
 This script will:
+
 - Load configuration from `.env`
 - Validate required variables
 - Stop any existing instances
@@ -159,6 +176,7 @@ This script will:
 - Show status and logs
 
 ### Method 2: Manual Start
+
 ```bash
 # Load .env and start from project root
 cd automation_tools
@@ -174,6 +192,7 @@ devtrack start
 ```
 
 ### Check Status
+
 ```bash
 devtrack status
 # or
@@ -185,6 +204,7 @@ devtrack status
 ## Verification & Testing
 
 ### Run Test Scripts
+
 ```bash
 # Full commit flow (daemon + IPC + Python)
 ./scripts/test_commit_flow.sh
@@ -200,6 +220,7 @@ devtrack stop
 ```
 
 ### Manual Verification
+
 ```bash
 # 1. Check daemon status
 devtrack status
@@ -219,6 +240,7 @@ tail -50 Data/logs/daemon.log | grep -E "NLP|spaCy|IPC|Git monitor"
 ```
 
 ### Test Commit Detection
+
 ```bash
 # In your monitored repository
 cd $DEVTRACK_WORKSPACE
@@ -236,11 +258,13 @@ tail -30 Data/logs/daemon.log
 ## Troubleshooting
 
 ### "spaCy model not found"
+
 ```bash
 uv run python -m spacy download en_core_web_sm
 ```
 
 ### "Binary not found"
+
 ```bash
 # Build from devtrack-bin
 cd devtrack-bin && go build -o devtrack .
@@ -250,6 +274,7 @@ export PATH="$PWD/devtrack-bin:$PATH"
 ```
 
 ### ".env file not found" or "Configuration missing"
+
 ```bash
 cp .env_sample .env
 # Edit .env - ALL VARIABLES ARE REQUIRED
@@ -265,6 +290,7 @@ cp .env_sample .env
 ```
 
 ### "Configuration missing [VARIABLE_NAME]"
+
 This means a required environment variable is not set in `.env`. The error message tells you which one.
 
 ```bash
@@ -282,6 +308,7 @@ devtrack start
 ```
 
 ### "IPC connection failed" / Port 35893 in use
+
 ```bash
 # Check what's using the port
 lsof -i :35893
@@ -293,6 +320,7 @@ devtrack start
 ```
 
 ### "Git commits not detected"
+
 ```bash
 # 1. Verify daemon is running
 devtrack status
@@ -305,6 +333,7 @@ tail Data/logs/daemon.log | grep "Git repository"
 ```
 
 ### "Daemon is not running" when stopping
+
 This is normal if the daemon was already stopped (e.g. by the test script trap). The test scripts now handle this correctly.
 
 ---
@@ -339,6 +368,7 @@ Data/                       # Runtime data (from .env DATA_DIR)
 ## Regular Usage
 
 ### Daily Workflow
+
 ```bash
 # Morning: Start daemon
 ./run_devtrack_local.sh
@@ -355,6 +385,7 @@ devtrack stop
 ```
 
 ### Useful Commands
+
 ```bash
 ./devtrack-bin/devtrack status    # Check if running
 ./devtrack-bin/devtrack stop      # Stop daemon
