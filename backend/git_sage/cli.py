@@ -159,7 +159,19 @@ def configure_wizard():
     print("Providers: ollama | openai | lmstudio | custom")
     provider = input(f"Provider [{cfg['provider']}]: ").strip() or cfg["provider"]
     cfg["provider"] = provider
-    default_models = {"ollama": "llama3", "openai": "gpt-4o-mini", "lmstudio": "local-model"}
+
+    # Load model defaults from config (NO HARDCODED DEFAULTS)
+    try:
+        from backend.config import git_sage_default_model, openai_model
+        default_models = {
+            "ollama": git_sage_default_model(),
+            "openai": openai_model(),
+            "lmstudio": "local-model"
+        }
+    except (ImportError, ValueError):
+        # Fallback if config vars missing
+        default_models = {"ollama": "llama3", "openai": "gpt-4o-mini", "lmstudio": "local-model"}
+
     def_model = default_models.get(provider, cfg["model"])
     cfg["model"] = input(f"Model [{def_model}]: ").strip() or def_model
     url = input("Base URL (blank = default): ").strip()
