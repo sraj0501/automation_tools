@@ -109,6 +109,30 @@ except ImportError as e:
     task_repo_available = False
     TaskRepository = None
 
+# Import git-sage conflict resolver and work update enhancer (Phase 3)
+try:
+    from backend.conflict_auto_resolver import auto_resolve_merge_conflicts
+    conflict_resolver_available = True
+except ImportError as e:
+    logger.debug(f"Conflict resolver not available: {e}")
+    conflict_resolver_available = False
+
+try:
+    from backend.work_update_enhancer import enhance_work_update_prompt
+    work_enhancer_available = True
+except ImportError as e:
+    logger.debug(f"Work update enhancer not available: {e}")
+    work_enhancer_available = False
+
+# Import Personalized AI (Phase 6 - Talk Like You)
+try:
+    from backend.personalized_ai import PersonalizedAI
+    personalized_ai_available = True
+except ImportError as e:
+    logger.debug(f"Personalized AI not available: {e}")
+    personalized_ai_available = False
+    PersonalizedAI = None
+
 
 class DevTrackBridge:
     """Main bridge between Go daemon and Python AI layer"""
@@ -182,7 +206,29 @@ class DevTrackBridge:
                     logger.info("✓ Task repository initialized (Jira not configured)")
             except Exception as e:
                 logger.warning(f"Could not initialize task repository: {e}")
-    
+
+        # Initialize Personalized AI (Phase 6 - Talk Like You)
+        self.personalized_ai = None
+        if personalized_ai_available:
+            try:
+                # Try to get user email from environment or config
+                try:
+                    from backend.config import user_email as get_user_email
+                    user_email = get_user_email()
+                except (ImportError, AttributeError, TypeError):
+                    # Fallback to environment variable or placeholder
+                    user_email = os.getenv('USER_EMAIL', os.getenv('USER', 'user@example.com'))
+
+                self.personalized_ai = PersonalizedAI(user_email)
+                if self.personalized_ai.consent_given:
+                    logger.info("✓ Personalized AI initialized (consent given)")
+                    if self.personalized_ai.profile:
+                        logger.info(f"  User profile: {self.personalized_ai.profile.total_samples} samples")
+                else:
+                    logger.info("✓ Personalized AI available (consent not yet given)")
+            except Exception as e:
+                logger.warning(f"Could not initialize personalized AI: {e}")
+
     def handle_commit_trigger(self, msg: IPCMessage):
         """Handle commit trigger from Go daemon"""
         self.trigger_count["commit"] += 1
@@ -252,12 +298,19 @@ class DevTrackBridge:
         if self.nlp_parser and commit_msg:
             logger.info("📝 Parsing commit message with NLP...")
             try:
-                parsed = self.nlp_parser.parse(commit_msg)
+                parsed = self.nlp_parser.parse(commit_msg, repo_path=repo_path)
                 logger.info(f"   Project: {parsed.project}")
                 logger.info(f"   Ticket:  {parsed.ticket_id}")
                 logger.info(f"   Action:  {parsed.action_verb}")
                 logger.info(f"   Status:  {parsed.status}")
                 logger.info(f"   Confidence: {parsed.confidence:.2f}")
+
+                # Log git context if available (Phase 1 enhancement)
+                if hasattr(parsed, 'git_context') and parsed.git_context and parsed.git_context.get('branch'):
+                    git_branch = parsed.git_context['branch'].get('branch', '')
+                    pr_num = parsed.git_context['branch'].get('issue_number', '')
+                    if git_branch:
+                        logger.info(f"   Git Context: {git_branch}" + (f" (PR #{pr_num})" if pr_num else ""))
                 
                 # Build description
                 description = parsed.description or commit_msg
@@ -361,13 +414,35 @@ class DevTrackBridge:
             logger.info("   - Install TUI dependencies or use non-interactive mode")
             return
         
-        # Step 2: Parse user input with spaCy NLP
+        # Step 2: Enhance work update with git context (Phase 3)
+        enhanced_input = user_input
+        repo_path = "."
+        git_context = None
+
+        if work_enhancer_available and user_input:
+            try:
+                self.tui.show_progress("Enhancing with git context")
+                enhanced_input = enhance_work_update_prompt(user_input, repo_path=repo_path)
+
+                if enhanced_input != user_input:
+                    logger.info("✓ Work update enriched with git context")
+                    logger.debug(f"Enhanced input:\n{enhanced_input}")
+
+                self.tui.show_progress("Enhancing with git context", done=True)
+            except Exception as e:
+                logger.debug(f"Could not enhance work update: {e}")
+                # Continue with original input
+
+        # Step 3: Parse user input with spaCy NLP
         parsed = None
-        if self.nlp_parser and user_input:
+        if self.nlp_parser and enhanced_input:
             try:
                 self.tui.show_progress("Parsing with NLP")
-                parsed = self.nlp_parser.parse(user_input)
+                parsed = self.nlp_parser.parse(enhanced_input, repo_path=repo_path)
                 self.tui.show_progress("Parsing with NLP", done=True)
+
+                # Extract git context from parsed task
+                git_context = parsed.git_context if hasattr(parsed, 'git_context') else None
                 
                 # Display parsed information
                 self.tui.display_parsed_task(parsed.to_dict())
@@ -383,13 +458,13 @@ class DevTrackBridge:
             except Exception as e:
                 logger.error(f"Error parsing with NLP: {e}")
                 # Continue with basic processing
-        
-        # Step 3: Enhance description with Ollama
+
+        # Step 4: Enhance description with Ollama
         enhanced = None
-        if self.description_enhancer and user_input:
+        if self.description_enhancer and enhanced_input:
             try:
                 self.tui.show_progress("Enhancing description with AI")
-                
+
                 # Build context for enhancement
                 enhance_context = {}
                 if parsed:
@@ -397,8 +472,12 @@ class DevTrackBridge:
                         enhance_context["project"] = parsed.project
                     if parsed.ticket_id:
                         enhance_context["ticket_id"] = parsed.ticket_id
-                
-                enhanced = self.description_enhancer.enhance(user_input, enhance_context)
+                    # Add git context to enhancement context
+                    if git_context:
+                        enhance_context["branch"] = git_context.get("branch", {}).get("branch")
+                        enhance_context["pr_number"] = git_context.get("branch", {}).get("issue_number")
+
+                enhanced = self.description_enhancer.enhance(enhanced_input, enhance_context)
                 self.tui.show_progress("Enhancing description with AI", done=True)
                 
                 # Display enhanced description
@@ -412,9 +491,39 @@ class DevTrackBridge:
             except Exception as e:
                 logger.error(f"Error enhancing description: {e}")
                 # Continue with parsed description
-        
-        # Step 4: Confirm with user
-        final_description = user_input
+
+        # Step 4.5: Generate personalized response suggestion (Phase 6 - Talk Like You)
+        response_suggestion = None
+        if self.personalized_ai and self.personalized_ai.consent_given and self.personalized_ai.profile:
+            try:
+                self.tui.show_progress("Generating personalized response suggestion")
+
+                # Use the work update as context for response generation
+                context_type = "chat"  # Default context
+                if parsed and parsed.ticket_id:
+                    context_type = "comment"  # If it's a ticket update, it's a comment
+
+                response_suggestion = self.personalized_ai.generate_response_suggestion(
+                    context_type=context_type,
+                    trigger=final_description,
+                    additional_context=f"Project: {parsed.project if parsed else 'unknown'}"
+                )
+
+                self.tui.show_progress("Generating personalized response suggestion", done=True)
+
+                if response_suggestion and not response_suggestion.startswith("Error"):
+                    logger.info("✓ Personalized response suggestion generated")
+                    logger.debug(f"Suggestion: {response_suggestion[:100]}...")
+                else:
+                    logger.debug(f"Could not generate response suggestion: {response_suggestion}")
+                    response_suggestion = None
+
+            except Exception as e:
+                logger.debug(f"Could not generate response suggestion: {e}")
+                # Continue without suggestion - this is optional
+
+        # Step 5: Confirm with user
+        final_description = enhanced_input
         if enhanced and enhanced.enhanced:
             final_description = enhanced.enhanced
         elif parsed and parsed.description:
@@ -424,13 +533,21 @@ class DevTrackBridge:
         if self.tui:
             print(f"\n{self.tui.ICON_TASK} Final description:")
             print(f"   {final_description[:100]}...")
+
+            # Show personalized response suggestion if available (Phase 6)
+            if response_suggestion:
+                print(f"\n💡 Personalized Response Suggestion (Talk Like You):")
+                print(f"   {response_suggestion[:150]}...")
+                if len(response_suggestion) > 150:
+                    print("   [Full suggestion available]")
+
             confirmed = self.tui.prompt_yes_no("Save this update?", default=True)
-            
+
             if not confirmed:
                 self.tui.print_warning("Update cancelled by user")
                 return
-        
-        # Step 5: Create and send task update
+
+        # Step 6: Create and send task update
         project = "automation_tools"
         ticket_id = ""
         status = "in_progress"
@@ -476,11 +593,18 @@ class DevTrackBridge:
         logger.info(f"   ✓ User prompted via TUI")
         if parsed:
             logger.info(f"   ✓ Parsed with spaCy NLP (confidence: {parsed.confidence:.2f})")
+        if git_context:
+            logger.info(f"   ✓ Git context enriched (branch: {git_context.get('branch', {}).get('branch')})")
         if enhanced:
             logger.info(f"   ✓ Enhanced with Ollama (category: {enhanced.category})")
+        if response_suggestion:
+            logger.info(f"   ✓ Personalized response suggestion generated")
         logger.info(f"   ✓ Task update sent to daemon")
         logger.info("")
-        
+
+        # Step 7: Check for and resolve merge conflicts (Phase 3 - git-sage)
+        self._check_and_resolve_conflicts()
+
         # TODO: Phase 4 - Update task management systems (Azure DevOps/GitHub/JIRA)
         
         # Phase 5 - Generate daily report if end of day
@@ -719,7 +843,75 @@ class DevTrackBridge:
         logger.info(f"   ✓ Days covered: {len(weekly_report.daily_reports)}")
         logger.info(f"   ✓ Total hours: {weekly_report.total_hours:.1f}h")
         logger.info(f"   ✓ Tasks completed: {weekly_report.total_completed}")
-    
+
+    def _check_and_resolve_conflicts(self):
+        """
+        Check for merge/rebase conflicts and attempt automatic resolution (Phase 3).
+        This runs after work updates to catch any pending conflicts.
+        """
+        if not conflict_resolver_available:
+            logger.debug("Conflict resolver not available, skipping conflict check")
+            return
+
+        try:
+            logger.debug("Checking for merge/rebase conflicts...")
+
+            # Attempt auto-resolution
+            result = auto_resolve_merge_conflicts(repo_path=".")
+
+            if result["status"] == "success":
+                # All conflicts resolved
+                logger.info("")
+                logger.info("🎯 Merge Conflict Resolution (Phase 3)")
+                logger.info(f"✓ {result['summary']}")
+                logger.info(f"  Auto-resolved {len(result['resolved'])} files:")
+                for f in result['resolved']:
+                    logger.info(f"    ✓ {f}")
+
+                # Log resolution event
+                if self.tui:
+                    self.tui.print_success("Merge conflicts auto-resolved!")
+
+            elif result["status"] == "partial":
+                # Some resolved, some need manual work
+                logger.info("")
+                logger.info("🎯 Merge Conflict Resolution (Phase 3)")
+                logger.info(f"⚠ {result['summary']}")
+
+                if result['resolved']:
+                    logger.info(f"Auto-resolved {len(result['resolved'])} files:")
+                    for f in result['resolved']:
+                        logger.info(f"  ✓ {f}")
+
+                if result['unresolvable']:
+                    logger.info(f"Files needing manual resolution ({len(result['unresolvable'])}):")
+                    for f in result['unresolvable']:
+                        logger.info(f"  ✗ {f}")
+
+                # Offer to show conflict details
+                if self.tui:
+                    self.tui.print_warning("Some conflicts need manual resolution")
+                    show_details = self.tui.prompt_yes_no(
+                        "Show conflict details?",
+                        default=False
+                    )
+
+                    if show_details:
+                        from backend.conflict_auto_resolver import get_conflict_report
+                        report = get_conflict_report(repo_path=".")
+                        print("\n" + report + "\n")
+
+            elif result["status"] == "failed":
+                # No conflicts detected or all need manual work
+                if result.get("error"):
+                    logger.debug(f"Could not auto-resolve conflicts: {result['error']}")
+                else:
+                    logger.debug("No conflicts detected")
+
+        except Exception as e:
+            logger.debug(f"Error checking for conflicts: {e}")
+            # Silently continue - conflicts are not critical to work updates
+
     def handle_status_query(self, msg: IPCMessage):
         """Handle status query from Go daemon"""
         logger.info("📊 Status query received")

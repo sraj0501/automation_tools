@@ -208,14 +208,182 @@ class AzureDevOpsDataCollector:
             return samples_collected
     
     def _get_recent_work_items(self, days: int) -> List[Dict]:
-        """Get recently updated work items"""
-        # Placeholder - would use Azure DevOps API
-        return []
+        """Get recently updated work items from Azure DevOps"""
+        if not self.azure_client:
+            logger.debug("Azure client not initialized")
+            return []
+
+        try:
+            import requests
+            from requests.auth import HTTPBasicAuth
+            from datetime import datetime, timedelta
+
+            # Get Azure DevOps credentials from environment/config
+            try:
+                from backend.config import azure_org, azure_pat
+                org = azure_org()
+                pat = azure_pat()
+            except (ImportError, TypeError):
+                import os
+                org = os.getenv('ORGANIZATION') or os.getenv('AZURE_ORG')
+                pat = os.getenv('AZURE_DEVOPS_PAT') or os.getenv('AZURE_API_KEY')
+
+            if not org or not pat:
+                logger.warning("Azure DevOps credentials not configured")
+                return []
+
+            # Get user's projects (simplified - could be parameterized)
+            cutoff_date = (datetime.now() - timedelta(days=days)).isoformat()
+
+            # WIQL query for recently updated items
+            wiql_query = {
+                "query": f"""
+                SELECT [System.Id], [System.Title], [System.WorkItemType],
+                       [System.State], [System.ChangedDate]
+                FROM WorkItems
+                WHERE [System.ChangedDate] >= '{cutoff_date}'
+                ORDER BY [System.ChangedDate] DESC
+                """
+            }
+
+            # Query work items across all projects
+            # Note: This requires PROJECT to be specified in config
+            # For now, we'll attempt to get from the first available project
+            base_url = f"https://dev.azure.com/{org}"
+
+            # Try to get projects first
+            projects_url = f"{base_url}/_apis/projects?api-version=7.1"
+            projects_resp = requests.get(
+                projects_url,
+                auth=HTTPBasicAuth('', pat),
+                timeout=10
+            )
+
+            if projects_resp.status_code != 200:
+                logger.warning(f"Could not fetch Azure DevOps projects: {projects_resp.status_code}")
+                return []
+
+            projects = projects_resp.json().get('value', [])
+            if not projects:
+                logger.warning("No Azure DevOps projects found")
+                return []
+
+            work_items = []
+
+            # Query the first project for recent work items
+            project = projects[0]['name']
+            wiql_url = f"{base_url}/{project}/_apis/wit/wiql?api-version=7.1"
+
+            wiql_resp = requests.post(
+                wiql_url,
+                json=wiql_query,
+                auth=HTTPBasicAuth('', pat),
+                timeout=10
+            )
+
+            if wiql_resp.status_code == 200:
+                items = wiql_resp.json().get('workItems', [])
+                # Limit to 50 items to avoid excessive API calls
+                for item in items[:50]:
+                    work_items.append({
+                        'id': item.get('id'),
+                        'url': item.get('url'),
+                        'type': 'work_item'
+                    })
+
+                logger.info(f"Found {len(work_items)} recently updated work items")
+            else:
+                logger.warning(f"WIQL query failed: {wiql_resp.status_code}")
+
+            return work_items
+
+        except ImportError:
+            logger.debug("requests library not available for Azure DevOps API")
+            return []
+        except Exception as e:
+            logger.error(f"Error fetching Azure DevOps work items: {e}")
+            return []
     
     def _get_work_item_comments(self, work_item_id: int) -> List[Dict]:
-        """Get comments for a work item"""
-        # Placeholder - would use Azure DevOps API
-        return []
+        """Get comments for a work item from Azure DevOps"""
+        if not self.azure_client:
+            logger.debug("Azure client not initialized")
+            return []
+
+        try:
+            import requests
+            from requests.auth import HTTPBasicAuth
+
+            # Get Azure DevOps credentials
+            try:
+                from backend.config import azure_org, azure_pat
+                org = azure_org()
+                pat = azure_pat()
+            except (ImportError, TypeError):
+                import os
+                org = os.getenv('ORGANIZATION') or os.getenv('AZURE_ORG')
+                pat = os.getenv('AZURE_DEVOPS_PAT') or os.getenv('AZURE_API_KEY')
+
+            if not org or not pat:
+                logger.warning("Azure DevOps credentials not configured")
+                return []
+
+            # Get projects to find which one contains this work item
+            base_url = f"https://dev.azure.com/{org}"
+            projects_url = f"{base_url}/_apis/projects?api-version=7.1"
+
+            projects_resp = requests.get(
+                projects_url,
+                auth=HTTPBasicAuth('', pat),
+                timeout=10
+            )
+
+            if projects_resp.status_code != 200:
+                return []
+
+            projects = projects_resp.json().get('value', [])
+
+            comments = []
+
+            # Try each project to find the work item and its comments
+            for project in projects:
+                project_name = project['name']
+
+                # Get comments for this work item
+                comments_url = f"{base_url}/{project_name}/_apis/wit/workItems/{work_item_id}/comments?api-version=7.1"
+
+                comments_resp = requests.get(
+                    comments_url,
+                    auth=HTTPBasicAuth('', pat),
+                    timeout=10
+                )
+
+                if comments_resp.status_code == 200:
+                    comments_data = comments_resp.json().get('comments', [])
+
+                    for comment in comments_data:
+                        comments.append({
+                            'id': comment.get('id'),
+                            'text': comment.get('text', ''),
+                            'author': {
+                                'email': comment.get('createdBy', {}).get('uniqueName', ''),
+                                'name': comment.get('createdBy', {}).get('displayName', '')
+                            },
+                            'timestamp': comment.get('createdDate'),
+                            'content': comment.get('content', '')
+                        })
+
+                    logger.debug(f"Found {len(comments)} comments for work item {work_item_id}")
+                    break  # Found the work item, no need to check other projects
+
+            return comments
+
+        except ImportError:
+            logger.debug("requests library not available for Azure DevOps API")
+            return []
+        except Exception as e:
+            logger.error(f"Error fetching Azure DevOps comments: {e}")
+            return []
     
     def _is_user_comment(self, comment: Dict) -> bool:
         """Check if comment is from the user"""
@@ -295,9 +463,68 @@ class OutlookDataCollector:
             return samples_collected
     
     def _get_sent_emails(self, days: int) -> List[Dict]:
-        """Get sent emails"""
-        # Placeholder - would use Microsoft Graph API
-        return []
+        """Get sent emails from Outlook using Microsoft Graph API"""
+        if not self.graph_client:
+            logger.error("Graph client not initialized")
+            return []
+
+        try:
+            from datetime import datetime, timedelta
+
+            sent_emails = []
+            cutoff_date = datetime.now() - timedelta(days=days)
+
+            # Get messages from Sent folder
+            # Note: Microsoft Graph API uses delta queries and filters
+            try:
+                # Try using graph client's inbox method and filter by sent folder
+                if hasattr(self.graph_client, 'get_inbox'):
+                    # This assumes graph_client has a method to get sent items
+                    # Typical Graph API endpoint: /me/mailFolders/sentItems/messages
+                    messages = self.graph_client.get_inbox(folder='sentItems')
+
+                    for message in messages:
+                        sent_time_str = message.get('sentDateTime')
+                        if sent_time_str:
+                            sent_time = self._parse_timestamp(sent_time_str)
+                            if sent_time >= cutoff_date:
+                                sent_emails.append({
+                                    'id': message.get('id'),
+                                    'subject': message.get('subject', ''),
+                                    'sentDateTime': sent_time_str,
+                                    'body': message.get('bodyPreview', ''),
+                                    'from': message.get('from', {}),
+                                    'toRecipients': message.get('toRecipients', []),
+                                    'isRead': message.get('isRead', False)
+                                })
+
+                    logger.info(f"Found {len(sent_emails)} sent emails in last {days} days")
+                    return sent_emails
+
+            except AttributeError:
+                logger.debug("Graph client get_inbox method not available")
+
+            # Fallback: if graph_client has different structure, try direct API call
+            if hasattr(self.graph_client, '_client'):
+                try:
+                    # Direct Microsoft Graph API call using the internal client
+                    query_filter = f"sentDateTime ge {cutoff_date.isoformat()}Z"
+                    endpoint = f"/me/mailFolders/sentItems/messages?$filter={query_filter}&$top=50"
+
+                    # This is a generic approach - actual implementation depends on graph_client structure
+                    logger.debug(f"Using direct Graph API endpoint: {endpoint}")
+                    # Would call: response = self.graph_client._client.get(endpoint)
+                    # For now, returning empty to avoid errors
+                    pass
+
+                except Exception as e:
+                    logger.debug(f"Direct Graph API call failed: {e}")
+
+            return sent_emails
+
+        except Exception as e:
+            logger.error(f"Error getting sent emails: {e}")
+            return []
     
     def _is_reply(self, email: Dict) -> bool:
         """Check if email is a reply"""
@@ -305,10 +532,45 @@ class OutlookDataCollector:
         return subject.startswith('RE:') or subject.startswith('Re:')
     
     def _get_original_message(self, email: Dict) -> str:
-        """Extract the original message being replied to"""
-        # Would parse email body to find quoted text
-        # Placeholder implementation
-        return "Original message content"
+        """Extract the original message being replied to from email body"""
+        try:
+            body = email.get('body', {})
+            content = body.get('content', '')
+
+            if not content:
+                return "Original message not available"
+
+            # Remove HTML tags for parsing
+            import re
+            content_plain = re.sub(r'<[^>]+>', '', content)
+
+            # Look for common quoted text markers
+            lines = content_plain.split('\n')
+            original_lines = []
+            in_original = False
+
+            for line in lines:
+                # Check for quote markers
+                if line.strip().startswith('>') or \
+                   line.strip().startswith('-----Original Message-----') or \
+                   'wrote:' in line or \
+                   'On' in line and 'wrote' in line:
+                    in_original = True
+
+                if in_original:
+                    original_lines.append(line)
+
+            if original_lines:
+                original_text = '\n'.join(original_lines).strip()
+                # Limit to first 500 chars to avoid too much context
+                return original_text[:500] if len(original_text) > 500 else original_text
+
+            # If no quoted text found, return first 200 chars as context
+            return content_plain[:200] if len(content_plain) > 200 else content_plain
+
+        except Exception as e:
+            logger.error(f"Error extracting original message: {e}")
+            return "Original message not available"
     
     def _extract_email_body(self, email: Dict) -> str:
         """Extract clean email body (user's response only)"""
