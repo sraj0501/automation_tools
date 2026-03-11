@@ -282,8 +282,9 @@ func (c *IPCClient) Connect() error {
 		return nil
 	}
 
-	// Try to connect with timeout
-	conn, err := net.DialTimeout("unix", c.socketPath, 5*time.Second)
+	// Try to connect with timeout from config
+	timeoutSecs := GetIPCConnectTimeoutSecs()
+	conn, err := net.DialTimeout("unix", c.socketPath, time.Duration(timeoutSecs)*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to connect to IPC server: %w", err)
 	}
