@@ -90,6 +90,7 @@ var requiredEnvVars = []string{
 	"DEVTRACK_HOME",
 	"IPC_HOST",
 	"IPC_PORT",
+	"IPC_CONNECT_TIMEOUT_SECS",
 	"PYTHON_BRIDGE_SCRIPT",
 	"CLI_BINARY_NAME",
 	"CONFIG_FILE_NAME",
@@ -682,4 +683,20 @@ func GetDevTrackBuildDate() string {
 		os.Exit(1)
 	}
 	return config.DevTrackBuildDate
+}
+
+// GetIPCConnectTimeoutSecs returns the IPC connection timeout in seconds
+// REQUIRED: IPC_CONNECT_TIMEOUT_SECS must be set in .env
+func GetIPCConnectTimeoutSecs() int {
+	val := os.Getenv("IPC_CONNECT_TIMEOUT_SECS")
+	if val == "" {
+		fmt.Fprintf(os.Stderr, "ERROR: IPC_CONNECT_TIMEOUT_SECS not set in .env\n")
+		os.Exit(1)
+	}
+	secs := mustParseInt("IPC_CONNECT_TIMEOUT_SECS", val)
+	if secs <= 0 {
+		fmt.Fprintf(os.Stderr, "ERROR: IPC_CONNECT_TIMEOUT_SECS must be > 0, got: %d\n", secs)
+		os.Exit(1)
+	}
+	return secs
 }

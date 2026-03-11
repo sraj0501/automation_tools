@@ -310,3 +310,171 @@ def github_owner() -> str:
 def github_repo() -> str:
     """Default GitHub repo name (for PR queries). Leave empty to query all repos."""
     return get("GITHUB_REPO", "")
+
+
+# --- Timeouts & Delays (NO DEFAULTS - REQUIRED ENV VARS) ---
+
+def ipc_connect_timeout_secs() -> int:
+    """IPC connection timeout in seconds. REQUIRED: IPC_CONNECT_TIMEOUT_SECS."""
+    val = get("IPC_CONNECT_TIMEOUT_SECS")
+    if not val:
+        raise ValueError("IPC_CONNECT_TIMEOUT_SECS environment variable required (e.g., 5)")
+    try:
+        secs = int(val)
+        if secs <= 0:
+            raise ValueError(f"IPC_CONNECT_TIMEOUT_SECS must be > 0, got {secs}")
+        return secs
+    except ValueError as e:
+        raise ValueError(f"IPC_CONNECT_TIMEOUT_SECS must be integer: {e}")
+
+
+def http_timeout_short() -> int:
+    """HTTP timeout for quick requests in seconds. REQUIRED: HTTP_TIMEOUT_SHORT."""
+    val = get("HTTP_TIMEOUT_SHORT")
+    if not val:
+        raise ValueError("HTTP_TIMEOUT_SHORT environment variable required (e.g., 10)")
+    try:
+        secs = int(val)
+        if secs <= 0:
+            raise ValueError(f"HTTP_TIMEOUT_SHORT must be > 0, got {secs}")
+        return secs
+    except ValueError as e:
+        raise ValueError(f"HTTP_TIMEOUT_SHORT must be integer: {e}")
+
+
+def http_timeout() -> int:
+    """HTTP timeout for standard requests in seconds. REQUIRED: HTTP_TIMEOUT."""
+    val = get("HTTP_TIMEOUT")
+    if not val:
+        raise ValueError("HTTP_TIMEOUT environment variable required (e.g., 30)")
+    try:
+        secs = int(val)
+        if secs <= 0:
+            raise ValueError(f"HTTP_TIMEOUT must be > 0, got {secs}")
+        return secs
+    except ValueError as e:
+        raise ValueError(f"HTTP_TIMEOUT must be integer: {e}")
+
+
+def http_timeout_long() -> int:
+    """HTTP timeout for long-running requests in seconds. REQUIRED: HTTP_TIMEOUT_LONG."""
+    val = get("HTTP_TIMEOUT_LONG")
+    if not val:
+        raise ValueError("HTTP_TIMEOUT_LONG environment variable required (e.g., 60)")
+    try:
+        secs = int(val)
+        if secs <= 0:
+            raise ValueError(f"HTTP_TIMEOUT_LONG must be > 0, got {secs}")
+        return secs
+    except ValueError as e:
+        raise ValueError(f"HTTP_TIMEOUT_LONG must be integer: {e}")
+
+
+def ipc_retry_delay_ms() -> int:
+    """IPC retry delay in milliseconds. REQUIRED: IPC_RETRY_DELAY_MS."""
+    val = get("IPC_RETRY_DELAY_MS")
+    if not val:
+        raise ValueError("IPC_RETRY_DELAY_MS environment variable required (e.g., 2000)")
+    try:
+        ms = int(val)
+        if ms < 0:
+            raise ValueError(f"IPC_RETRY_DELAY_MS must be >= 0, got {ms}")
+        return ms
+    except ValueError as e:
+        raise ValueError(f"IPC_RETRY_DELAY_MS must be integer: {e}")
+
+
+def llm_request_timeout() -> int:
+    """LLM request timeout in seconds. REQUIRED: LLM_REQUEST_TIMEOUT_SECS."""
+    val = get("LLM_REQUEST_TIMEOUT_SECS")
+    if not val:
+        raise ValueError("LLM_REQUEST_TIMEOUT_SECS environment variable required (e.g., 120)")
+    try:
+        secs = int(val)
+        if secs <= 0:
+            raise ValueError(f"LLM_REQUEST_TIMEOUT_SECS must be > 0, got {secs}")
+        return secs
+    except ValueError as e:
+        raise ValueError(f"LLM_REQUEST_TIMEOUT_SECS must be integer: {e}")
+
+
+def sentiment_analysis_window_minutes() -> int:
+    """Sentiment analysis time window in minutes. REQUIRED: SENTIMENT_ANALYSIS_WINDOW_MINUTES."""
+    val = get("SENTIMENT_ANALYSIS_WINDOW_MINUTES")
+    if not val:
+        raise ValueError("SENTIMENT_ANALYSIS_WINDOW_MINUTES environment variable required (e.g., 120)")
+    try:
+        mins = int(val)
+        if mins <= 0:
+            raise ValueError(f"SENTIMENT_ANALYSIS_WINDOW_MINUTES must be > 0, got {mins}")
+        return mins
+    except ValueError as e:
+        raise ValueError(f"SENTIMENT_ANALYSIS_WINDOW_MINUTES must be integer: {e}")
+
+
+# --- LM Studio & Ollama Hosts (NO DEFAULTS) ---
+
+def lmstudio_host() -> str:
+    """LM Studio API base URL. REQUIRED: LMSTUDIO_HOST."""
+    val = get("LMSTUDIO_HOST")
+    if not val:
+        raise ValueError("LMSTUDIO_HOST environment variable required (e.g., http://localhost:1234/v1)")
+    return val
+
+
+# Remove defaults from ollama_host - make it required
+def _orig_ollama_host_with_default() -> str:
+    """Original with default - kept for backward compat during migration."""
+    return get("OLLAMA_HOST", "http://localhost:11434")
+
+
+# --- Model Names (NO DEFAULTS) ---
+
+def git_sage_default_model() -> str:
+    """Git Sage default model name. REQUIRED: GIT_SAGE_DEFAULT_MODEL."""
+    val = get("GIT_SAGE_DEFAULT_MODEL")
+    if not val:
+        raise ValueError("GIT_SAGE_DEFAULT_MODEL environment variable required (e.g., llama3)")
+    return val
+
+
+def prompt_timeout_simple() -> int:
+    """Simple prompt timeout in seconds. REQUIRED: PROMPT_TIMEOUT_SIMPLE_SECS."""
+    val = get("PROMPT_TIMEOUT_SIMPLE_SECS")
+    if not val:
+        raise ValueError("PROMPT_TIMEOUT_SIMPLE_SECS environment variable required (e.g., 30)")
+    try:
+        secs = int(val)
+        if secs <= 0:
+            raise ValueError(f"PROMPT_TIMEOUT_SIMPLE_SECS must be > 0, got {secs}")
+        return secs
+    except ValueError as e:
+        raise ValueError(f"PROMPT_TIMEOUT_SIMPLE_SECS must be integer: {e}")
+
+
+def prompt_timeout_work() -> int:
+    """Work update prompt timeout in seconds. REQUIRED: PROMPT_TIMEOUT_WORK_SECS."""
+    val = get("PROMPT_TIMEOUT_WORK_SECS")
+    if not val:
+        raise ValueError("PROMPT_TIMEOUT_WORK_SECS environment variable required (e.g., 60)")
+    try:
+        secs = int(val)
+        if secs <= 0:
+            raise ValueError(f"PROMPT_TIMEOUT_WORK_SECS must be > 0, got {secs}")
+        return secs
+    except ValueError as e:
+        raise ValueError(f"PROMPT_TIMEOUT_WORK_SECS must be integer: {e}")
+
+
+def prompt_timeout_task() -> int:
+    """Task description prompt timeout in seconds. REQUIRED: PROMPT_TIMEOUT_TASK_SECS."""
+    val = get("PROMPT_TIMEOUT_TASK_SECS")
+    if not val:
+        raise ValueError("PROMPT_TIMEOUT_TASK_SECS environment variable required (e.g., 120)")
+    try:
+        secs = int(val)
+        if secs <= 0:
+            raise ValueError(f"PROMPT_TIMEOUT_TASK_SECS must be > 0, got {secs}")
+        return secs
+    except ValueError as e:
+        raise ValueError(f"PROMPT_TIMEOUT_TASK_SECS must be integer: {e}")
