@@ -70,27 +70,30 @@ class GitDiffAnalyzer:
         """
         try:
             # Get the diff for this commit
+            from backend.config import http_timeout_short
+            timeout_secs = http_timeout_short()
+
             result = subprocess.run(
                 ["git", "show", "--stat", "--format=", commit_hash],
                 cwd=repo_path,
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=timeout_secs
             )
-            
+
             if result.returncode != 0:
                 logger.error(f"Failed to get diff: {result.stderr}")
                 return None
-                
+
             stat_output = result.stdout.strip()
-            
+
             # Also get actual code changes (limited to avoid huge diffs)
             result = subprocess.run(
                 ["git", "show", "--format=", "--unified=3", commit_hash],
                 cwd=repo_path,
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=timeout_secs
             )
             
             if result.returncode != 0:
@@ -153,10 +156,11 @@ class GitDiffAnalyzer:
                 """
 
             from backend.llm.base import LLMOptions
+            from backend.config import http_timeout
             analysis_text = self._get_provider().generate(
                 prompt=prompt,
                 options=LLMOptions(temperature=0.3, max_tokens=200),
-                timeout=30,
+                timeout=http_timeout(),
             )
 
             if not analysis_text:

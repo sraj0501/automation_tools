@@ -138,10 +138,11 @@ KEYWORDS: API, REST, endpoints, user-management
 Now enhance this input:"""
 
         from backend.llm.base import LLMOptions
+        from backend.config import http_timeout
         response_text = self._get_provider().generate(
             prompt=prompt,
             options=LLMOptions(temperature=0.3, max_tokens=300),
-            timeout=30,
+            timeout=http_timeout(),
         )
 
         if not response_text:
