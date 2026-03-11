@@ -23,6 +23,13 @@ from spacy.tokens import Doc
 # Set up logging
 logger = logging.getLogger(__name__)
 
+# Try to import work update enhancer
+try:
+    from backend.work_update_enhancer import get_work_context
+    HAS_WORK_ENHANCER = True
+except ImportError:
+    HAS_WORK_ENHANCER = False
+
 # Try to load spaCy model
 try:
     nlp = spacy.load("en_core_web_sm")
@@ -45,10 +52,13 @@ class ParsedTask:
     status: Optional[str] = None
     entities: Dict[str, List[str]] = None
     confidence: float = 0.0
-    
+    git_context: Optional[Dict] = None  # NEW: Git branch/PR context
+
     def __post_init__(self):
         if self.entities is None:
             self.entities = {}
+        if self.git_context is None:
+            self.git_context = {}
     
     def to_dict(self) -> Dict:
         """Convert to dictionary"""
@@ -62,7 +72,8 @@ class ParsedTask:
             "time_spent": self.time_spent,
             "status": self.status,
             "entities": self.entities,
-            "confidence": self.confidence
+            "confidence": self.confidence,
+            "git_context": self.git_context
         }
 
 
@@ -167,51 +178,75 @@ class NLPTaskParser:
         ]
         self.matcher.add("FIXED", [fixed_pattern])
     
-    def parse(self, text: str) -> ParsedTask:
+    def parse(self, text: str, repo_path: str = ".") -> ParsedTask:
         """
         Parse natural language text to extract task information
-        
+
         Args:
             text: The text to parse
-            
+            repo_path: Path to git repo for context extraction (optional)
+
         Returns:
             ParsedTask object with extracted information
         """
         logger.info(f"Parsing text: {text}")
-        
+
         # Create parsed task
         task = ParsedTask(raw_text=text)
-        
+
+        # Extract git context (branch, PR metadata, changes)
+        if HAS_WORK_ENHANCER:
+            try:
+                task.git_context = get_work_context(repo_path) or {}
+                if task.git_context.get('branch'):
+                    logger.debug(f"Git context: {task.git_context.get('branch')}")
+            except Exception as e:
+                logger.debug(f"Error getting git context: {e}")
+                task.git_context = {}
+
         # Process with spaCy
         doc = nlp(text)
-        
+
         # Extract ticket numbers
         task.ticket_id = self._extract_ticket_number(text)
-        
+
+        # Try to extract ticket from git context (PR number)
+        if not task.ticket_id and task.git_context.get('branch'):
+            pr_number = task.git_context['branch'].get('issue_number')
+            if pr_number:
+                task.ticket_id = pr_number
+                logger.debug(f"Extracted ticket from git context: {task.ticket_id}")
+
         # Extract time information
         time_info = self._extract_time(text)
         task.time_estimate = time_info.get('estimate')
         task.time_spent = time_info.get('spent')
-        
+
         # Extract action verb and status
         action, status = self._extract_action_and_status(doc, text)
         task.action_verb = action
         task.status = status or 'in_progress'  # Default status
-        
+
         # Extract entities
         task.entities = self._extract_entities(doc)
-        
+
         # Extract project name
         task.project = self._extract_project(text, doc, task.entities)
-        
+
         # Extract description
         task.description = self._extract_description(text, doc, task)
-        
+
+        # Enhance description with git context if available
+        if task.git_context.get('branch') and task.description:
+            branch_info = task.git_context['branch'].get('branch', '')
+            if branch_info and branch_info not in task.description:
+                task.description = f"{task.description} (on {branch_info})"
+
         # Calculate confidence
         task.confidence = self._calculate_confidence(task)
-        
+
         logger.info(f"Parsed result: {task.to_dict()}")
-        
+
         return task
     
     def _extract_ticket_number(self, text: str) -> Optional[str]:

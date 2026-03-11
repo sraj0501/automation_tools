@@ -2,12 +2,24 @@
 
 > An intelligent system that automates developer timesheet tracking, task management, and progress reporting through Git monitoring and AI-powered natural language processing.
 
-## �� Documentation
+## Documentation Hub
 
-**All comprehensive documentation has been moved to the Wiki:**
+Start here to find what you need:
 
-- **[📖 Complete Wiki](wiki/index.html)** - Full documentation with all features, architecture, commands, and guides
-- **[🔒 Privacy Policy](wiki/privacy.html)** - Detailed privacy and security information
+| Purpose | Documentation |
+|---------|---|
+| **New to DevTrack?** | Read [Getting Started](docs/GETTING_STARTED.md) |
+| **Setup & Installation** | See [Installation Guide](docs/INSTALLATION.md) |
+| **Understanding the vision** | Check [Vision & Roadmap](docs/VISION.md) |
+| **How it works** | Read [Architecture Overview](docs/ARCHITECTURE.md) |
+| **Using DevTrack** | See [Quick Start Guide](docs/QUICK_START.md) |
+| **Git workflow tools** | Check [Git Features](docs/GIT_FEATURES.md) & [Commit Workflow](GIT_COMMIT_WORKFLOW.md) |
+| **LLM Configuration** | Read [LLM Guide](docs/LLM_GUIDE.md) |
+| **Phase Status** | See [Roadmap & Phases](docs/PHASES.md) |
+| **Development Guide** | Check [CLAUDE.md](CLAUDE.md) (for developers) |
+| **All Documentation** | See [Complete Index](docs/INDEX.md) |
+
+---
 
 ## Quick Overview
 
@@ -21,205 +33,77 @@ DevTrack combines background process automation with AI intelligence to:
 - Generate professional reports for managers and stakeholders
 - Track time and productivity without manual timesheet entry
 
-## Installation Options
+## Configuration Required
 
-> **📘 New to local setup?** See the complete [Local Setup Guide](LOCAL_SETUP.md) for step-by-step instructions from scratch.
+DevTrack requires **explicit configuration** with no hardcoded defaults. All configuration comes from a single `.env` file with **12 required variables**:
 
-### Option 1: Local/Manual Installation (Recommended for Development)
-
-Run DevTrack natively on your system without Docker for faster iteration and easier debugging.
-
-#### Prerequisites
-- **Go** 1.20+ ([Download](https://go.dev/dl/))
-- **Python** 3.12+ with **uv** package manager ([Install uv](https://github.com/astral-sh/uv))
-- **Git** (for repository monitoring)
-- **Ollama** (optional, for AI features) ([Download](https://ollama.com/download))
-
-#### Setup Steps
-
-1. **Clone and configure**:
-   ```bash
-   git clone https://github.com/yourusername/automation_tools.git
-   cd automation_tools
-   
-   # Copy and configure environment
-   cp .env_sample .env
-   # Edit .env - set PROJECT_ROOT to your repo path
-   ```
-
-2. **Install Python dependencies**:
-   ```bash
-   # uv automatically creates and manages virtual environment
-   uv sync
-   ```
-
-3. **Build the Go binary**:
-   ```bash
-   cd devtrack-bin
-   go build -o devtrack .
-   
-   # Optional: Install globally
-   mv devtrack ~/.local/bin/
-   # Add to PATH if not already: export PATH="$HOME/.local/bin:$PATH"
-   ```
-
-4. **Set up environment** (add to `~/.bashrc` or `~/.zshrc`):
-   ```bash
-   export PROJECT_ROOT="/path/to/automation_tools"
-   ```
-
-5. **Start the daemon**:
-   ```bash
-   # Navigate to the repository you want to monitor
-   cd ~/path/to/your/project
-   
-   # Start daemon (runs in background)
-   devtrack start &
-   disown
-   
-   # Check status
-   devtrack status
-   ```
-
-
-#### Key Configuration (.env file)
-
-All configuration is centralized in `.env` with **no hardcoded defaults or fallback locations**.
-
-**How DevTrack finds your .env file:**
-
-- If the `DEVTRACK_ENV_FILE` environment variable is set, DevTrack will load the .env file from that path.
-- If not set, DevTrack will only look for `.env` in the current working directory.
-- If neither is found, DevTrack will exit with an error.
-
-**Example:**
-```sh
-export DEVTRACK_ENV_FILE=/absolute/path/to/your/.env
-~/.local/bin/devtrack
+```bash
+# Copy and configure (MUST set all variables)
+cp .env_sample .env
+nano .env  # Edit with YOUR paths and settings
 ```
 
-See `.env_sample` for a template of all required variables.
+**Required variables** (no defaults - must be set):
+- Timeouts: `IPC_CONNECT_TIMEOUT_SECS`, `HTTP_TIMEOUT_SHORT`, `HTTP_TIMEOUT`, `HTTP_TIMEOUT_LONG`
+- Hosts: `OLLAMA_HOST`, `LMSTUDIO_HOST`
+- Model: `GIT_SAGE_DEFAULT_MODEL`
+- Delays: `IPC_RETRY_DELAY_MS`
+- Prompts: `PROMPT_TIMEOUT_SIMPLE_SECS`, `PROMPT_TIMEOUT_WORK_SECS`, `PROMPT_TIMEOUT_TASK_SECS`
+- LLM: `LLM_REQUEST_TIMEOUT_SECS`
+- Sentiment: `SENTIMENT_ANALYSIS_WINDOW_MINUTES`
 
-Validate `.env_sample` matches required runtime env keys:
-```sh
-python validate_env_sample.py
+See [Configuration Reference](docs/CONFIGURATION.md) for complete list with examples.
+
+## 30-Second Start
+
+```bash
+# 1. Clone and configure (MUST do this)
+git clone https://github.com/yourusername/automation_tools.git
+cd automation_tools
+cp .env_sample .env
+nano .env  # IMPORTANT: Set all required variables!
+
+# 2. Install dependencies
+uv sync
+
+# 3. Build the Go daemon
+cd devtrack-bin && go build -o devtrack .
+mv devtrack ~/.local/bin/
+
+# 4. Start monitoring
+devtrack start &
+devtrack status
+
+# 5. Make a commit - see AI magic
+git commit -m "Working on auth feature (2h)"
 ```
 
-#### Local Installation Benefits
-- ✅ Faster startup and iteration
-- ✅ Native filesystem access (no Docker overhead)
-- ✅ Easier debugging with direct log access
-- ✅ Uses uv for fast dependency management
-- ✅ Full Python 3.12 compatibility with spaCy NLP
+**Note**: Daemon will fail at startup if any required variables are missing (this is intentional for safety).
+
+For detailed setup, see [Installation Guide](docs/INSTALLATION.md) and [Configuration Reference](docs/CONFIGURATION.md).
 
 ---
 
-### Option 2: Containerized Setup (Cross-Platform)
+## Core Features
 
-This workflow runs the full stack on macOS, Windows (PowerShell, WSL, or Git Bash), and Linux with the same commands.
+### Git Workflow Enhancement (Phases 1-3)
+- **Enhanced Commit Messages**: AI-powered context-aware commit messages with branch/PR information
+- **Conflict Resolution**: Automatic merge conflict detection and smart resolution
+- **Work Update Parsing**: Natural language work updates with PR/issue auto-detection
+- **Daily Reports**: AI-enhanced daily and weekly report generation
 
-1. Copy `.env_sample` to `.env` and set `DEVTRACK_WORKSPACE` to the host path you want mounted at `/workspace`. Relative paths (default `.`) resolve to the repository root and work on every OS. Use Windows-style paths (e.g., `C:\Users\you\Projects\automation_tools`) when running from PowerShell.
-2. Enable BuildKit for faster incremental builds:
+### AI-Powered Processing
+- **Local-First**: 100% offline-capable with Ollama (no external AI required)
+- **Hybrid LLM**: Optional integration with OpenAI, Anthropic, or custom LLMs
+- **NLP Parsing**: spaCy-based natural language processing for task extraction
+- **Learning**: Personalized AI that learns from your communication style
 
-     ```bash
-     DOCKER_BUILDKIT=1 docker buildx build --load .
-     ```
+### Integrations
+- **Project Management**: Azure DevOps, GitHub, Jira
+- **Communication**: Microsoft Teams, Outlook
+- **Task Tracking**: Automatic updates to linked tasks and stories
 
-3. Install and run [Ollama](https://ollama.com/download) locally on your host machine. Keep it listening on `11434` (or set `OLLAMA_HOST` in `.env` to match your custom port/URL). The container reaches the host via `host.docker.internal`, which is mapped automatically for Linux, macOS, and Windows.
-
-     ```bash
-     # host shell
-     ollama serve
-     ```
-
-4. Launch the DevTrack container (it will call the host's Ollama endpoint):
-
-     ```bash
-     docker compose up devtrack
-     ```
-
-Bind mounts now rely on the portable `DEVTRACK_WORKSPACE` variable, so no OS-specific path rewriting or WSL hacks are required.
-
-## System Architecture
-
-\`\`\`
-Git Activity/Timer → Go Daemon → Python AI Layer → Project Management APIs
-                         ↓              ↓
-                    SQLite Cache    NLP Processing
-                         ↓              ↓
-                    Local Storage   Task Matching → Email Reports
-\`\`\`
-
-### Core Components
-- **Go Background Engine**: Lightweight daemon for Git monitoring and scheduling
-- **Python Intelligence Layer**: NLP processing, API integrations, and user interactions
-- **Local Storage**: SQLite for offline support and caching
-- **Multiple Integrations**: Azure DevOps, GitHub, Microsoft Graph, Jira
-
-## Quick Start
-
-Choose your installation method above, then use these commands:
-
-### Using Local Installation
-
-```bash
-# Navigate to a Git repository you want to monitor
-cd ~/path/to/your/project
-
-# Start daemon in background
-devtrack start &
-disown
-
-# Check status and view configuration
-devtrack status
-
-# View recent logs
-devtrack logs
-
-# Make a commit with task info for NLP parsing
-git commit -m "Working on #PROJ-123 - Fixed authentication bug (2h)"
-
-# Check logs to see NLP parsing results
-tail -f ~/.devtrack/daemon.log
-
-# Stop daemon
-devtrack stop
-```
-
-### Using Docker
-
-```bash
-# Start containerized daemon
-docker compose up devtrack -d
-
-# Check logs
-docker compose logs devtrack -f
-
-# Stop container
-docker compose down
-```
-
-### Common Commands
-
-```bash
-# Daemon Control
-devtrack start              # Start monitoring
-devtrack stop               # Stop daemon
-devtrack restart            # Restart with new config
-devtrack status             # Show running status
-
-# Scheduler Control
-devtrack pause              # Pause scheduled triggers
-devtrack resume             # Resume scheduler
-devtrack force-trigger      # Trigger immediately
-devtrack skip-next          # Skip next scheduled trigger
-
-# Information
-devtrack logs               # View recent logs
-devtrack db-stats           # Database statistics
-devtrack version            # Version information
-devtrack help               # Full command list
-```
+---
 
 ## Technology Stack
 
@@ -242,139 +126,164 @@ devtrack help               # Full command list
 - Azure DevOps REST API
 - Microsoft Graph API (Teams, Email, Lists)
 - GitHub API
-- Jira API (planned)
+- Jira API
 
-### Configuration
-- **.env file**: Zero-fallback configuration (16 required variables)
-- All paths, ports, and file names customizable
-- No hardcoded values - explicit configuration enforced
+---
+
+## Project Status
+
+**Current Phase**: Phase 3 Complete (Advanced Features - In Progress)
+**Overall Progress**: ~85% Complete
+
+### Completed Phases
+- **Phase 1**: Enhanced Commit Messages ✅
+- **Phase 2**: Conflict Resolution & PR-Aware Parsing ✅
+- **Phase 3**: Event-Driven Integration ✅
+
+### Current Phase (Phase 4+)
+- Enhanced Integrations and advanced features
+- Dashboard and analytics
+- Mobile notifications
+- Plugin system
+
+For detailed phase information, see [Roadmap & Phases](docs/PHASES.md).
+
+---
+
+## Installation Options
+
+### Option 1: Local Installation (Recommended for Development)
+
+Run DevTrack natively on your system without Docker for faster iteration and easier debugging.
+
+**Prerequisites**:
+- Go 1.20+ ([Download](https://go.dev/dl/))
+- Python 3.12+ with uv package manager ([Install uv](https://github.com/astral-sh/uv))
+- Git (for repository monitoring)
+- Ollama (optional, for AI features) ([Download](https://ollama.com/download))
+
+**Setup**:
+```bash
+git clone https://github.com/yourusername/automation_tools.git
+cd automation_tools
+cp .env_sample .env
+# Edit .env - set PROJECT_ROOT to your repo path
+uv sync
+cd devtrack-bin && go build -o devtrack .
+mv devtrack ~/.local/bin/
+devtrack start &
+```
+
+See [Installation Guide](docs/INSTALLATION.md) for complete step-by-step instructions.
+
+### Option 2: Containerized Setup (Cross-Platform)
+
+This workflow runs the full stack on macOS, Windows, and Linux with the same commands.
+
+```bash
+# Copy .env_sample to .env and configure
+cp .env_sample .env
+
+# Start Ollama on host machine
+ollama serve
+
+# Launch DevTrack container
+DOCKER_BUILDKIT=1 docker compose up devtrack
+```
+
+---
 
 ## Privacy & Security
 
 DevTrack is built with privacy as a core principle:
 - All data stored locally on your machine
-- No cloud AI services (uses local Ollama)
+- No cloud AI services by default (uses local Ollama)
 - Explicit consent required for AI learning features
 - Complete transparency about data collection
 - Full data deletion option available anytime
 
-For complete details, see the **[Privacy Policy](wiki/privacy.html)**.
+---
+
+## Common Commands
+
+```bash
+# Daemon Control
+devtrack start              # Start monitoring
+devtrack stop               # Stop daemon
+devtrack restart            # Restart with new config
+devtrack status             # Show running status
+
+# Scheduler Control
+devtrack pause              # Pause scheduled triggers
+devtrack resume             # Resume scheduler
+devtrack force-trigger      # Trigger immediately
+devtrack skip-next          # Skip next scheduled trigger
+
+# Information
+devtrack logs               # View recent logs
+devtrack db-stats           # Database statistics
+devtrack version            # Version information
+devtrack help               # Full command list
+```
+
+---
 
 ## Troubleshooting
 
-### Local Installation Issues
-
-**Python version compatibility:**
+### Python Version Issues
 ```bash
 # DevTrack requires Python 3.12 or 3.13 (not 3.14+)
 python3 --version
 
-# If using Python 3.14, uv will automatically downgrade
-# based on pyproject.toml settings
+# If using Python 3.14, uv will automatically downgrade based on pyproject.toml
 ```
 
-**spaCy NLP model not found:**
+### spaCy NLP Model Not Found
 ```bash
-# Install spaCy language model
 uv run python -m spacy download en_core_web_sm
 ```
 
-**Daemon won't start:**
+### Daemon Won't Start
 ```bash
 # Check logs for errors
 tail -50 ~/.devtrack/daemon.log
 
-# Verify .env file exists and PROJECT_ROOT is set
+# Verify .env file exists
 cat .env | grep PROJECT_ROOT
-
-# Ensure binary is in PATH
-which devtrack
 
 # Check if port is already in use
 lsof -i :35893
 ```
 
-**Git commits not detected:**
-```bash
-# Verify daemon is running in correct repository
-devtrack status
+See [Troubleshooting Guide](docs/TROUBLESHOOTING.md) for more solutions.
 
-# Check git monitor is active
-tail ~/.devtrack/daemon.log | grep "Git monitor"
-
-# Ensure you're making commits in the monitored repo
-```
-
-**IPC connection errors:**
-```bash
-# Check IPC configuration in .env
-grep IPC .env
-
-# Verify no firewall blocking localhost:35893
-# Restart daemon after .env changes
-devtrack restart
-```
-
-## Project Status
-
-**Current Phase**: Phase 6 (Production Ready) - In Progress  
-**Overall Progress**: ~85% Complete
-
-**Phase 5 Achievements (Advanced Features - 75% Complete):**
-- ✅ AI-enhanced daily report generation with Ollama
-- ✅ Multiple output formats (Terminal, Text, HTML, Markdown, JSON)
-- ✅ Weekly report generation capability
-- ✅ Automatic end-of-day detection and prompting
-- ✅ Report saving and email integration
-- ✅ Git wrapper with AI-enhanced commits (`devtrack git commit`)
-- ✅ Commit message enhancer and git diff analyzer
-- ✅ Analytics via `devtrack stats` command
-- 🔄 Dashboard, mobile notifications, plugin system (planned)
-
-**Phase 4 Achievements (Enhanced Integrations - 80% Complete):**
-- ✅ Azure DevOps integration (work items, updates, stories)
-- ✅ Microsoft Graph integration (Teams, Email, sentiment analysis)
-- ✅ GitHub integration (repository analysis, branch analyzer)
-- ✅ Task matcher with fuzzy and semantic matching
-- ✅ Learning integration for personalized AI
-- 🔄 Jira integration (structure in place, pending implementation)
-
-**Phase 3 Achievements (AI Intelligence - 90% Complete):**
-- ✅ TUI user prompts for work updates
-- ✅ spaCy NLP parsing for task extraction
-- ✅ Ollama description enhancement and categorization
-- ✅ Personalized AI learning from communications
-- ✅ Full timer trigger workflow integration
-- ✅ Automated email report generation
-
-**Next Steps:**
-- Complete Jira integration (Phase 4)
-- Cross-platform testing (Windows, Linux)
-- Performance optimization and security hardening
-- Dashboard and mobile notifications
-
-See the [Roadmap section in the Wiki](wiki/index.html#roadmap) and [Implementation Plan](docs/IMPLEMENTATION_PLAN.md) for detailed status.
+---
 
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch (\`git checkout -b feature/amazing-feature\`)
-3. Commit your changes (\`git commit -m 'Add amazing feature'\`)
-4. Push to the branch (\`git push origin feature/amazing-feature\`)
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## License
+For development setup and architecture details, see [CLAUDE.md](CLAUDE.md).
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+---
 
 ## Support
 
-- **Documentation**: [Complete Wiki](wiki/index.html)
+- **Documentation**: [Complete Documentation Index](docs/INDEX.md)
+- **Architecture**: [System Architecture](docs/ARCHITECTURE.md)
 - **Issues**: [GitHub Issues](https://github.com/sraj0501/automation_tools/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/sraj0501/automation_tools/discussions)
 
 ---
 
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+---
+
 **Note**: This tool is designed for individual and team productivity enhancement. Ensure you have appropriate licenses and permissions for all integrated services.
-# Test interactive feedback
-# Testing descriptive commit messages with reasoning

@@ -142,15 +142,45 @@ Stored at `~/.config/git-sage/config.json`. Supports: `ollama`, `openai`, `lmstu
 
 ---
 
+## Advanced Features (New!)
+
+### ✨ Intelligent Conflict Resolution
+- **Analyzes** conflict markers to understand both sides
+- **Auto-resolves** when safe (addition-only, adjacent changes, identical)
+- **Merges intelligently** for non-overlapping changes
+- **Reports** unresolvable conflicts with context
+
+### 📊 PR/MR Utilities
+- Extract metadata from branch names
+- Suggest PR titles and descriptions
+- Analyze diff statistics (files, additions, deletions)
+- Find related commits and issues
+
+### 🔧 Advanced Git Operations
+- **Branch**: list, delete, check tracking, estimate merge complexity
+- **Commits**: log, blame, find by message pattern
+- **Status**: clean check, file status by type
+- **Merge**: estimate complexity, suggest merge base
+- **Stash**: list and manage stashed changes
+
 ## Architecture
 
 ```
 git_sage/
-├── cli.py       # ask + do + interactive modes
-├── agent.py     # agentic loop: plan → execute → verify → recover
-├── llm.py       # Ollama + OpenAI-compatible backends
-├── context.py   # repo state collector
-└── config.py    # config wizard + persistence
+├── cli.py              # ask + do + interactive modes
+├── agent.py            # agentic loop: plan → execute → verify → recover
+├── llm.py              # Ollama + OpenAI-compatible backends
+├── context.py          # repo state collector
+├── config.py           # config wizard + persistence
+├── git_operations.py   # advanced git operations (NEW!)
+├── conflict_resolver.py # intelligent conflict resolution (NEW!)
+└── pr_finder.py        # PR/MR utilities (NEW!)
 ```
 
 Zero external dependencies. All context stays local unless you configure OpenAI.
+
+## Documentation
+
+- **[INTEGRATION.md](INTEGRATION.md)** - Detailed API reference and DevTrack integration examples
+- [Configuration Guide](#configuration) - Setup and model recommendations
+- [Examples](#usage) - Common use cases and workflows

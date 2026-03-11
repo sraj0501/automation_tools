@@ -8,18 +8,25 @@ This continues until the LLM emits DONE or ABORT.
 import json
 import os
 import subprocess
-import shutil
-import tempfile
 from dataclasses import dataclass, field
 from typing import Optional
 
 from .llm import LLMBackend
 from .context import get_repo_context, format_context, run_git
+from .git_operations import GitOperations
+from .conflict_resolver import ConflictResolver, ConflictAnalyzer
+from .pr_finder import PRFinder
 
 # ─── ANSI ────────────────────────────────────────────────────────────────────
-RESET  = "\033[0m";  BOLD  = "\033[1m";   DIM   = "\033[2m"
-GREEN  = "\033[92m"; YELLOW= "\033[93m";  CYAN  = "\033[96m"
-RED    = "\033[91m"; MAGENTA="\033[95m";  BLUE  = "\033[94m"
+RESET  = "\033[0m"
+BOLD  = "\033[1m"
+DIM   = "\033[2m"
+GREEN  = "\033[92m"
+YELLOW= "\033[93m"
+CYAN  = "\033[96m"
+RED    = "\033[91m"
+MAGENTA="\033[95m"
+BLUE  = "\033[94m"
 
 # ─── SYSTEM PROMPT ───────────────────────────────────────────────────────────
 AGENT_SYSTEM_PROMPT = """You are git-sage, an autonomous git agent running inside the user's terminal.
@@ -70,17 +77,30 @@ You respond with a JSON object choosing ONE action per turn:
 {"action": "abort", "reason": "Conflict in src/auth.py is ambiguous — both versions add different logic. Manual resolution required."}
 ```
 
+## Conflict Resolution Guide
+
+When resolving conflicts:
+1. **Read the conflicted file** to understand both sides
+2. **Analyze the conflict**: Is one side empty? Are changes adjacent? Do they overlap?
+3. **Apply resolution strategy**:
+   - If one side is empty: use the non-empty side
+   - If changes are adjacent (no overlap): merge both
+   - If changes overlap logically: ask the user OR use judgment
+   - If identical: use either side
+4. **Verify**: After resolving, check the file makes sense
+5. **Format properly**: Ensure proper syntax, no leftover markers
+
 ## Behavioral rules
 
 1. **Always checkpoint before destructive operations** (rebase, reset, force-push, merge with conflicts).
 2. **Read before writing** — if you need to resolve a conflict, read the file first, then write the resolved version.
 3. **Verify after each step** — after a git command, check its output. If it failed, diagnose and either retry or rollback.
 4. **Prefer safe flags** — use `--no-ff` for merges, avoid `--force` unless necessary.
-5. **Resolve conflicts yourself** when possible — read conflict markers, understand both sides, pick the right resolution. Only ask the user if the intent is genuinely unclear.
+5. **Resolve conflicts intelligently** — read conflict markers, analyze both sides, merge when safe, ask user for ambiguous cases.
 6. **One action per response** — output only the JSON object, nothing else. No markdown, no explanation outside the JSON.
 7. **Use the `reason` field** to explain your thinking — it's shown to the user as a log.
 8. **If something unexpected happens**, adapt. Don't blindly retry the same failing command.
-9. **Conflict resolution strategy**: Keep both changes unless they're logically contradictory. Prefer the incoming change for new features, prefer HEAD for bug fixes, use judgment.
+9. **Smart conflict resolution**: Prefer keeping both changes unless contradictory. For feature branches: prefer incoming. For fixes: prefer HEAD.
 10. **Never truncate file content in write_file** — write the complete file.
 
 ## Reading tool output
@@ -117,6 +137,9 @@ class GitAgent:
         self.verbose = verbose
         self.auto = auto
         self.state = AgentState(cwd=self.cwd)
+        self.git_ops = GitOperations(cwd=self.cwd)
+        self.pr_finder = PRFinder(cwd=self.cwd)
+        self.conflict_resolver = ConflictResolver(strategy="smart")
 
     # ── public entry point ──────────────────────────────────────────────────
 
@@ -287,6 +310,83 @@ class GitAgent:
         print(f"\n  {CYAN}{BOLD}❓ {question}{RESET}")
         answer = input(f"  {BOLD}your answer>{RESET} ").strip()
         return answer or "(no answer)", 0
+
+    # ── git operation helpers ────────────────────────────────────────────────
+
+    def detect_conflicts_in_repo(self) -> list[str]:
+        """Detect conflicted files using GitOperations."""
+        return self.git_ops.detect_conflicts()
+
+    def resolve_conflict_in_file(self, path: str, strategy: str = "smart") -> tuple[str, bool]:
+        """Read, analyze, and resolve conflicts in a file."""
+        try:
+            content = self.git_ops.read_conflict_file(path)
+            if "<<<<<<< " not in content:
+                return f"No conflicts found in {path}", 1
+
+            resolver = ConflictResolver(strategy=strategy)
+            resolved, has_unresolvable = resolver.resolve_file(content)
+
+            if has_unresolvable:
+                # Show what couldn't be resolved
+                unresolvable = resolver.extract_unresolvable_conflicts(content)
+                msg = f"Resolved some conflicts in {path}, but {len(unresolvable)} remain unresolvable"
+                return msg, 0  # Return 0 because we made progress
+
+            return f"Resolved all conflicts in {path}", 0
+        except Exception as e:
+            return f"Error resolving conflicts: {e}", 1
+
+    def analyze_conflict_file(self, path: str) -> str:
+        """Analyze conflicts in a file and provide summary."""
+        try:
+            content = self.git_ops.read_conflict_file(path)
+            analyzer = ConflictAnalyzer()
+            summary = analyzer.conflict_summary(content)
+            sections = analyzer.get_conflicted_sections(content)
+
+            msg = f"{summary}\n"
+            for sec in sections[:3]:  # Show first 3 conflicts
+                msg += f"\nConflict #{sec['number']}: {sec['current_lines']} vs {sec['incoming_lines']} lines\n"
+                msg += f"  From: {sec['branch_from']} → To: {sec['branch_to']}"
+
+            return msg
+        except Exception as e:
+            return f"Error analyzing conflicts: {e}"
+
+    def get_branch_info(self) -> str:
+        """Get detailed branch information."""
+        try:
+            current = self.git_ops.get_current_branch()
+            tracking = self.git_ops.check_tracking_branch()
+            ahead, behind = self.git_ops.get_ahead_behind()
+
+            msg = f"Current branch: {current}\n"
+            if tracking:
+                msg += f"Tracking: {tracking}\n"
+                msg += f"Ahead: {ahead}, Behind: {behind}"
+            return msg
+        except Exception as e:
+            return f"Error getting branch info: {e}"
+
+    def list_changes_for_pr(self) -> str:
+        """Get PR metadata and diff statistics."""
+        try:
+            metadata = self.pr_finder.suggest_pr_metadata()
+            stats = self.pr_finder.get_diff_stats()
+
+            msg = "PR Metadata:\n"
+            for key, val in metadata.items():
+                msg += f"  {key}: {val}\n"
+
+            msg += f"\nDiff Stats:\n"
+            msg += f"  Files: {stats['files']}\n"
+            msg += f"  Additions: {stats['additions']}\n"
+            msg += f"  Deletions: {stats['deletions']}"
+
+            return msg
+        except Exception as e:
+            return f"Error getting PR info: {e}"
 
     # ── display helpers ──────────────────────────────────────────────────────
 
