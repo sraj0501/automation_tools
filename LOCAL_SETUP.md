@@ -70,25 +70,37 @@ cp .env_sample .env
 nano .env  # or use your preferred editor
 ```
 
-**Required .env variables** (update paths for your system):
+**IMPORTANT: All configuration is required (NO defaults)**
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `PROJECT_ROOT` | Absolute path to automation_tools | `/home/user/automation_tools` |
-| `DEVTRACK_HOME` | DevTrack config directory | `${PROJECT_ROOT}/devtrack-bin` |
-| `DEVTRACK_WORKSPACE` | Git repo to monitor | Same as PROJECT_ROOT or your project |
-| `DATA_DIR` | Runtime data (db, logs, pids) | `${PROJECT_ROOT}/Data` |
-| `IPC_HOST` | IPC server host | `127.0.0.1` |
-| `IPC_PORT` | IPC server port | `35893` |
+Copy `.env_sample` to `.env` and set all variables. Missing any variable causes daemon to fail at startup with clear error message.
 
-**All paths are driven by .env** – no hardcoded `$HOME` or `~/.devtrack` fallbacks.
+**System paths** (required):
+- `PROJECT_ROOT` - Absolute path to automation_tools
+- `DEVTRACK_WORKSPACE` - Git repo to monitor
+- `DATA_DIR` - Runtime data directory
 
-**.env file location:**
-- DevTrack loads from `.env` in the current directory, or
-- Set `DEVTRACK_ENV_FILE` to the absolute path of your `.env` before running
-- If neither is found, DevTrack exits with an error
+**IPC configuration** (required):
+- `IPC_HOST` - IPC server host (usually `127.0.0.1`)
+- `IPC_PORT` - IPC server port (usually `35893`)
+- `IPC_CONNECT_TIMEOUT_SECS` - IPC timeout in seconds (e.g., `5`)
+- `IPC_RETRY_DELAY_MS` - IPC retry delay in milliseconds (e.g., `2000`)
 
-See `.env_sample` for the full list of variables.
+**Timeout configuration** (required - all must be set):
+- `HTTP_TIMEOUT_SHORT` - Fast operations (e.g., `10` seconds)
+- `HTTP_TIMEOUT` - Standard operations (e.g., `30` seconds)
+- `HTTP_TIMEOUT_LONG` - Long operations (e.g., `60` seconds)
+- `LLM_REQUEST_TIMEOUT_SECS` - LLM timeout (e.g., `120` seconds)
+- `PROMPT_TIMEOUT_SIMPLE_SECS` - Simple prompts (e.g., `30` seconds)
+- `PROMPT_TIMEOUT_WORK_SECS` - Work updates (e.g., `60` seconds)
+- `PROMPT_TIMEOUT_TASK_SECS` - Task descriptions (e.g., `120` seconds)
+- `SENTIMENT_ANALYSIS_WINDOW_MINUTES` - Analysis window (e.g., `120` minutes)
+
+**Host configuration** (required):
+- `OLLAMA_HOST` - Ollama server URL (e.g., `http://localhost:11434`)
+- `LMSTUDIO_HOST` - LM Studio URL (e.g., `http://localhost:1234/v1`)
+- `GIT_SAGE_DEFAULT_MODEL` - Default model (e.g., `llama3`)
+
+**See [CONFIGURATION.md](docs/CONFIGURATION.md)** for complete reference with all variables and descriptions.
 
 ### Step 3: Install Python Dependencies
 ```bash
@@ -237,10 +249,36 @@ cd devtrack-bin && go build -o devtrack .
 export PATH="$PWD/devtrack-bin:$PATH"
 ```
 
-### ".env file not found"
+### ".env file not found" or "Configuration missing"
 ```bash
 cp .env_sample .env
-# Edit .env with your paths
+# Edit .env - ALL VARIABLES ARE REQUIRED
+# Run verify to check all variables are set:
+./scripts/verify_setup.sh
+
+# Common missing variables:
+# - IPC_CONNECT_TIMEOUT_SECS
+# - HTTP_TIMEOUT_SHORT, HTTP_TIMEOUT, HTTP_TIMEOUT_LONG
+# - OLLAMA_HOST, LMSTUDIO_HOST
+# - All PROMPT_TIMEOUT_* variables
+# See docs/CONFIGURATION.md for all 12+ required variables
+```
+
+### "Configuration missing [VARIABLE_NAME]"
+This means a required environment variable is not set in `.env`. The error message tells you which one.
+
+```bash
+# 1. Check .env has the variable
+grep VARIABLE_NAME .env
+
+# 2. If missing, add it from .env_sample
+cat .env_sample | grep VARIABLE_NAME >> .env
+
+# 3. Edit to set the correct value
+nano .env
+
+# 4. Try again
+devtrack start
 ```
 
 ### "IPC connection failed" / Port 35893 in use
@@ -351,6 +389,9 @@ devtrack start
 
 ## Getting Help
 
-- **Usage**: [USAGE_GUIDE.md](USAGE_GUIDE.md)
-- **Wiki**: [wiki/index.html](wiki/index.html)
+- **Configuration**: [docs/CONFIGURATION.md](docs/CONFIGURATION.md) - All 12+ required variables
+- **Usage Guide**: [USAGE_GUIDE.md](USAGE_GUIDE.md) - Feature usage documentation
+- **Troubleshooting**: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) - Common issues and solutions
+- **Wiki/Documentation**: [docs/INDEX.md](docs/INDEX.md) - Complete documentation index
+- **Architecture**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - System design overview
 - **Logs**: `Data/logs/daemon.log` (or path from `LOG_DIR` in .env)

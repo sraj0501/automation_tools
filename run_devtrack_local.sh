@@ -59,6 +59,12 @@ else
 fi
 
 # Check 4: Verify required environment variables
+# NOTE: These are the MINIMUM required variables. Additional variables are needed:
+# - IPC_CONNECT_TIMEOUT_SECS, HTTP_TIMEOUT_SHORT, HTTP_TIMEOUT, HTTP_TIMEOUT_LONG
+# - IPC_RETRY_DELAY_MS, OLLAMA_HOST, LMSTUDIO_HOST, GIT_SAGE_DEFAULT_MODEL
+# - PROMPT_TIMEOUT_SIMPLE_SECS, PROMPT_TIMEOUT_WORK_SECS, PROMPT_TIMEOUT_TASK_SECS
+# - LLM_REQUEST_TIMEOUT_SECS, SENTIMENT_ANALYSIS_WINDOW_MINUTES
+# See docs/CONFIGURATION.md for complete list
 REQUIRED_VARS=(
     "DEVTRACK_WORKSPACE"
     "DEVTRACK_HOME"
@@ -66,6 +72,14 @@ REQUIRED_VARS=(
     "CLI_BINARY_NAME"
     "LOG_FILE_NAME"
     "PID_FILE_NAME"
+    "IPC_CONNECT_TIMEOUT_SECS"
+    "HTTP_TIMEOUT_SHORT"
+    "HTTP_TIMEOUT"
+    "HTTP_TIMEOUT_LONG"
+    "IPC_RETRY_DELAY_MS"
+    "OLLAMA_HOST"
+    "LMSTUDIO_HOST"
+    "GIT_SAGE_DEFAULT_MODEL"
 )
 
 MISSING_VARS=()
@@ -80,6 +94,7 @@ if [ ${#MISSING_VARS[@]} -gt 0 ]; then
     printf '  - %s\n' "${MISSING_VARS[@]}"
     echo ""
     echo "Please update your .env file. See .env_sample for reference."
+    echo "For complete configuration guide, see: docs/CONFIGURATION.md"
     exit 1
 fi
 
