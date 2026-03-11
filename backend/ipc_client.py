@@ -105,58 +105,58 @@ class IPCClient:
         self.listener_thread: Optional[Thread] = None
     
     def _get_socket_path(self) -> str:
-        """Get IPC server address"""
-        try:
-            from backend.config import ipc_host, ipc_port
-            return f"{ipc_host()}:{ipc_port()}"
-        except ImportError:
-            return f"{os.getenv('IPC_HOST', '127.0.0.1')}:{os.getenv('IPC_PORT', '35893')}"
+        """Get IPC server address (required: IPC_HOST, IPC_PORT from .env)"""
+        from backend.config import ipc_host, ipc_port
+        return f"{ipc_host()}:{ipc_port()}"
     
     def connect(self, timeout: int = 5, retry_count: int = 3) -> bool:
         """
         Connect to the IPC server
-        
+
         Args:
             timeout: Connection timeout in seconds
             retry_count: Number of connection retry attempts
-            
+
         Returns:
             True if connected successfully
         """
+        from backend.config import ipc_retry_delay_ms
+        retry_delay_secs = ipc_retry_delay_ms() / 1000.0
+
         for attempt in range(retry_count):
             try:
                 with self.lock:
                     if self.connected:
                         logger.info("Already connected to IPC server")
                         return True
-                    
+
                     # Create TCP socket
                     self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     self.sock.settimeout(timeout)
-                    
+
                     # Parse address:port
                     host, port = self.socket_path.split(':')
                     self.sock.connect((host, int(port)))
                     self.connected = True
-                    
+
                     logger.info(f"Connected to IPC server at {self.socket_path}")
                     return True
-                    
+
             except FileNotFoundError:
                 logger.warning(f"Socket file not found: {self.socket_path}")
                 if attempt < retry_count - 1:
                     logger.info(f"Retrying connection (attempt {attempt + 2}/{retry_count})...")
-                    time.sleep(2)
+                    time.sleep(retry_delay_secs)
             except ConnectionRefusedError:
                 logger.warning("Connection refused by IPC server")
                 if attempt < retry_count - 1:
                     logger.info(f"Retrying connection (attempt {attempt + 2}/{retry_count})...")
-                    time.sleep(2)
+                    time.sleep(retry_delay_secs)
             except Exception as e:
                 logger.error(f"Failed to connect to IPC server: {e}")
                 if attempt < retry_count - 1:
-                    time.sleep(2)
-        
+                    time.sleep(retry_delay_secs)
+
         logger.error("Failed to connect to IPC server after all retries")
         return False
     
@@ -315,7 +315,8 @@ class IPCClient:
             except Exception as e:
                 if self.running:
                     logger.error(f"Error in listen loop: {e}")
-                    time.sleep(1)
+                    from backend.config import ipc_retry_delay_ms
+                    time.sleep(ipc_retry_delay_ms() / 1000.0)
 
 
 def create_response_message(request_id: str, data: Dict[str, Any]) -> IPCMessage:

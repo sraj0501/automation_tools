@@ -29,12 +29,14 @@ class LLMBackend:
         self.model = model
         self.api_key = api_key
 
+        # Load endpoints from config (NO HARDCODED DEFAULTS)
+        from backend.config import ollama_host, lmstudio_host
         defaults = {
-            "ollama":   "http://localhost:11434",
+            "ollama":   ollama_host(),
             "openai":   "https://api.openai.com/v1",
-            "lmstudio": "http://localhost:1234/v1",
+            "lmstudio": lmstudio_host(),
         }
-        self.base_url = base_url or defaults.get(provider, "http://localhost:11434")
+        self.base_url = base_url or defaults.get(provider, ollama_host())
 
     # ── Public methods ────────────────────────────────────────────────────────
 
@@ -73,9 +75,10 @@ class LLMBackend:
         if auth and self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
+        from backend.config import llm_request_timeout
         req = urllib.request.Request(url, data=data, headers=headers, method="POST")
         try:
-            with urllib.request.urlopen(req, timeout=120) as resp:
+            with urllib.request.urlopen(req, timeout=llm_request_timeout()) as resp:
                 return json.loads(resp.read())
         except urllib.error.URLError as e:
             raise ConnectionError(

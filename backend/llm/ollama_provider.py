@@ -17,19 +17,10 @@ class OllamaProvider(LLMProvider):
     """LLM provider that dispatches to a local Ollama instance."""
 
     def __init__(self, host: Optional[str] = None, model: Optional[str] = None):
-        # Lazy config load — same pattern used by ollama_client.py
-        _host = host
-        _model = model
-        if _host is None or _model is None:
-            try:
-                from backend.config import ollama_host, ollama_model
-                _host = _host or ollama_host()
-                _model = _model or ollama_model()
-            except Exception:
-                _host = _host or "http://localhost:11434"
-                _model = _model or "llama3.2"
-        self._host = _host
-        self._model = _model
+        # Load from config (REQUIRED: OLLAMA_HOST, OLLAMA_MODEL in .env)
+        from backend.config import ollama_host, ollama_model
+        self._host = host or ollama_host()
+        self._model = model or ollama_model()
 
     @property
     def provider_name(self) -> str:
