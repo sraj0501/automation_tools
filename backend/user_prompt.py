@@ -303,9 +303,10 @@ class DevTrackTUI:
             True for yes, False for no
         """
         default_str = "Y/n" if default else "y/N"
-        
+
+        from backend.config import prompt_timeout_simple
         prompt = f"{question} [{default_str}]"
-        response = self.prompt_user(prompt, timeout=30)
+        response = self.prompt_user(prompt, timeout=prompt_timeout_simple())
         
         if response.timed_out or response.cancelled or not response.raw_input:
             return default
@@ -337,9 +338,10 @@ class DevTrackTUI:
             marker = f"{Colors.GREEN}*{Colors.RESET}" if i == default else " "
             print(f"  {marker} [{i+1}] {option}")
         
+        from backend.config import prompt_timeout_work
         response = self.prompt_user(
             f"Enter choice (1-{len(options)})",
-            timeout=60,
+            timeout=prompt_timeout_work(),
             default=str(default + 1)
         )
         
@@ -442,10 +444,11 @@ class DevTrackTUI:
         # Main prompt
         print(f"\n{Colors.WHITE}What have you been working on?{Colors.RESET}")
         print(f"{Colors.DIM}(Include ticket numbers like #123 or PROJ-456, time like '2h' or '30min'){Colors.RESET}")
-        
+
+        from backend.config import prompt_timeout_task
         response = self.prompt_user(
             "Describe your work",
-            timeout=120,  # 2 minute timeout
+            timeout=prompt_timeout_task(),
             default=""
         )
         
