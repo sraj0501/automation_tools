@@ -198,10 +198,11 @@ Keep it professional and constructive. Respond ONLY with valid JSON."""
 
         try:
             from backend.llm.base import LLMOptions
+            from backend.config import http_timeout
             response_text = self._get_provider().generate(
                 prompt=prompt,
                 options=LLMOptions(temperature=0.3, max_tokens=500),
-                timeout=30,
+                timeout=http_timeout(),
             )
 
             if response_text:
@@ -1072,10 +1073,11 @@ Be constructive and highlight patterns. Respond ONLY with valid JSON."""
 
         try:
             from backend.llm.base import LLMOptions
+            from backend.config import http_timeout_long
             response_text = self._get_provider().generate(
                 prompt=prompt,
                 options=LLMOptions(temperature=0.3, max_tokens=600),
-                timeout=45,
+                timeout=http_timeout_long(),
             )
             if response_text:
                 insights_data = self._parse_ai_response(response_text)

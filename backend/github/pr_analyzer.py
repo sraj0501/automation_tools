@@ -147,10 +147,11 @@ class PRAnalyzer:
 
         try:
             from backend.llm.base import LLMOptions
+            from backend.config import http_timeout_short
             result = provider.generate(
                 prompt=prompt,
                 options=LLMOptions(temperature=0.3, max_tokens=60),
-                timeout=15,
+                timeout=http_timeout_short(),
             )
             return result.strip() if result else pr.title
         except Exception as e:
