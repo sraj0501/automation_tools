@@ -247,8 +247,9 @@ def make_codeflow_and_prompt(file_path: str, analysis: Dict) -> Dict:
 # -----------------------------
 
 def call_ollama(prompt: str, model: str, ollama_url: str | None , timeout: int = 60) -> str:
-    model = model or os.getenv("OLLAMA_MODEL", "llama3.1:8b")
-    base = ollama_url or os.getenv("OLLAMA_URL", "http://localhost:11434")
+    from backend.config import ollama_host, ollama_model
+    model = model or ollama_model()
+    base = ollama_url or ollama_host()
     url = base.rstrip("/") + "/api/generate"
     payload = {
         "model": model,
@@ -308,7 +309,8 @@ def main():
     # Optionally call Ollama
     if args.ollama:
         print("\n--- Calling Ollama with factual prompt (temperature=0.0) ---\n")
-        llm_out = call_ollama(out["llm_prompt"], model="mistral:latest", ollama_url="http://localhost:11434") 
+        from backend.config import ollama_host
+        llm_out = call_ollama(out["llm_prompt"], model="mistral:latest", ollama_url=ollama_host())
         print(llm_out)
 
 if __name__ == "__main__":

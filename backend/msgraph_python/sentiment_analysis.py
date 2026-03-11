@@ -87,10 +87,11 @@ class ChatResponsivenessAnalyzer:
             provider = self._get_provider()
             if provider is None:
                 return "Error: LLM provider unavailable"
+            from backend.config import http_timeout_long
             result = provider.generate(
                 prompt=prompt,
                 options=LLMOptions(temperature=0.2, max_tokens=300),
-                timeout=60,
+                timeout=http_timeout_long(),
             )
             return result if result else "Error: No response"
         except Exception as e:
@@ -238,11 +239,13 @@ Reply with only: positive, negative, or neutral"""
                     questions_or_requests_count += 1
                 
                 # Check if our sender responded within reasonable time
+                from backend.config import sentiment_analysis_window_minutes
+                window_minutes = sentiment_analysis_window_minutes()
                 for j in range(i + 1, min(i + 5, len(sorted_all))):  # Check next 5 messages
                     next_msg = sorted_all[j]
                     if next_msg['sender'] == sender_name:
                         time_diff = (next_msg['timestamp'] - current_msg['timestamp']).total_seconds() / 60
-                        if time_diff <= 120:  # Within 2 hours
+                        if time_diff <= window_minutes:
                             responses_given += 1
                             response_times.append(time_diff)
                             found_response = True
@@ -269,7 +272,8 @@ Reply with only: positive, negative, or neutral"""
             elif current_msg['sender'] == sender_name and i > 0:
                 prev_msg = sorted_all[i - 1]
                 time_diff = (current_msg['timestamp'] - prev_msg['timestamp']).total_seconds() / 60
-                if time_diff > 120 and prev_msg['sender'] != sender_name:  # Gap > 2 hours, different sender
+                from backend.config import sentiment_analysis_window_minutes
+                if time_diff > sentiment_analysis_window_minutes() and prev_msg['sender'] != sender_name:
                     conversations_initiated += 1
         
         # Calculate response rate
