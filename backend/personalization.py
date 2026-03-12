@@ -53,19 +53,22 @@ def _load_personalized_ai():
     try:
         from backend.personalized_ai import PersonalizedAI  # noqa: PLC0415
 
-        data_dir: Optional[str] = None
+        # Resolve the learning dir (PersonalizedAI expects this, not DATA_DIR)
+        learning_data_dir: Optional[str] = None
         try:
-            from backend.config import get_path  # noqa: PLC0415
-            data_dir = str(get_path("DATA_DIR"))
+            from backend.config import learning_dir  # noqa: PLC0415
+            learning_data_dir = str(learning_dir())
         except Exception:
             pass
 
-        email = _read_user_email(data_dir)
+        email = _read_user_email(learning_data_dir)
         if not email:
             logger.debug("personalization: no user email in consent.json — profile not loaded")
             return None
 
-        ai = PersonalizedAI(user_email=email, data_dir=data_dir)
+        # Pass None so PersonalizedAI uses its own config resolver (same result,
+        # but avoids any path mismatch if learning_dir() is overridden elsewhere).
+        ai = PersonalizedAI(user_email=email, data_dir=learning_data_dir)
         if ai.consent_given and ai.profile:
             _instance = ai
             logger.debug(
@@ -85,11 +88,11 @@ def _load_personalized_ai():
     return _instance
 
 
-def _read_user_email(data_dir: Optional[str]) -> Optional[str]:
-    """Read user_email from Data/learning/consent.json."""
-    if not data_dir:
+def _read_user_email(learning_data_dir: Optional[str]) -> Optional[str]:
+    """Read user_email from consent.json inside the learning directory."""
+    if not learning_data_dir:
         return None
-    consent_file = os.path.join(data_dir, "learning", "consent.json")
+    consent_file = os.path.join(learning_data_dir, "consent.json")
     if not os.path.exists(consent_file):
         return None
     try:
