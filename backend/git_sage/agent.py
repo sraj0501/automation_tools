@@ -86,6 +86,9 @@ You respond with a JSON object choosing ONE action per turn:
 {"action": "done", "summary": "Squashed 3 commits into one. New HEAD: abc1234"}
 ```
 
+For **informational tasks** (check, inspect, show, analyze, list, explain), the `summary` MUST contain the full answer — not "analysis completed" or "task done". Include the actual commit details, diff, file contents, or whatever the user asked for. The user can only see what you put in `summary`; they cannot see your internal tool results.
+
+
 ### Abort with explanation
 ```json
 {"action": "abort", "reason": "Conflict in src/auth.py is ambiguous — both versions add different logic. Manual resolution required."}
@@ -503,7 +506,14 @@ class GitAgent:
             print(f"     {DIM}{reason}{RESET}")
 
     def _print_done(self, summary: str):
-        print(f"\n  {GREEN}{BOLD}✅ Done:{RESET} {summary}\n")
+        lines = summary.strip().splitlines()
+        if len(lines) <= 1:
+            print(f"\n  {GREEN}{BOLD}✅ Done:{RESET} {summary}\n")
+        else:
+            print(f"\n  {GREEN}{BOLD}✅ Done:{RESET}")
+            for line in lines:
+                print(f"  {line}")
+            print()
 
     def _print_abort(self, reason: str):
         print(f"\n  {RED}{BOLD}🛑 Aborted:{RESET} {reason}\n")
