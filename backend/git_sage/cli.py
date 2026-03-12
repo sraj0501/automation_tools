@@ -157,6 +157,9 @@ def ask_mode(query: str, cfg: dict):
         execute_commands(commands, auto=cfg.get("auto_confirm", False))
 
 
+MAX_FOLLOWUPS = 5
+
+
 # ── AGENT DO MODE ─────────────────────────────────────────────────────────────
 
 def do_mode(task: str, cfg: dict, auto: bool = False, verbose: bool = False):
@@ -166,10 +169,10 @@ def do_mode(task: str, cfg: dict, auto: bool = False, verbose: bool = False):
         print(f"{RED}Not inside a git repository.{RESET}")
         sys.exit(1)
 
-    # Show session approval dialog
+    # Show session approval dialog once for the whole do session
     mode = prompt_approval_mode(auto=auto)
-    session_auto    = (mode == "auto")
-    suggest_only    = (mode == "suggest")
+    session_auto = (mode == "auto")
+    suggest_only = (mode == "suggest")
 
     backend = LLMBackend(**_backend_kwargs(cfg))
     agent = GitAgent(
@@ -182,15 +185,56 @@ def do_mode(task: str, cfg: dict, auto: bool = False, verbose: bool = False):
         success = agent.run(task)
     except KeyboardInterrupt:
         print(f"\n{RED}Agent interrupted by user.{RESET}\n")
+        _finalize_do_session(agent)
+        sys.exit(1)
     except ConnectionError as e:
         print(f"{RED}{e}{RESET}")
         sys.exit(1)
-    finally:
-        # Always offer undo after a do session
-        if agent.get_step_history():
-            offer_undo(agent)
 
+    # ── Follow-up loop ───────────────────────────────────────────────────────
+    for i in range(MAX_FOLLOWUPS):
+        remaining = MAX_FOLLOWUPS - i
+        try:
+            followup = input(
+                f"\n{CYAN}Follow-up{RESET} {DIM}[{remaining} left — Enter to exit]:{RESET} "
+            ).strip()
+        except (KeyboardInterrupt, EOFError):
+            print()
+            break
+
+        if not followup:
+            break
+
+        # Allow undo/history as inline commands during follow-up
+        if followup.lower() == "history":
+            show_session_history(agent)
+            continue
+        if followup.lower().startswith("undo"):
+            parts = followup.split()
+            if len(parts) > 1 and parts[1].isdigit():
+                agent.undo_step(int(parts[1]) - 1)
+                show_session_history(agent)
+            else:
+                offer_undo(agent)
+            continue
+
+        try:
+            agent.followup(followup)
+        except KeyboardInterrupt:
+            print(f"\n{RED}Interrupted.{RESET}")
+            break
+        except ConnectionError as e:
+            print(f"{RED}{e}{RESET}")
+            break
+
+    _finalize_do_session(agent)
     sys.exit(0 if success else 1)
+
+
+def _finalize_do_session(agent: GitAgent) -> None:
+    """Show undo prompt at the end of a do session if any steps were run."""
+    if agent.get_step_history():
+        offer_undo(agent)
 
 
 # ── INTERACTIVE SHELL ─────────────────────────────────────────────────────────

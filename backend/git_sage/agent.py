@@ -165,10 +165,10 @@ class GitAgent:
         self.pr_finder = PRFinder(cwd=self.cwd)
         self.conflict_resolver = ConflictResolver(strategy="smart")
 
-    # ── public entry point ──────────────────────────────────────────────────
+    # ── public entry points ──────────────────────────────────────────────────
 
     def run(self, task: str, max_steps: int = 30) -> bool:
-        """Run the agent on a task. Returns True on success."""
+        """Start a new agent session for a task. Resets conversation history."""
         ctx = get_repo_context(self.cwd)
         context_str = format_context(ctx)
 
@@ -177,16 +177,35 @@ class GitAgent:
             "Respond with a JSON action object only. No prose, no markdown."
         )
         self.state.history = [{"role": "user", "content": initial_message}]
-
         self._print_header(task)
+        return self._run_loop(max_steps)
 
-        for step in range(max_steps):
+    def followup(self, question: str, max_steps: int = 20) -> bool:
+        """Continue the current session with a follow-up question.
+
+        Appends to existing conversation history so the agent has full context
+        of everything it already ran and saw.
+        """
+        self.state.history.append({
+            "role": "user",
+            "content": (
+                f"Follow-up question: {question}\n\n"
+                "Respond with a JSON action object only. No prose, no markdown."
+            ),
+        })
+        self._print_header(f"Follow-up: {question}")
+        return self._run_loop(max_steps)
+
+    # ── shared agent loop ────────────────────────────────────────────────────
+
+    def _run_loop(self, max_steps: int) -> bool:
+        """Core LLM → dispatch → feedback loop. Uses self.state.history as context."""
+        for _ in range(max_steps):
             raw = self.backend.raw_chat(self.state.history, AGENT_SYSTEM_PROMPT,
                                         json_mode=True)
             action = self._parse_action(raw)
 
             if action is None:
-                # Always show a snippet so the user can see what went wrong
                 snippet = raw.strip()[:400].replace("\n", " ")
                 self._log_error("LLM returned unparseable response", raw)
                 print(f"  {DIM}Raw: {snippet}{RESET}")
