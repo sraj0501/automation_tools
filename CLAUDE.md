@@ -123,14 +123,15 @@ Git commits / cron timer
 
 | Module | Purpose |
 |---|---|
-| `cli.py` | Ask/do/interactive modes for git assistance |
-| `agent.py` | Agentic loop: plan → execute → verify → recover (300+ lines) |
-| `llm.py` | Ollama and OpenAI-compatible LLM backends |
+| `cli.py` | Ask/do/interactive modes; session approval dialog; command history; offer_undo; follow-up loop |
+| `agent.py` | Agentic loop with suggest_only mode, step_log (HEAD snapshots), followup(), undo_step() |
+| `llm.py` | Ollama + OpenAI-compatible backends; json_mode enforcement; strips LiteLLM `provider/` prefix |
 | `context.py` | Git repository state collection and formatting |
-| `config.py` | Configuration management (~/.config/git-sage/config.json) |
+| `config.py` | Env-driven config: `.env` > `~/.config/git-sage/config.json` > hard defaults |
 | `git_operations.py` | Advanced git operations: branches, commits, merges, status, blame, stash (300+ lines) |
 | `conflict_resolver.py` | Intelligent conflict analysis and resolution with multiple strategies (280+ lines) |
 | `pr_finder.py` | PR/MR utilities: metadata extraction, branch analysis, diff statistics (220+ lines) |
+| `__main__.py` | Entry point for `python -m backend.git_sage` |
 
 #### External Integrations
 
@@ -277,18 +278,19 @@ except ConfigError as e:
 - Phase 3: Event-Driven Integration ✅
 - Phase 4: Project Management ✅
 - Personalization "Talk Like You" ✅ FULLY WORKING
+- git-sage Session UX ✅ (sage-improvements branch)
 
 **Major Accomplishments (March 12, 2026 session)**:
 
 - Personalization pipeline working end-to-end: Teams → MongoDB → Profile → Personalized responses
-- Fixed user identification: Teams messages use Azure AD object ID (not UPN) for matching
-- Fixed `graph.py` `get_user()` to include `id` in `$select`
-- Fixed delta state: stale `last_collected` blocks collection; use `learning-sync --full` to reset
-- Added MongoDB storage for learning data (motor async driver)
-- Docker Compose with mongo, redis, postgres
-- 10 new CLI commands for learning management
-- `test-response` no longer triggers Graph auth
-- Daily cron at 20:00 for automatic delta sync
+- git-sage: session approval mode (auto / review / suggest-only)
+- git-sage: step history with git HEAD snapshots + interactive undo
+- git-sage: follow-up loop (5 questions, shared conversation context)
+- git-sage: Groq cloud API support via openai SDK (no urllib Cloudflare block)
+- git-sage: JSON mode enforcement (`response_format` + Ollama `format:json`)
+- git-sage: squash flow fixed — uses `git reset --soft HEAD~N`, never `git rebase -i`
+- git-sage: model name prefix stripping (`groq/compound` → `compound-beta`)
+- git-sage: informational tasks now surface full answer in done.summary
 
 **Production Readiness**: VERY HIGH
 
@@ -376,6 +378,10 @@ All user-facing documentation has been reorganized for clarity:
 - **Work update enrichment**: Timer trigger enhancements (Phase 3) inject git context (branch, PR, changes) into work updates before NLP parsing for better task extraction and auto PR-number detection.
 - **Conflict auto-resolution**: Post-update hook (Phase 3) automatically detects and resolves merge conflicts using smart strategies, reports status to user via TUI or logs.
 - **Git-sage agent mode**: The `git-sage` tool runs autonomously: it plans operations, executes them, reads output, handles failures with rollback, and only asks for input on genuine ambiguities.
+- **git-sage session UX**: `do` mode shows an approval dialog (auto/review/suggest-only) before the first command. After the task completes, up to 5 follow-up questions can be asked in the same conversation context. Command history and `undo [N]` are available at any point.
+- **git-sage squash**: Agent always uses `git reset --soft HEAD~N && git commit -m "..."` — never `git rebase -i` (interactive editor blocks the agent loop).
+- **git-sage LLM JSON mode**: `raw_chat(..., json_mode=True)` is set on every agent call. Ollama uses `format:"json"`, OpenAI-compatible uses `response_format:{"type":"json_object"}` with a `BadRequestError` fallback. Model names strip `provider/` prefixes (LiteLLM convention) before the API call.
+- **Groq provider**: `backend/llm/groq_provider.py` + added to `provider_factory.py` fallback chain. git-sage uses `GIT_SAGE_PROVIDER=groq` with `GROQ_API_KEY` / `GROQ_HOST` / `GROQ_MODEL` env vars.
 
 ## Personalization System
 
@@ -489,6 +495,17 @@ Cron runs at `LEARNING_CRON_SCHEDULE` (default `0 20 * * *`) via `backend/run_da
 - Use `--verbose` flag to see what agent is doing
 - Check LLM responses are valid JSON
 - Interrupt with Ctrl+C and check git status
+
+**git-sage parse error / agent does nothing then says Done:**
+
+- The LLM is returning prose instead of JSON. Check the `Raw:` snippet printed after `[parse error]`.
+- If using Groq: verify `GROQ_MODEL` uses the native model name (e.g. `compound-beta`, `llama-3.3-70b-versatile`) — the `groq/` prefix is stripped automatically but the base name must be valid.
+- `compound-beta` ignores `response_format` — it eventually obeys text-level instructions. Switch to `llama-3.3-70b-versatile` for more reliable JSON compliance.
+- JSON mode is enforced via `response_format={"type":"json_object"}` for OpenAI-compatible providers and `"format":"json"` for Ollama. If a model raises `BadRequestError` for `response_format`, it falls back to text-only.
+
+**git-sage Groq 403 Cloudflare block:**
+
+- Caused by `urllib` User-Agent being blocked. All non-Ollama providers now use the `openai` SDK which sets a proper User-Agent. If you still see 403, run `uv add openai` to ensure the package is installed.
 
 **Phase 3: Work context not enriching work updates:**
 
