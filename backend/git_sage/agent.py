@@ -51,7 +51,7 @@ You respond with a JSON object choosing ONE action per turn:
 
 ### Run a git or shell command
 ```json
-{"action": "run", "cmd": "git rebase -i HEAD~3", "reason": "Squash last 3 commits interactively"}
+{"action": "run", "cmd": "git --no-pager log -5 --oneline", "reason": "See which commits will be squashed"}
 ```
 
 ### Read a file (e.g. to inspect conflict markers)
@@ -66,7 +66,7 @@ You respond with a JSON object choosing ONE action per turn:
 
 ### Create a checkpoint (saves current HEAD sha for possible rollback)
 ```json
-{"action": "checkpoint", "label": "before-rebase", "reason": "Save state before risky operation"}
+{"action": "checkpoint", "label": "before-squash", "reason": "Save state before squash reset"}
 ```
 
 ### Roll back to a checkpoint
@@ -114,7 +114,11 @@ When resolving conflicts:
 8. **If something unexpected happens**, adapt. Don't blindly retry the same failing command.
 9. **Smart conflict resolution**: Prefer keeping both changes unless contradictory. For feature branches: prefer incoming. For fixes: prefer HEAD.
 10. **Never truncate file content in write_file** — write the complete file.
-11. **Avoid interactive flags**: Use `git --no-pager log`, `git --no-pager diff` instead of plain `git log`/`git diff`. For squashing N commits, prefer `git reset --soft HEAD~N && git commit -m "msg"` over `git rebase -i`. If you must use `git rebase -i`, note that it will open an editor in the user's terminal.
+11. **Never use `git rebase -i` for squashing** — it opens an interactive editor and blocks. Instead follow this exact squash workflow:
+    - Step 1: `git --no-pager log -N --oneline` → read the commit messages you will squash
+    - Step 2: `git reset --soft HEAD~N` → move HEAD back N commits, keep all changes staged
+    - Step 3: `git commit -m "<synthesized summary of the N commits>"` → create the squashed commit
+    Use `git --no-pager log` and `git --no-pager diff` instead of plain `git log`/`git diff` to avoid pager blocking.
 
 ## Reading tool output
 
