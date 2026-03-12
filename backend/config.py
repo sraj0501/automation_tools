@@ -478,3 +478,33 @@ def prompt_timeout_task() -> int:
         return secs
     except ValueError as e:
         raise ValueError(f"PROMPT_TIMEOUT_TASK_SECS must be integer: {e}")
+
+
+# --- MongoDB ---
+
+def mongodb_uri() -> str:
+    """MongoDB connection URI. Optional - if set, learning data is stored in MongoDB.
+    Leave empty to use file-based storage. MONGODB_URI."""
+    return get("MONGODB_URI", "")
+
+
+def mongodb_db_name() -> str:
+    """MongoDB database name. MONGODB_DB_NAME (default: devtrack)."""
+    return get("MONGODB_DB_NAME", "devtrack")
+
+
+# --- Learning cron settings ---
+
+def learning_cron_enabled() -> bool:
+    """Whether automatic daily learning collection is enabled. LEARNING_CRON_ENABLED."""
+    return get_bool("LEARNING_CRON_ENABLED", False)
+
+
+def learning_cron_schedule() -> str:
+    """Cron schedule for learning collection. LEARNING_CRON_SCHEDULE (default: '0 8 * * *')."""
+    return get("LEARNING_CRON_SCHEDULE", "0 8 * * *")
+
+
+def learning_history_days() -> int:
+    """History window in days for initial collection. LEARNING_HISTORY_DAYS (default: 30)."""
+    return get_int("LEARNING_HISTORY_DAYS", 30)

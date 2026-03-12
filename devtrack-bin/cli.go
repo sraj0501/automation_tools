@@ -111,6 +111,16 @@ func (cli *CLI) Execute() error {
 		return cli.handleRevokeConsent()
 	case "learning-status":
 		return cli.handleLearningStatus()
+	case "learning-setup-cron":
+		return cli.handleLearningSetupCron()
+	case "learning-remove-cron":
+		return cli.handleLearningRemoveCron()
+	case "learning-cron-status":
+		return cli.handleLearningCronStatus()
+	case "learning-sync":
+		return cli.handleLearningSync()
+	case "learning-reset":
+		return cli.handleLearningReset()
 	case "preview-report":
 		return cli.handlePreviewReport()
 	case "send-report":
@@ -683,6 +693,37 @@ func (cli *CLI) handleLearningStatus() error {
 	return nil
 }
 
+// handleLearningReset wipes all learning data for a fresh start
+func (cli *CLI) handleLearningReset() error {
+	learning := NewLearningCommands()
+	return learning.ResetLearning()
+}
+
+// handleLearningSetupCron installs the crontab entry from LEARNING_CRON_SCHEDULE
+func (cli *CLI) handleLearningSetupCron() error {
+	learning := NewLearningCommands()
+	return learning.SetupCron()
+}
+
+// handleLearningRemoveCron removes the DevTrack learning crontab entry
+func (cli *CLI) handleLearningRemoveCron() error {
+	learning := NewLearningCommands()
+	return learning.RemoveCron()
+}
+
+// handleLearningCronStatus shows cron entry status
+func (cli *CLI) handleLearningCronStatus() error {
+	learning := NewLearningCommands()
+	return learning.CronStatus()
+}
+
+// handleLearningSync runs a delta (or full) sync immediately
+func (cli *CLI) handleLearningSync() error {
+	full := len(os.Args) > 2 && os.Args[2] == "--full"
+	learning := NewLearningCommands()
+	return learning.SyncNow(full)
+}
+
 // handlePreviewReport previews today's email report
 func (cli *CLI) handlePreviewReport() error {
 	date := ""
@@ -836,10 +877,18 @@ func (cli *CLI) printUsage() {
 	fmt.Println()
 	fmt.Println("PERSONALIZED AI LEARNING:")
 	fmt.Println("  devtrack enable-learning [days]  Enable learning from communications (default 30 days)")
+	fmt.Println("  devtrack learning-reset          Wipe all learning data and start fresh")
+	fmt.Println("  devtrack learning-sync           Run delta sync now (only new messages since last run)")
+	fmt.Println("  devtrack learning-sync --full    Force full re-sync (ignore delta state)")
 	fmt.Println("  devtrack learning-status         Show learning status and statistics")
 	fmt.Println("  devtrack show-profile            Show learned communication profile")
 	fmt.Println("  devtrack test-response <text>    Test generating personalized response")
 	fmt.Println("  devtrack revoke-consent          Revoke learning consent and delete data")
+	fmt.Println()
+	fmt.Println("LEARNING CRON (configure LEARNING_CRON_SCHEDULE in .env):")
+	fmt.Println("  devtrack learning-setup-cron     Install/update daily cron entry from .env")
+	fmt.Println("  devtrack learning-cron-status    Show cron entry and .env schedule settings")
+	fmt.Println("  devtrack learning-remove-cron    Remove the cron entry")
 	fmt.Println()
 	fmt.Println("EMAIL REPORTS:")
 	fmt.Println("  devtrack preview-report [date]   Preview today's report (or YYYY-MM-DD)")

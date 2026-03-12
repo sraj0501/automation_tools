@@ -3,9 +3,16 @@
 
 # <UserAuthConfigSnippet>
 from configparser import SectionProxy
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Optional
 
 from azure.identity import DeviceCodeCredential
+try:
+    from azure.identity import TokenCachePersistenceOptions
+    _PERSISTENT_CACHE_AVAILABLE = True
+except ImportError:
+    _PERSISTENT_CACHE_AVAILABLE = False
+
 from msgraph import GraphServiceClient
 from msgraph.generated.users.item.user_item_request_builder import UserItemRequestBuilder
 from msgraph.generated.users.item.mail_folders.item.messages.messages_request_builder import (
@@ -31,7 +38,19 @@ class Graph:
         tenant_id = self.settings['tenantId']
         graph_scopes = self.settings['graphUserScopes'].split(' ')
 
-        self.device_code_credential = DeviceCodeCredential(client_id, tenant_id = tenant_id)
+        if _PERSISTENT_CACHE_AVAILABLE:
+            cache_options = TokenCachePersistenceOptions(
+                name="devtrack",
+                allow_unencrypted_storage=True  # fallback for Linux without system keyring
+            )
+            self.device_code_credential = DeviceCodeCredential(
+                client_id,
+                tenant_id=tenant_id,
+                cache_persistence_options=cache_options
+            )
+        else:
+            self.device_code_credential = DeviceCodeCredential(client_id, tenant_id=tenant_id)
+
         self.user_client = GraphServiceClient(self.device_code_credential, graph_scopes)
 # </UserAuthConfigSnippet>
 
@@ -46,7 +65,7 @@ class Graph:
     async def get_user(self):
         # Only request specific properties using $select
         query_params = UserItemRequestBuilder.UserItemRequestBuilderGetQueryParameters(
-            select=['displayName', 'mail', 'userPrincipalName']
+            select=['id', 'displayName', 'mail', 'userPrincipalName']
         )
 
         request_config = UserItemRequestBuilder.UserItemRequestBuilderGetRequestConfiguration(
@@ -162,17 +181,24 @@ class Graph:
     # </GetOneOnOneChatsWithPersonSnippet>
 
     # <GetAllChatMessagesSnippet>
-    async def get_all_chat_messages(self, chat_id: str):
+    async def get_all_chat_messages(self, chat_id: str, since_datetime: Optional[datetime] = None):
+        """
+        Fetch all messages from a chat, optionally stopping when messages older
+        than since_datetime are reached (delta/incremental fetch).
+
+        Args:
+            chat_id: Teams chat ID
+            since_datetime: If provided, stop paginating once messages are older
+                            than this timestamp (must be timezone-aware).
+        """
         all_messages = []
         next_link = None
-        
+
         try:
             while True:
                 if next_link:
-                    # Use the next link to get more messages
                     response = await self.user_client.chats.by_chat_id(chat_id).messages.with_url(next_link).get()
                 else:
-                    # Initial request - simplified without select and orderby
                     query_params = ChatMessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters(
                         top=50
                     )
@@ -181,24 +207,41 @@ class Graph:
                     )
                     response = await self.user_client.chats.by_chat_id(chat_id).messages.get(
                         request_configuration=request_config)
-                
+
                 if response and response.value:
-                    all_messages.extend(response.value)
-                    print(f"Fetched {len(response.value)} messages... (Total: {len(all_messages)})")
-                
-                # Check if there are more messages
+                    batch = response.value
+                    all_messages.extend(batch)
+                    print(f"Fetched {len(batch)} messages... (Total: {len(all_messages)})")
+
+                    # Early termination: API returns newest-first. If the oldest
+                    # message in this batch is older than the cutoff, stop paging.
+                    if since_datetime is not None:
+                        oldest_in_batch = min(
+                            (m.created_date_time for m in batch if m.created_date_time),
+                            default=None
+                        )
+                        if oldest_in_batch is not None:
+                            # Ensure both are timezone-aware for comparison
+                            cutoff = since_datetime
+                            if cutoff.tzinfo is None:
+                                cutoff = cutoff.replace(tzinfo=timezone.utc)
+                            if oldest_in_batch.tzinfo is None:
+                                oldest_in_batch = oldest_in_batch.replace(tzinfo=timezone.utc)
+                            if oldest_in_batch <= cutoff:
+                                break
+
                 if hasattr(response, 'odata_next_link') and response.odata_next_link:
                     next_link = response.odata_next_link
                 else:
                     break
-                    
+
         except Exception as e:
             print(f"Error fetching messages: {e}")
-        
-        # Sort messages by creation time (oldest first) manually
+
+        # Sort oldest-first for processing
         if all_messages:
             all_messages.sort(key=lambda x: x.created_date_time if x.created_date_time else datetime.min)
-        
+
         return all_messages
     # </GetAllChatMessagesSnippet>
 

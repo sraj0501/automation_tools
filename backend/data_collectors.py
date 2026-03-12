@@ -113,13 +113,18 @@ class TeamsDataCollector:
     
     def _is_user_message(self, message: Dict) -> bool:
         """Check if message is from the user"""
-        from_user = message.get('from', {}).get('user', {})
+        if not message:
+            return False
+        from_field = message.get('from') or {}
+        from_user = from_field.get('user') or {}
         user_email = from_user.get('userPrincipalName', '')
         return user_email == self.ai.user_email
     
     def _extract_message_content(self, message: Dict) -> str:
         """Extract clean message content"""
-        body = message.get('body', {})
+        if not message:
+            return ''
+        body = message.get('body') or {}
         content = body.get('content', '')
         
         # Remove HTML tags if present
