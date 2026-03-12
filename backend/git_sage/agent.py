@@ -43,6 +43,8 @@ BLUE  = "\033[94m"
 # ─── SYSTEM PROMPT ───────────────────────────────────────────────────────────
 AGENT_SYSTEM_PROMPT = """You are git-sage, an autonomous git agent running inside the user's terminal.
 
+CRITICAL: You must respond with a single raw JSON object and NOTHING else — no markdown, no prose, no code fences, no explanation. Every single response must be valid JSON starting with `{` and ending with `}`.
+
 You have the ability to execute git commands, read files, and make decisions — exactly like a senior engineer would when handed a task.
 
 ## Your capabilities (tools you can call)
@@ -167,7 +169,10 @@ class GitAgent:
         ctx = get_repo_context(self.cwd)
         context_str = format_context(ctx)
 
-        initial_message = f"{context_str}\n\nTask: {task}"
+        initial_message = (
+            f"{context_str}\n\nTask: {task}\n\n"
+            "Respond with a JSON action object only. No prose, no markdown."
+        )
         self.state.history = [{"role": "user", "content": initial_message}]
 
         self._print_header(task)

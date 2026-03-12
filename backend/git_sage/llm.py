@@ -87,16 +87,23 @@ class LLMBackend:
             )
         from backend.config import llm_request_timeout
         full_messages = [{"role": "system", "content": system}] + messages
+        # Strip LiteLLM-style provider prefix (e.g. "groq/compound-beta" → "compound-beta")
+        model = self.model.split("/", 1)[-1] if "/" in self.model else self.model
         try:
             client = openai.OpenAI(
                 api_key=self.api_key or "no-key",
                 base_url=self.base_url,
                 timeout=llm_request_timeout(),
             )
-            kwargs: dict = {"model": self.model, "messages": full_messages}
+            kwargs: dict = {"model": model, "messages": full_messages}
             if json_mode:
                 kwargs["response_format"] = {"type": "json_object"}
-            resp = client.chat.completions.create(**kwargs)
+            try:
+                resp = client.chat.completions.create(**kwargs)
+            except openai.BadRequestError:
+                # Model doesn't support response_format — retry without it
+                kwargs.pop("response_format", None)
+                resp = client.chat.completions.create(**kwargs)
             return resp.choices[0].message.content
         except openai.AuthenticationError as e:
             raise ConnectionError(f"Authentication failed for {self.provider}: {e}")
