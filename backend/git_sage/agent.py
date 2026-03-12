@@ -17,6 +17,18 @@ from .git_operations import GitOperations
 from .conflict_resolver import ConflictResolver, ConflictAnalyzer
 from .pr_finder import PRFinder
 
+# ─── devtrack git integration ────────────────────────────────────────────────
+
+def _devtrack_git_cmd(cmd: str) -> str:
+    """Replace 'git commit' with 'devtrack git commit' to use AI-enhanced commits."""
+    import re
+    project_root = os.environ.get("PROJECT_ROOT", "")
+    if not project_root:
+        return cmd
+    devtrack_bin = os.path.join(project_root, "devtrack")
+    return re.sub(r'(?<!\w)git(\s+commit\b)', rf'{devtrack_bin} git\1', cmd)
+
+
 # ─── ANSI ────────────────────────────────────────────────────────────────────
 RESET  = "\033[0m"
 BOLD  = "\033[1m"
@@ -127,16 +139,18 @@ class Checkpoint:
 class AgentState:
     checkpoints: dict[str, Checkpoint] = field(default_factory=dict)
     history: list[dict] = field(default_factory=list)   # LLM conversation turns
-    step_log: list[dict] = field(default_factory=list)  # for display
+    step_log: list[dict] = field(default_factory=list)  # executed run actions
     cwd: str = field(default_factory=os.getcwd)
 
 
 class GitAgent:
-    def __init__(self, backend: LLMBackend, cwd: str = ".", verbose: bool = False, auto: bool = False):
+    def __init__(self, backend: LLMBackend, cwd: str = ".", verbose: bool = False,
+                 auto: bool = False, suggest_only: bool = False):
         self.backend = backend
         self.cwd = os.path.abspath(cwd)
         self.verbose = verbose
         self.auto = auto
+        self.suggest_only = suggest_only
         self.state = AgentState(cwd=self.cwd)
         self.git_ops = GitOperations(cwd=self.cwd)
         self.pr_finder = PRFinder(cwd=self.cwd)
@@ -149,20 +163,17 @@ class GitAgent:
         ctx = get_repo_context(self.cwd)
         context_str = format_context(ctx)
 
-        # Seed the conversation
         initial_message = f"{context_str}\n\nTask: {task}"
         self.state.history = [{"role": "user", "content": initial_message}]
 
         self._print_header(task)
 
         for step in range(max_steps):
-            # Ask LLM for next action
             raw = self.backend.raw_chat(self.state.history, AGENT_SYSTEM_PROMPT)
             action = self._parse_action(raw)
 
             if action is None:
                 self._log_error("LLM returned unparseable response", raw)
-                # Feed back the parse error
                 self.state.history.append({"role": "assistant", "content": raw})
                 self.state.history.append({
                     "role": "user",
@@ -174,7 +185,6 @@ class GitAgent:
 
             result, exit_code = self._dispatch(action)
 
-            # Terminal actions
             if action["action"] == "done":
                 self._print_done(action.get("summary", "Task complete."))
                 return True
@@ -182,7 +192,6 @@ class GitAgent:
                 self._print_abort(action.get("reason", "Aborted."))
                 return False
 
-            # Feed result back
             feedback = f"TOOL_RESULT: {result}\nEXIT_CODE: {exit_code}"
             self.state.history.append({"role": "user", "content": feedback})
 
@@ -215,7 +224,7 @@ class GitAgent:
 
     # ── tool implementations ─────────────────────────────────────────────────
 
-    # Commands that open a pager or editor — must run with stdin/stdout attached to terminal
+    # Commands that open a pager or editor — must run with stdin/stdout attached
     _INTERACTIVE_PATTERNS = [
         r'\bgit\s+rebase\s+(-i|--interactive)\b',
         r'\bgit\s+add\s+(-p|--patch|-i|--interactive)\b',
@@ -229,16 +238,32 @@ class GitAgent:
         return any(re.search(p, cmd) for p in self._INTERACTIVE_PATTERNS)
 
     def _do_run(self, cmd: str) -> tuple[str, int]:
-        """Execute a shell command. Commands that open editors/pagers (rebase -i,
-        add -p, commit without -m, etc.) run with stdin/stdout attached to the
-        terminal so the user can interact. All others capture output for the LLM."""
+        """Execute a shell command, capturing git HEAD before for undo support."""
+        cmd = _devtrack_git_cmd(cmd)
+
+        # Snapshot HEAD before execution so user can undo this step
+        head_before, _ = run_git(["rev-parse", "HEAD"], self.cwd)
+        head_before = head_before.strip() if head_before else None
+
+        if self.suggest_only:
+            print(f"  {DIM}  [suggest] $ {cmd}{RESET}")
+            self.state.step_log.append({
+                "cmd": cmd, "git_head_before": head_before,
+                "exit_code": 0, "skipped": True,
+            })
+            return "Command suggested (not executed).", 0
+
         if not self.auto:
             if not self._confirm_run(cmd):
+                self.state.step_log.append({
+                    "cmd": cmd, "git_head_before": head_before,
+                    "exit_code": 0, "skipped": True,
+                })
                 return "User skipped this command.", 0
 
         try:
             if self._is_interactive(cmd):
-                # Let the editor/pager render in the user's terminal
+                # Let editor/pager render in the user's terminal
                 result = subprocess.run(cmd, shell=True, text=True, cwd=self.cwd)
                 output = "(interactive command completed)" if result.returncode == 0 \
                     else f"(exited with code {result.returncode})"
@@ -248,8 +273,16 @@ class GitAgent:
                 )
                 output = (result.stdout + result.stderr).strip() or "(no output)"
 
+            self.state.step_log.append({
+                "cmd": cmd, "git_head_before": head_before,
+                "exit_code": result.returncode, "skipped": False,
+            })
             return output, result.returncode
         except Exception as e:
+            self.state.step_log.append({
+                "cmd": cmd, "git_head_before": head_before,
+                "exit_code": 1, "skipped": False,
+            })
             return str(e), 1
 
     def _do_read_file(self, path: str) -> tuple[str, int]:
@@ -286,7 +319,6 @@ class GitAgent:
         if not ok:
             return "Not in a git repo or no commits yet.", 1
 
-        # Stash if dirty
         status, _ = run_git(["status", "--porcelain"], self.cwd)
         stash_sha = None
         if status.strip():
@@ -309,16 +341,13 @@ class GitAgent:
         if not self.auto and not self._confirm("Confirm rollback?"):
             return "Rollback cancelled by user.", 0
 
-        # Abort any ongoing operation
         for abort_cmd in ["git rebase --abort", "git merge --abort", "git cherry-pick --abort"]:
             subprocess.run(abort_cmd, shell=True, capture_output=True, cwd=self.cwd)
 
-        # Reset to checkpoint sha
         out, code = run_git(["reset", "--hard", cp.sha], self.cwd)
         if code != 0:
             return f"Reset failed: {out}", 1
 
-        # Restore stash if there was one
         if cp.stash_sha:
             run_git(["stash", "pop"], self.cwd)
 
@@ -329,56 +358,81 @@ class GitAgent:
         answer = input(f"  {BOLD}your answer>{RESET} ").strip()
         return answer or "(no answer)", 0
 
+    # ── session history & undo ───────────────────────────────────────────────
+
+    def get_step_history(self) -> list[dict]:
+        """Return executed (non-skipped) run-action steps."""
+        return [s for s in self.state.step_log if not s.get("skipped")]
+
+    def undo_step(self, step_idx: int) -> bool:
+        """Reset git to state before step_idx (0-indexed). Removes that step and all after."""
+        steps = self.get_step_history()
+        if step_idx < 0 or step_idx >= len(steps):
+            print(f"{RED}Invalid step number.{RESET}")
+            return False
+
+        entry = steps[step_idx]
+        head_before = entry.get("git_head_before")
+        if not head_before:
+            print(f"{YELLOW}No git snapshot for step {step_idx + 1} — cannot undo automatically.{RESET}")
+            print(f"  {DIM}Command was: {entry['cmd']}{RESET}")
+            return False
+
+        print(f"{YELLOW}Undoing step {step_idx + 1}:{RESET} {entry['cmd']}")
+        print(f"  {DIM}Resetting to {head_before[:8]}...{RESET}")
+
+        for abort_cmd in ["git rebase --abort", "git merge --abort", "git cherry-pick --abort"]:
+            subprocess.run(abort_cmd, shell=True, capture_output=True, cwd=self.cwd)
+
+        out, code = run_git(["reset", "--hard", head_before], self.cwd)
+        if code == 0:
+            original_idx = self.state.step_log.index(entry)
+            self.state.step_log = self.state.step_log[:original_idx]
+            print(f"{GREEN}Undone. Restored to {head_before[:8]}.{RESET}")
+            return True
+
+        print(f"{RED}Undo failed: {out}{RESET}")
+        print(f"  {DIM}Manual: git reset --hard {head_before[:8]}{RESET}")
+        return False
+
     # ── git operation helpers ────────────────────────────────────────────────
 
     def detect_conflicts_in_repo(self) -> list[str]:
-        """Detect conflicted files using GitOperations."""
         return self.git_ops.detect_conflicts()
 
     def resolve_conflict_in_file(self, path: str, strategy: str = "smart") -> tuple[str, bool]:
-        """Read, analyze, and resolve conflicts in a file."""
         try:
             content = self.git_ops.read_conflict_file(path)
             if "<<<<<<< " not in content:
                 return f"No conflicts found in {path}", 1
-
             resolver = ConflictResolver(strategy=strategy)
             resolved, has_unresolvable = resolver.resolve_file(content)
-
             if has_unresolvable:
-                # Show what couldn't be resolved
                 unresolvable = resolver.extract_unresolvable_conflicts(content)
-                msg = f"Resolved some conflicts in {path}, but {len(unresolvable)} remain unresolvable"
-                return msg, 0  # Return 0 because we made progress
-
+                return f"Resolved some conflicts in {path}, but {len(unresolvable)} remain unresolvable", 0
             return f"Resolved all conflicts in {path}", 0
         except Exception as e:
             return f"Error resolving conflicts: {e}", 1
 
     def analyze_conflict_file(self, path: str) -> str:
-        """Analyze conflicts in a file and provide summary."""
         try:
             content = self.git_ops.read_conflict_file(path)
             analyzer = ConflictAnalyzer()
             summary = analyzer.conflict_summary(content)
             sections = analyzer.get_conflicted_sections(content)
-
             msg = f"{summary}\n"
-            for sec in sections[:3]:  # Show first 3 conflicts
+            for sec in sections[:3]:
                 msg += f"\nConflict #{sec['number']}: {sec['current_lines']} vs {sec['incoming_lines']} lines\n"
                 msg += f"  From: {sec['branch_from']} → To: {sec['branch_to']}"
-
             return msg
         except Exception as e:
             return f"Error analyzing conflicts: {e}"
 
     def get_branch_info(self) -> str:
-        """Get detailed branch information."""
         try:
             current = self.git_ops.get_current_branch()
             tracking = self.git_ops.check_tracking_branch()
             ahead, behind = self.git_ops.get_ahead_behind()
-
             msg = f"Current branch: {current}\n"
             if tracking:
                 msg += f"Tracking: {tracking}\n"
@@ -388,20 +442,16 @@ class GitAgent:
             return f"Error getting branch info: {e}"
 
     def list_changes_for_pr(self) -> str:
-        """Get PR metadata and diff statistics."""
         try:
             metadata = self.pr_finder.suggest_pr_metadata()
             stats = self.pr_finder.get_diff_stats()
-
             msg = "PR Metadata:\n"
             for key, val in metadata.items():
                 msg += f"  {key}: {val}\n"
-
             msg += f"\nDiff Stats:\n"
             msg += f"  Files: {stats['files']}\n"
             msg += f"  Additions: {stats['additions']}\n"
             msg += f"  Deletions: {stats['deletions']}"
-
             return msg
         except Exception as e:
             return f"Error getting PR info: {e}"
@@ -460,24 +510,18 @@ class GitAgent:
     def _confirm(self, prompt: str) -> bool:
         while True:
             ans = input(f"  {YELLOW}{prompt}{RESET} [y/n/abort]: ").strip().lower()
-            if ans in ("y", "yes"):
-                return True
-            if ans in ("n", "no", "skip"):
-                return False
-            if ans == "abort":
-                raise KeyboardInterrupt("User aborted agent.")
+            if ans in ("y", "yes"):   return True
+            if ans in ("n", "no", "skip"): return False
+            if ans == "abort":        raise KeyboardInterrupt("User aborted agent.")
 
     def _parse_action(self, raw: str) -> Optional[dict]:
-        """Parse JSON action from LLM output, tolerating markdown fences."""
         raw = raw.strip()
-        # Strip markdown code fences if present
         if raw.startswith("```"):
             lines = raw.split("\n")
             raw = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
         try:
             return json.loads(raw)
         except json.JSONDecodeError:
-            # Try to extract JSON object from response
             import re
             match = re.search(r'\{.*\}', raw, re.DOTALL)
             if match:

@@ -8,11 +8,11 @@ import sys
 from .config import load_config, save_config, show_config
 from .context import get_repo_context, format_context, run_git
 from .llm import LLMBackend, parse_response
-from .agent import GitAgent
+from .agent import GitAgent, _devtrack_git_cmd
 
 RESET  = "\033[0m";  BOLD  = "\033[1m";   DIM   = "\033[2m"
 GREEN  = "\033[92m"; YELLOW= "\033[93m";  CYAN  = "\033[96m"
-RED    = "\033[91m"
+RED    = "\033[91m"; MAGENTA="\033[95m"
 
 
 def print_banner():
@@ -26,6 +26,97 @@ def confirm(prompt: str) -> bool:
         if ans in ("n", "no"):  return False
 
 
+# ── Session approval mode dialog ──────────────────────────────────────────────
+
+def prompt_approval_mode(auto: bool = False) -> str:
+    """Show a trust dialog for this session. Returns 'auto', 'review', or 'suggest'."""
+    if auto:
+        return "auto"
+
+    print(f"\n{CYAN}{BOLD}Session approval mode:{RESET}")
+    print(f"  {BOLD}[a]{RESET}  Accept all    — run every command without asking  {DIM}(like --yes){RESET}")
+    print(f"  {BOLD}[r]{RESET}  Review each   — confirm every command before it runs")
+    print(f"  {BOLD}[s]{RESET}  Suggest only  — show commands, never execute them\n")
+
+    while True:
+        choice = input(f"  {YELLOW}Choose mode{RESET} [a/r/s]: ").strip().lower()
+        if choice in ("a", "auto", "accept"):
+            print(f"  {GREEN}✓ Auto-accept mode — all commands will run automatically.{RESET}\n")
+            return "auto"
+        if choice in ("r", "review"):
+            print(f"  {YELLOW}✓ Review mode — you'll confirm each command.{RESET}\n")
+            return "review"
+        if choice in ("s", "suggest"):
+            print(f"  {DIM}✓ Suggest mode — commands will be shown but not run.{RESET}\n")
+            return "suggest"
+        print(f"  {RED}Please enter a, r, or s.{RESET}")
+
+
+# ── Session history display ───────────────────────────────────────────────────
+
+def show_session_history(agent: GitAgent) -> list[dict]:
+    """Print numbered step history. Returns the list of executed steps."""
+    steps = agent.get_step_history()
+    if not steps:
+        print(f"  {DIM}No commands were executed in this session.{RESET}")
+        return steps
+
+    print(f"\n{CYAN}{BOLD}Session command history:{RESET}")
+    for i, step in enumerate(steps, 1):
+        ok = step.get("exit_code", 0) == 0
+        icon = f"{GREEN}✓{RESET}" if ok else f"{RED}✗{RESET}"
+        head = step.get("git_head_before", "")
+        head_str = f"{DIM}  (HEAD was {head[:8]}){RESET}" if head else ""
+        print(f"  {DIM}{i:2d}.{RESET} {icon} {step['cmd']}{head_str}")
+    print()
+    return steps
+
+
+def offer_undo(agent: GitAgent) -> None:
+    """Interactively offer to undo steps from the session."""
+    steps = show_session_history(agent)
+    if not steps:
+        return
+
+    print(f"{DIM}Enter a step number to undo it (and all steps after it), or press Enter to skip.{RESET}")
+    while True:
+        raw = input(f"  {YELLOW}Undo step #{RESET} [1-{len(steps)}, or Enter to skip]: ").strip()
+        if not raw:
+            break
+        if not raw.isdigit():
+            print(f"  {RED}Please enter a number.{RESET}")
+            continue
+        idx = int(raw) - 1
+        if idx < 0 or idx >= len(steps):
+            print(f"  {RED}Out of range. Enter 1-{len(steps)}.{RESET}")
+            continue
+
+        step = steps[idx]
+        head = step.get("git_head_before", "")
+        if head:
+            print(f"\n  {YELLOW}This will reset to {head[:8]}, undoing step {idx+1} and all after it:{RESET}")
+            for j in range(idx, len(steps)):
+                print(f"    {DIM}• {steps[j]['cmd']}{RESET}")
+
+            if confirm(f"  {YELLOW}Confirm undo?{RESET}"):
+                ok = agent.undo_step(idx)
+                if ok:
+                    # Refresh step list after undo
+                    steps = agent.get_step_history()
+                    if not steps:
+                        print(f"  {DIM}No more steps. Exiting undo.{RESET}")
+                        break
+                    show_session_history(agent)
+            else:
+                print(f"  {DIM}Undo cancelled.{RESET}")
+        else:
+            # No HEAD snapshot — call undo_step which will print the warning
+            agent.undo_step(idx)
+        break
+
+
+# ── execute_commands (ask mode) ───────────────────────────────────────────────
+
 def execute_commands(commands: list[str], auto: bool = False):
     if not commands:
         return
@@ -37,8 +128,9 @@ def execute_commands(commands: list[str], auto: bool = False):
 
     if auto or confirm(f"{YELLOW}Run these commands?{RESET}"):
         for cmd in commands:
+            cmd = _devtrack_git_cmd(cmd)
             print(f"{DIM}$ {cmd}{RESET}")
-            result = subprocess.run(cmd.split(), capture_output=False, text=True)
+            result = subprocess.run(cmd, shell=True, capture_output=False, text=True)
             if result.returncode != 0:
                 print(f"{RED}Command failed (exit {result.returncode}). Stopping.{RESET}")
                 break
@@ -46,7 +138,8 @@ def execute_commands(commands: list[str], auto: bool = False):
         print(f"{DIM}Commands not executed. Copy-paste them manually.{RESET}\n")
 
 
-# ASK MODE (simple suggestion)
+# ── ASK MODE (simple suggestion) ─────────────────────────────────────────────
+
 def ask_mode(query: str, cfg: dict):
     cwd = os.getcwd()
     ctx = get_repo_context(cwd)
@@ -64,33 +157,52 @@ def ask_mode(query: str, cfg: dict):
         execute_commands(commands, auto=cfg.get("auto_confirm", False))
 
 
-# AGENT DO MODE
+# ── AGENT DO MODE ─────────────────────────────────────────────────────────────
+
 def do_mode(task: str, cfg: dict, auto: bool = False, verbose: bool = False):
     cwd = os.getcwd()
     _, is_git = run_git(["rev-parse", "--git-dir"], cwd)
     if not is_git:
         print(f"{RED}Not inside a git repository.{RESET}")
         sys.exit(1)
+
+    # Show session approval dialog
+    mode = prompt_approval_mode(auto=auto)
+    session_auto    = (mode == "auto")
+    suggest_only    = (mode == "suggest")
+
     backend = LLMBackend(**_backend_kwargs(cfg))
-    agent = GitAgent(backend=backend, cwd=cwd, verbose=verbose, auto=auto)
+    agent = GitAgent(
+        backend=backend, cwd=cwd, verbose=verbose,
+        auto=session_auto, suggest_only=suggest_only,
+    )
+
+    success = False
     try:
         success = agent.run(task)
-        sys.exit(0 if success else 1)
     except KeyboardInterrupt:
         print(f"\n{RED}Agent interrupted by user.{RESET}\n")
-        sys.exit(1)
     except ConnectionError as e:
         print(f"{RED}{e}{RESET}")
         sys.exit(1)
+    finally:
+        # Always offer undo after a do session
+        if agent.get_step_history():
+            offer_undo(agent)
+
+    sys.exit(0 if success else 1)
 
 
-# INTERACTIVE SHELL
+# ── INTERACTIVE SHELL ─────────────────────────────────────────────────────────
+
 def interactive_mode(cfg: dict):
     print_banner()
     print(f"Provider: {CYAN}{cfg['provider']}{RESET}  Model: {CYAN}{cfg['model']}{RESET}")
     print(f"{DIM}  ask <question>  — get command suggestions{RESET}")
     print(f"{DIM}  do  <task>      — agent plans + executes + recovers{RESET}")
     print(f"{DIM}  context         — show repo state{RESET}")
+    print(f"{DIM}  history         — show commands run in this session{RESET}")
+    print(f"{DIM}  undo [step]     — undo a step from the last agent run{RESET}")
     print(f"{DIM}  quit            — exit{RESET}\n")
 
     cwd = os.getcwd()
@@ -98,7 +210,13 @@ def interactive_mode(cfg: dict):
     if not is_git:
         print(f"{YELLOW}Not inside a git repository.{RESET}\n")
 
+    # Ask approval mode once for the whole interactive session
+    mode = prompt_approval_mode(auto=cfg.get("auto_confirm", False))
+    session_auto = (mode == "auto")
+    suggest_only = (mode == "suggest")
+
     backend = LLMBackend(**_backend_kwargs(cfg))
+    last_agent: GitAgent | None = None
 
     while True:
         try:
@@ -122,17 +240,47 @@ def interactive_mode(cfg: dict):
             ctx = get_repo_context(cwd)
             print(format_context(ctx))
 
+        elif cmd == "history":
+            if last_agent:
+                show_session_history(last_agent)
+            else:
+                print(f"  {DIM}No agent has run yet in this session.{RESET}")
+
+        elif cmd == "undo":
+            if not last_agent:
+                print(f"  {DIM}No agent has run yet in this session.{RESET}")
+                continue
+
+            steps = last_agent.get_step_history()
+            if not steps:
+                print(f"  {DIM}No steps to undo.{RESET}")
+                continue
+
+            # Allow `undo 3` to jump directly to step 3
+            if rest.strip().isdigit():
+                idx = int(rest.strip()) - 1
+                last_agent.undo_step(idx)
+                show_session_history(last_agent)
+            else:
+                offer_undo(last_agent)
+
         elif cmd == "do":
             if not rest:
                 print(f"{YELLOW}Usage: do <task>{RESET}")
                 continue
-            agent = GitAgent(backend=backend, cwd=cwd,
-                             verbose=cfg.get("verbose", False),
-                             auto=cfg.get("auto_confirm", False))
+
+            last_agent = GitAgent(
+                backend=backend, cwd=cwd,
+                verbose=cfg.get("verbose", False),
+                auto=session_auto, suggest_only=suggest_only,
+            )
             try:
-                agent.run(rest)
+                last_agent.run(rest)
             except KeyboardInterrupt:
                 print(f"\n{RED}Agent interrupted.{RESET}")
+            finally:
+                if last_agent.get_step_history():
+                    print(f"{DIM}Tip: type 'history' to review steps, 'undo [N]' to revert.{RESET}\n")
 
         else:
             # ask (explicit or bare question)
@@ -148,36 +296,40 @@ def interactive_mode(cfg: dict):
             explanation, commands = parse_response(response)
             print(f"\n{CYAN}{BOLD}sage>{RESET} {explanation}\n")
             if commands:
-                execute_commands(commands, auto=cfg.get("auto_confirm", False))
+                execute_commands(commands, auto=session_auto)
 
 
-# CONFIG WIZARD
+# ── CONFIG WIZARD ─────────────────────────────────────────────────────────────
+
 def configure_wizard():
     cfg = load_config()
     print(f"\n{BOLD}git-sage configuration{RESET}\n")
     show_config(cfg)
-    print("Providers: ollama | openai | lmstudio | custom")
+    print("Providers: ollama | openai | groq | lmstudio | anthropic | custom")
     provider = input(f"Provider [{cfg['provider']}]: ").strip() or cfg["provider"]
     cfg["provider"] = provider
 
-    # Load model defaults from config (NO HARDCODED DEFAULTS)
     try:
-        from backend.config import git_sage_default_model, openai_model
+        from backend.config import git_sage_default_model, openai_model, groq_model
         default_models = {
-            "ollama": git_sage_default_model(),
-            "openai": openai_model(),
-            "lmstudio": "local-model"
+            "ollama":    git_sage_default_model(),
+            "openai":    openai_model(),
+            "groq":      groq_model(),
+            "lmstudio":  "local-model",
+            "anthropic": "claude-haiku-4-5",
         }
     except (ImportError, ValueError):
-        # Fallback if config vars missing
-        default_models = {"ollama": "llama3", "openai": "gpt-4o-mini", "lmstudio": "local-model"}
+        default_models = {
+            "ollama": "llama3", "openai": "gpt-4o-mini",
+            "groq": "llama-3.3-70b-versatile", "lmstudio": "local-model",
+        }
 
     def_model = default_models.get(provider, cfg["model"])
     cfg["model"] = input(f"Model [{def_model}]: ").strip() or def_model
     url = input("Base URL (blank = default): ").strip()
     if url: cfg["base_url"] = url
-    if provider in ("openai", "custom"):
-        key = input("API key (blank = skip): ").strip()
+    if provider in ("openai", "groq", "anthropic", "custom"):
+        key = input("API key (blank = use env var): ").strip()
         if key: cfg["api_key"] = key
     cfg["auto_confirm"] = input("Auto-execute commands? [y/N]: ").strip().lower() in ("y", "yes")
     save_config(cfg)
@@ -200,7 +352,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Modes:
-  git-sage                          Interactive shell
+  git-sage                          Interactive shell (with session approval + undo)
   git-sage ask "how do I..."        Simple command suggestion
   git-sage do  "squash last 3..."   Agentic: LLM plans + executes + recovers
 
@@ -209,6 +361,15 @@ Examples:
   git-sage do  "squash my last 5 commits into one"
   git-sage do  "my last push broke prod, roll back to the previous commit"
   git-sage ask "what does git reflog do"
+
+Session approval (shown automatically when using 'do'):
+  [a] Accept all   — run every command without asking
+  [r] Review each  — confirm before each command
+  [s] Suggest only — show commands, never execute
+
+Undo support:
+  After any 'do' session, you can undo specific steps using the undo prompt.
+  In interactive mode, type: history  or  undo [N]
         """
     )
     parser.add_argument("mode",  nargs="?", choices=["ask", "do"])
@@ -217,7 +378,7 @@ Examples:
     parser.add_argument("--show-config", action="store_true")
     parser.add_argument("--provider")
     parser.add_argument("--model")
-    parser.add_argument("--yes", "-y",   action="store_true")
+    parser.add_argument("--yes", "-y",   action="store_true", help="Accept all commands (auto mode)")
     parser.add_argument("--verbose",     action="store_true")
 
     args = parser.parse_args()
