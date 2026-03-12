@@ -198,10 +198,13 @@ Keep it professional and constructive. Respond ONLY with valid JSON."""
 
         try:
             from backend.llm.base import LLMOptions
-            from backend.config import http_timeout
+            from backend.config import http_timeout, report_llm_temperature, report_llm_max_tokens
             response_text = self._get_provider().generate(
                 prompt=prompt,
-                options=LLMOptions(temperature=0.3, max_tokens=500),
+                options=LLMOptions(
+                    temperature=report_llm_temperature(),
+                    max_tokens=report_llm_max_tokens(),
+                ),
                 timeout=http_timeout(),
             )
 
@@ -1073,10 +1076,13 @@ Be constructive and highlight patterns. Respond ONLY with valid JSON."""
 
         try:
             from backend.llm.base import LLMOptions
-            from backend.config import http_timeout_long
+            from backend.config import http_timeout_long, report_llm_temperature, report_llm_max_tokens
             response_text = self._get_provider().generate(
                 prompt=prompt,
-                options=LLMOptions(temperature=0.3, max_tokens=600),
+                options=LLMOptions(
+                    temperature=report_llm_temperature(),
+                    max_tokens=report_llm_max_tokens(),
+                ),
                 timeout=http_timeout_long(),
             )
             if response_text:

@@ -73,9 +73,10 @@ type EnvConfig struct {
 	TeamsMentionUser string
 
 	// Learning command settings
-	LearningPythonPath  string
-	LearningScriptPath  string
-	LearningDefaultDays string
+	LearningPythonPath      string
+	LearningScriptPath      string
+	LearningDailyScriptPath string
+	LearningDefaultDays     string
 
 	// Build metadata
 	DevTrackVersion   string
@@ -213,9 +214,10 @@ func LoadEnvConfig() (*EnvConfig, error) {
 		TeamsChatType:       os.Getenv("TEAMS_CHAT_TYPE"),
 		TeamsWebhookURL:     os.Getenv("TEAMS_WEBHOOK_URL"),
 		TeamsMentionUser:    os.Getenv("TEAMS_MENTION_USER"),
-		LearningPythonPath:  os.Getenv("LEARNING_PYTHON_PATH"),
-		LearningScriptPath:  os.Getenv("LEARNING_SCRIPT_PATH"),
-		LearningDefaultDays: os.Getenv("LEARNING_DEFAULT_DAYS"),
+		LearningPythonPath:      os.Getenv("LEARNING_PYTHON_PATH"),
+		LearningScriptPath:      os.Getenv("LEARNING_SCRIPT_PATH"),
+		LearningDailyScriptPath: os.Getenv("LEARNING_DAILY_SCRIPT_PATH"),
+		LearningDefaultDays:     os.Getenv("LEARNING_DEFAULT_DAYS"),
 		DevTrackVersion:     os.Getenv("DEVTRACK_VERSION"),
 		DevTrackBuildDate:   os.Getenv("DEVTRACK_BUILD_DATE"),
 	}
@@ -656,6 +658,19 @@ func GetLearningScriptPath() string {
 		os.Exit(1)
 	}
 	return expandPath(config.LearningScriptPath)
+}
+
+func GetLearningDailyScriptPath() string {
+	config, err := LoadEnvConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: Failed to load configuration: %v\n", err)
+		os.Exit(1)
+	}
+	// Use explicit env var if set, otherwise derive from PROJECT_ROOT
+	if config.LearningDailyScriptPath != "" {
+		return expandPath(config.LearningDailyScriptPath)
+	}
+	return filepath.Join(config.ProjectRoot, "backend", "run_daily_learning.py")
 }
 
 func GetLearningDefaultDays() int {

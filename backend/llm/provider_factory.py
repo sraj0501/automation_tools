@@ -68,21 +68,25 @@ def _build_chain() -> ProviderChain:
     from backend.llm.ollama_provider import OllamaProvider
     from backend.llm.openai_provider import OpenAIProvider
     from backend.llm.anthropic_provider import AnthropicProvider
+    from backend.llm.groq_provider import GroqProvider
 
     try:
-        from backend.config import llm_provider, openai_api_key, anthropic_api_key
-        primary_name = llm_provider()
-        has_openai = bool(openai_api_key())
+        from backend.config import llm_provider, openai_api_key, anthropic_api_key, groq_api_key
+        primary_name  = llm_provider()
+        has_openai    = bool(openai_api_key())
         has_anthropic = bool(anthropic_api_key())
+        has_groq      = bool(groq_api_key())
     except Exception:
-        primary_name = "ollama"
-        has_openai = False
+        primary_name  = "ollama"
+        has_openai    = False
         has_anthropic = False
+        has_groq      = False
 
     provider_map = {
-        "ollama": OllamaProvider,
-        "openai": OpenAIProvider,
+        "ollama":    OllamaProvider,
+        "openai":    OpenAIProvider,
         "anthropic": AnthropicProvider,
+        "groq":      GroqProvider,
     }
 
     ordered: List[LLMProvider] = []
@@ -92,6 +96,8 @@ def _build_chain() -> ProviderChain:
     ordered.append(primary_cls())
 
     # Add other providers that have credentials as fallbacks
+    if primary_name != "groq" and has_groq:
+        ordered.append(GroqProvider())
     if primary_name != "openai" and has_openai:
         ordered.append(OpenAIProvider())
     if primary_name != "anthropic" and has_anthropic:

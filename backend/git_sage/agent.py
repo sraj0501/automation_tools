@@ -102,6 +102,7 @@ When resolving conflicts:
 8. **If something unexpected happens**, adapt. Don't blindly retry the same failing command.
 9. **Smart conflict resolution**: Prefer keeping both changes unless contradictory. For feature branches: prefer incoming. For fixes: prefer HEAD.
 10. **Never truncate file content in write_file** — write the complete file.
+11. **Avoid interactive flags**: Use `git --no-pager log`, `git --no-pager diff` instead of plain `git log`/`git diff`. For squashing N commits, prefer `git reset --soft HEAD~N && git commit -m "msg"` over `git rebase -i`. If you must use `git rebase -i`, note that it will open an editor in the user's terminal.
 
 ## Reading tool output
 
@@ -214,22 +215,39 @@ class GitAgent:
 
     # ── tool implementations ─────────────────────────────────────────────────
 
+    # Commands that open a pager or editor — must run with stdin/stdout attached to terminal
+    _INTERACTIVE_PATTERNS = [
+        r'\bgit\s+rebase\s+(-i|--interactive)\b',
+        r'\bgit\s+add\s+(-p|--patch|-i|--interactive)\b',
+        r'\bgit\s+commit\b(?!.*\s+-m\b)',   # commit without -m flag
+        r'\bgit\s+log\b(?!.*--no-pager)',
+        r'\bgit\s+diff\b(?!.*--no-pager)',
+    ]
+
+    def _is_interactive(self, cmd: str) -> bool:
+        import re
+        return any(re.search(p, cmd) for p in self._INTERACTIVE_PATTERNS)
+
     def _do_run(self, cmd: str) -> tuple[str, int]:
-        """Execute a shell command."""
+        """Execute a shell command. Commands that open editors/pagers (rebase -i,
+        add -p, commit without -m, etc.) run with stdin/stdout attached to the
+        terminal so the user can interact. All others capture output for the LLM."""
         if not self.auto:
             if not self._confirm_run(cmd):
                 return "User skipped this command.", 0
 
         try:
-            result = subprocess.run(
-                cmd, shell=True, capture_output=True, text=True, cwd=self.cwd
-            )
-            output = (result.stdout + result.stderr).strip()
-            if not output:
-                output = "(no output)"
+            if self._is_interactive(cmd):
+                # Let the editor/pager render in the user's terminal
+                result = subprocess.run(cmd, shell=True, text=True, cwd=self.cwd)
+                output = "(interactive command completed)" if result.returncode == 0 \
+                    else f"(exited with code {result.returncode})"
+            else:
+                result = subprocess.run(
+                    cmd, shell=True, capture_output=True, text=True, cwd=self.cwd
+                )
+                output = (result.stdout + result.stderr).strip() or "(no output)"
 
-            # Handle interactive git commands that need stdin (rebase -i, etc.)
-            # We auto-set GIT_SEQUENCE_EDITOR for interactive rebases
             return output, result.returncode
         except Exception as e:
             return str(e), 1

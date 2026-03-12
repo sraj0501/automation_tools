@@ -11,16 +11,86 @@ import (
 
 // LearningCommands handles personalized AI learning commands
 type LearningCommands struct {
-	pythonPath string
-	scriptPath string
+	pythonPath      string
+	scriptPath      string
+	dailyScriptPath string
+	projectRoot     string
 }
 
 // NewLearningCommands creates a new learning commands handler
 func NewLearningCommands() *LearningCommands {
-	return &LearningCommands{
-		pythonPath: GetLearningPythonPath(),
-		scriptPath: GetLearningScriptPath(),
+	config, _ := LoadEnvConfig()
+	projectRoot := ""
+	if config != nil {
+		projectRoot = config.ProjectRoot
 	}
+	return &LearningCommands{
+		pythonPath:      GetLearningPythonPath(),
+		scriptPath:      GetLearningScriptPath(),
+		dailyScriptPath: GetLearningDailyScriptPath(),
+		projectRoot:     projectRoot,
+	}
+}
+
+// runDailyScript runs run_daily_learning.py with the given arguments via uv
+func (lc *LearningCommands) runDailyScript(args ...string) error {
+	uvArgs := []string{"run", "--directory", lc.projectRoot, "python", lc.dailyScriptPath}
+	uvArgs = append(uvArgs, args...)
+	cmd := exec.Command("uv", uvArgs...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	return cmd.Run()
+}
+
+// SetupCron installs the crontab entry using LEARNING_CRON_SCHEDULE from .env
+func (lc *LearningCommands) SetupCron() error {
+	fmt.Println("🕐 Installing learning cron entry...")
+	fmt.Println()
+	if err := lc.runDailyScript("--setup-cron"); err != nil {
+		return fmt.Errorf("failed to set up cron: %w", err)
+	}
+	return nil
+}
+
+// RemoveCron removes the DevTrack learning crontab entry
+func (lc *LearningCommands) RemoveCron() error {
+	fmt.Println("🗑️  Removing learning cron entry...")
+	fmt.Println()
+	if err := lc.runDailyScript("--remove-cron"); err != nil {
+		return fmt.Errorf("failed to remove cron: %w", err)
+	}
+	return nil
+}
+
+// CronStatus shows the current cron entry status
+func (lc *LearningCommands) CronStatus() error {
+	if err := lc.runDailyScript("--cron-status"); err != nil {
+		return fmt.Errorf("failed to get cron status: %w", err)
+	}
+	return nil
+}
+
+// ResetLearning wipes all learning data and prompts for fresh setup
+func (lc *LearningCommands) ResetLearning() error {
+	if err := lc.runDailyScript("--reset"); err != nil {
+		return fmt.Errorf("reset failed: %w", err)
+	}
+	return nil
+}
+
+// SyncNow runs a delta collection immediately
+func (lc *LearningCommands) SyncNow(full bool) error {
+	fmt.Println("🔄 Running learning sync...")
+	fmt.Println()
+	args := []string{}
+	if full {
+		args = append(args, "--full")
+	}
+	if err := lc.runDailyScript(args...); err != nil {
+		return fmt.Errorf("failed to sync: %w", err)
+	}
+	return nil
 }
 
 // EnableLearning starts collecting communication data and enables learning

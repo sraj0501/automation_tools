@@ -268,38 +268,33 @@ except ConfigError as e:
 
 ## Session Completion Status (Current)
 
-This session achieved major production-readiness milestones:
+**Last Updated**: March 12, 2026
 
 **Phases Completed**:
 
 - Phase 1: Enhanced Commit Messages ✅
 - Phase 2: Conflict Resolution & PR-Aware Parsing ✅
 - Phase 3: Event-Driven Integration ✅
-- Phase 4: Personalization (95% complete) ✅
+- Phase 4: Project Management ✅
+- Personalization "Talk Like You" ✅ FULLY WORKING
 
-**Major Accomplishments**:
+**Major Accomplishments (March 12, 2026 session)**:
 
-- Hardcoding Refactoring: Eliminated ALL 22 hardcoded values → environment variables
-- Configuration System: 12 new required timeout/host/model variables
-- Error Handling: Clear errors when config missing (no silent failures)
-- Testing: 134+ tests passing, 95%+ coverage
-- Documentation: Comprehensive wiki restructure, CLAUDE.md updates
-- Git History: 40+ clean commits, well-organized feature branches
+- Personalization pipeline working end-to-end: Teams → MongoDB → Profile → Personalized responses
+- Fixed user identification: Teams messages use Azure AD object ID (not UPN) for matching
+- Fixed `graph.py` `get_user()` to include `id` in `$select`
+- Fixed delta state: stale `last_collected` blocks collection; use `learning-sync --full` to reset
+- Added MongoDB storage for learning data (motor async driver)
+- Docker Compose with mongo, redis, postgres
+- 10 new CLI commands for learning management
+- `test-response` no longer triggers Graph auth
+- Daily cron at 20:00 for automatic delta sync
 
-**Production Readiness**: VERY HIGH (99.5% confidence)
+**Production Readiness**: VERY HIGH
 
-- All phases feature-complete and verified
-- No hardcoded values (all via env config)
-- Comprehensive error handling
-- Full test coverage
-- Production-grade configuration
-
-**Deployment Ready**: YES
-
-- All 12 required env vars documented
-- Example .env provided with all variables
-- Error messages guide missing config
-- Validation script available
+**Planned Next**:
+- launchd plist for macOS auto-start on login
+- Multi-repo monitoring with per-repo project management config
 
 ## Phase Implementation Status
 
@@ -382,6 +377,66 @@ All user-facing documentation has been reorganized for clarity:
 - **Conflict auto-resolution**: Post-update hook (Phase 3) automatically detects and resolves merge conflicts using smart strategies, reports status to user via TUI or logs.
 - **Git-sage agent mode**: The `git-sage` tool runs autonomously: it plans operations, executes them, reads output, handles failures with rollback, and only asks for input on genuine ambiguities.
 
+## Personalization System
+
+### Architecture
+
+Teams chats are collected via MS Graph API and stored in MongoDB. The system learns your communication style and generates personalized response suggestions.
+
+### CLI Commands
+
+```bash
+devtrack enable-learning          # Consent + initial data collection
+devtrack learning-sync            # Delta sync (only new messages since last run)
+devtrack learning-sync --full     # Force full 30-day re-collection
+devtrack learning-setup-cron      # Install daily cron (uses LEARNING_CRON_SCHEDULE)
+devtrack learning-remove-cron     # Remove cron entry
+devtrack learning-cron-status     # Show cron status
+devtrack learning-reset           # Wipe all data (MongoDB + files) and start fresh
+devtrack show-profile             # Display learned communication profile
+devtrack test-response <text>     # Generate a personalized response (no auth needed)
+devtrack learning-status          # Show consent/sample count status
+```
+
+### Key Implementation Details
+
+**User identification**: Teams messages do NOT contain `userPrincipalName` in `additional_data` (only `tenantId`). User matching is done by **Azure AD object ID** stored in `consent.json` as `user_object_id`. This is fetched from `graph.get_user()` which must include `'id'` in `$select`.
+
+**`AsyncTeamsDataCollector._is_user_message()`**: Overrides base class to match by `user_object_id` first, falls back to UPN. The base class in `data_collectors.py` uses UPN only.
+
+**Delta sync**: `learning_state` MongoDB collection tracks `last_collected` per user email. If `learning-sync` runs repeatedly with 0 samples, the window shrinks. Fix: `learning-sync --full`.
+
+**MongoDB mode**: When `MONGODB_URI` is set and `motor` is installed, `PersonalizedAI._mongo_mode=True` suppresses file writes. Samples deduplicated by Teams message GUID using `$setOnInsert`.
+
+**`test-response` / `show-profile` / `revoke-consent`**: Skip MS Graph auth entirely — they only need the local profile from MongoDB/files.
+
+**sys.path**: `learning_integration.py` adds repo root to `sys.path` so `backend.llm` imports work when the script runs standalone.
+
+### MongoDB Collections
+
+| Collection | `_id` | Purpose |
+|---|---|---|
+| `communication_samples` | Teams message GUID | Trigger→response pairs |
+| `user_profiles` | user email | Computed style profile |
+| `learning_state` | user email | Delta sync timestamp |
+
+### Consent File
+
+`Data/learning/consent.json` stores:
+- `user_email` — used as fallback when Graph auth fails
+- `user_object_id` — Azure AD ID for message matching (saved on first successful `get_user()`)
+
+### Infrastructure
+
+```bash
+docker compose up -d    # Start MongoDB, Redis, PostgreSQL
+docker compose down     # Stop services
+```
+
+Cron runs at `LEARNING_CRON_SCHEDULE` (default `0 20 * * *`) via `backend/run_daily_learning.py`.
+
+---
+
 ## Common Debugging Patterns
 
 **AI enhancement failing silently in `devtrack git commit`:**
@@ -441,6 +496,106 @@ All user-facing documentation has been reorganized for clarity:
 - Ensure repo_path is correct (default: "." in python_bridge.py)
 - Check git repo is valid and on a feature branch
 - Review logs: `tail -f Data/logs/python_bridge.log | grep "context"`
+
+## Ticket Alerter (Planned Feature)
+
+### Overview
+
+A background polling service that watches Jira, Azure DevOps, and GitHub for ticket events relevant to the developer, delivering OS/terminal notifications and persisting them to MongoDB.
+
+### Events to Watch
+
+| Source | Events |
+|---|---|
+| Jira | Assigned to me, comment added, status changed, priority changed |
+| Azure DevOps | Work item assigned, comment added, state changed |
+| GitHub | Issue/PR assigned, review requested, comment on my PR |
+
+### Notification Delivery
+
+- **macOS OS notification**: `osascript -e 'display notification ...'` or `terminal-notifier` (richer, with actions)
+- **Terminal**: Bell + formatted output when devtrack is in foreground
+- **Configurable per-source**: opt in/out of each integration and event type via `.env`
+
+### MongoDB Schema
+
+```
+notifications collection:
+  _id: ObjectId
+  source: "jira" | "azure" | "github"
+  event_type: "assigned" | "comment" | "status_change" | "review_requested"
+  ticket_id: "PROJ-123"
+  title: "Fix login bug"
+  summary: "John commented: ..."
+  url: "https://..."
+  timestamp: datetime
+  read: false
+  dismissed: false
+  raw: { ...full API payload... }
+```
+
+### CLI Commands (Planned)
+
+```bash
+devtrack alerts                   # Show unread notifications (last 24h)
+devtrack alerts --all             # Show all notifications
+devtrack alerts --clear           # Mark all as read
+devtrack alerts --pause           # Pause polling
+devtrack alerts --resume          # Resume polling
+```
+
+### Architecture
+
+```
+Poller (Python, async)
+  ├── JiraPoller      — REST API, polls every ALERT_POLL_INTERVAL_SECS
+  ├── AzurePoller     — Azure DevOps REST API
+  └── GitHubPoller    — GitHub REST API (or webhooks if hosted)
+          │
+          ▼
+  MongoDB notifications collection
+          │
+          ▼
+  Notifier
+    ├── macOS: osascript / terminal-notifier
+    └── Terminal: print to stdout if TTY attached
+```
+
+**Polling**: Run as part of the existing Go daemon — a new `alert_poller.go` that spawns `backend/alert_poller.py` via the IPC bridge, similar to how the scheduler works.
+
+**State tracking**: Each integration stores `last_checked` timestamp (like learning delta) in MongoDB `alert_state` collection keyed by `source`.
+
+### Configuration (`.env` keys to add)
+
+```
+ALERT_ENABLED=true
+ALERT_POLL_INTERVAL_SECS=300        # Poll every 5 minutes
+ALERT_JIRA_ENABLED=true
+ALERT_AZURE_ENABLED=true
+ALERT_GITHUB_ENABLED=true
+ALERT_NOTIFY_ASSIGNED=true
+ALERT_NOTIFY_COMMENTS=true
+ALERT_NOTIFY_STATUS_CHANGES=true
+```
+
+### Implementation Files (To Create)
+
+```
+backend/
+  ├── alert_poller.py         — Main async poller, coordinates all sources
+  ├── alert_notifier.py       — OS + terminal notification delivery
+  ├── alerters/
+  │   ├── jira_alerter.py     — Jira polling logic
+  │   ├── azure_alerter.py    — Azure DevOps polling logic
+  │   └── github_alerter.py   — GitHub polling logic
+  └── db/mongo_alerts.py      — MongoAlertsStore (notifications + alert_state)
+
+devtrack-bin/
+  ├── alert_poller.go         — Launches alert_poller.py, manages lifecycle
+  └── cli_alerts.go           — `devtrack alerts` CLI commands
+```
+
+---
 
 ## Hardcoding Refactoring Summary
 

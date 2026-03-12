@@ -187,13 +187,13 @@ def azure_pat() -> str:
 
 
 def azure_org() -> str:
-    """Azure DevOps organization."""
-    return get("ORGANIZATION", "")
+    """Azure DevOps organization. Reads AZURE_ORGANIZATION, falls back to ORGANIZATION."""
+    return get("AZURE_ORGANIZATION") or get("ORGANIZATION", "")
 
 
 def azure_project() -> str:
-    """Azure DevOps project."""
-    return get("PROJECT", "")
+    """Azure DevOps project. Reads AZURE_PROJECT, falls back to PROJECT."""
+    return get("AZURE_PROJECT") or get("PROJECT", "")
 
 
 # --- Task generation defaults (from env, no hardcoded personal data) ---
@@ -478,3 +478,128 @@ def prompt_timeout_task() -> int:
         return secs
     except ValueError as e:
         raise ValueError(f"PROMPT_TIMEOUT_TASK_SECS must be integer: {e}")
+
+
+# --- MongoDB ---
+
+def mongodb_uri() -> str:
+    """MongoDB connection URI. Optional - if set, learning data is stored in MongoDB.
+    Leave empty to use file-based storage. MONGODB_URI."""
+    return get("MONGODB_URI", "")
+
+
+def mongodb_db_name() -> str:
+    """MongoDB database name. MONGODB_DB_NAME (default: devtrack)."""
+    return get("MONGODB_DB_NAME", "devtrack")
+
+
+# --- Learning cron settings ---
+
+def learning_cron_enabled() -> bool:
+    """Whether automatic daily learning collection is enabled. LEARNING_CRON_ENABLED."""
+    return get_bool("LEARNING_CRON_ENABLED", False)
+
+
+def learning_cron_schedule() -> str:
+    """Cron schedule for learning collection. LEARNING_CRON_SCHEDULE (default: '0 8 * * *')."""
+    return get("LEARNING_CRON_SCHEDULE", "0 8 * * *")
+
+
+def learning_history_days() -> int:
+    """History window in days for initial collection. LEARNING_HISTORY_DAYS (default: 30)."""
+    return get_int("LEARNING_HISTORY_DAYS", 30)
+
+
+# --- LLM generation parameters ---
+
+def commit_llm_temperature() -> float:
+    """Temperature for commit message generation. Lower = more focused/deterministic.
+    COMMIT_LLM_TEMPERATURE (default: 0.2)."""
+    val = get("COMMIT_LLM_TEMPERATURE", "0.2")
+    return float(val)
+
+
+def commit_llm_max_tokens() -> int:
+    """Max tokens for commit message generation. COMMIT_LLM_MAX_TOKENS (default: 400)."""
+    return get_int("COMMIT_LLM_MAX_TOKENS", 400)
+
+
+def report_llm_temperature() -> float:
+    """Temperature for report generation. REPORT_LLM_TEMPERATURE (default: 0.3)."""
+    val = get("REPORT_LLM_TEMPERATURE", "0.3")
+    return float(val)
+
+
+def report_llm_max_tokens() -> int:
+    """Max tokens for report generation. REPORT_LLM_MAX_TOKENS (default: 600)."""
+    return get_int("REPORT_LLM_MAX_TOKENS", 600)
+
+
+def personalization_llm_temperature() -> float:
+    """Temperature for personalized response generation. PERSONALIZATION_LLM_TEMPERATURE (default: 0.7)."""
+    val = get("PERSONALIZATION_LLM_TEMPERATURE", "0.7")
+    return float(val)
+
+
+def personalization_llm_max_tokens() -> int:
+    """Max tokens for personalized response generation. PERSONALIZATION_LLM_MAX_TOKENS (default: 300)."""
+    return get_int("PERSONALIZATION_LLM_MAX_TOKENS", 300)
+
+
+def description_llm_temperature() -> float:
+    """Temperature for description enhancement. DESCRIPTION_LLM_TEMPERATURE (default: 0.3)."""
+    val = get("DESCRIPTION_LLM_TEMPERATURE", "0.3")
+    return float(val)
+
+
+def description_llm_max_tokens() -> int:
+    """Max tokens for description enhancement. DESCRIPTION_LLM_MAX_TOKENS (default: 300)."""
+    return get_int("DESCRIPTION_LLM_MAX_TOKENS", 300)
+
+
+# --- Groq ---
+
+def groq_api_key() -> str:
+    return get("GROQ_API_KEY", "")
+
+def groq_host() -> str:
+    return get("GROQ_HOST", "https://api.groq.com/openai/v1")
+
+def groq_model() -> str:
+    return get("GROQ_MODEL", "llama-3.3-70b-versatile")
+
+
+# --- git-sage provider resolution ---
+
+def git_sage_provider() -> str:
+    return get("GIT_SAGE_PROVIDER", llm_provider()).lower().strip()
+
+def git_sage_model() -> str:
+    provider = git_sage_provider()
+    if provider == "openai":
+        return openai_model()
+    if provider == "groq":
+        return groq_model()
+    if provider == "anthropic":
+        return anthropic_model()
+    return get("GIT_SAGE_DEFAULT_MODEL", "") or ollama_model()
+
+def git_sage_api_key() -> str:
+    explicit = get("GIT_SAGE_API_KEY", "")
+    if explicit:
+        return explicit
+    provider = git_sage_provider()
+    if provider == "openai":   return openai_api_key()
+    if provider == "groq":     return groq_api_key()
+    if provider == "anthropic": return anthropic_api_key()
+    return ""
+
+def git_sage_base_url() -> str:
+    explicit = get("GIT_SAGE_BASE_URL", "")
+    if explicit:
+        return explicit
+    provider = git_sage_provider()
+    if provider == "groq":     return groq_host()
+    if provider == "lmstudio": return lmstudio_host()
+    if provider in ("openai", "anthropic"): return ""
+    return ollama_host()

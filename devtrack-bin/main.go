@@ -19,8 +19,8 @@ func main() {
 			return
 		}
 
-		// Handle test commands
-		if strings.HasPrefix(cmd, "test-") {
+		// Handle test commands (but not CLI commands that start with "test-")
+		if strings.HasPrefix(cmd, "test-") && cmd != "test-response" {
 			RunDemo()
 			return
 		}
@@ -32,7 +32,10 @@ func main() {
 			cmd == "db-stats" || cmd == "stats" || cmd == "enable-learning" || cmd == "show-profile" ||
 			cmd == "test-response" || cmd == "revoke-consent" || cmd == "learning-status" ||
 			cmd == "preview-report" || cmd == "send-report" || cmd == "save-report" ||
-			cmd == "force-trigger" || cmd == "send-summary" || cmd == "skip-next" {
+			cmd == "force-trigger" || cmd == "send-summary" || cmd == "skip-next" ||
+			cmd == "learning-sync" || cmd == "learning-setup-cron" ||
+			cmd == "learning-remove-cron" || cmd == "learning-cron-status" ||
+			cmd == "learning-reset" {
 			cli, err := NewCLI()
 			if err != nil {
 				fmt.Printf("Error initializing CLI: %v\n", err)

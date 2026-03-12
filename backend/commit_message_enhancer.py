@@ -361,10 +361,13 @@ class CommitMessageEnhancer:
                 Write ONLY the improved commit message. No meta-commentary, nothing else."""
 
             from backend.llm.base import LLMOptions
-            from backend.config import http_timeout
+            from backend.config import http_timeout, commit_llm_temperature, commit_llm_max_tokens
             enhanced = self._get_provider().generate(
                 prompt=prompt,
-                options=LLMOptions(temperature=0.2, max_tokens=200),
+                options=LLMOptions(
+                    temperature=commit_llm_temperature(),
+                    max_tokens=commit_llm_max_tokens(),
+                ),
                 timeout=http_timeout(),
             )
 

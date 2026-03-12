@@ -114,6 +114,8 @@ class PersonalizedAI:
         self.samples: List[CommunicationSample] = []
         self.profile: Optional[UserProfile] = None
         self.consent_given = self._check_consent()
+        # When True, skip JSONL file writes (MongoDB is the primary store)
+        self._mongo_mode: bool = False
         
         if self.consent_given:
             self._load_samples()
@@ -274,13 +276,15 @@ class PersonalizedAI:
             logger.error(f"Error loading profile: {e}")
     
     def _save_sample(self, sample: CommunicationSample):
-        """Save a communication sample"""
+        """Save a communication sample to file (skipped in MongoDB mode)."""
+        if self._mongo_mode:
+            return
         with open(self.samples_file, 'a') as f:
             f.write(json.dumps(sample.to_dict()) + '\n')
     
     def _save_profile(self):
-        """Save user profile"""
-        if not self.profile:
+        """Save user profile to file (skipped in MongoDB mode)."""
+        if self._mongo_mode or not self.profile:
             return
         
         profile_data = asdict(self.profile)
@@ -613,9 +617,6 @@ class PersonalizedAI:
         if not self.profile:
             return "Error: Not enough data to generate personalized responses yet"
         
-        if not ollama_available:
-            return "Error: Ollama not available. Install: pip install ollama"
-        
         # Build prompt with user's style characteristics
         style_info = self._build_style_prompt()
         
@@ -635,9 +636,13 @@ Response:"""
         try:
             from backend.llm import get_provider
             from backend.llm.base import LLMOptions
+            from backend.config import personalization_llm_temperature, personalization_llm_max_tokens
             result = get_provider().generate(
                 prompt=prompt,
-                options=LLMOptions(temperature=0.7, max_tokens=300),
+                options=LLMOptions(
+                    temperature=personalization_llm_temperature(),
+                    max_tokens=personalization_llm_max_tokens(),
+                ),
             )
             return result if result else "Error: LLM unavailable"
         except Exception as e:

@@ -1,4 +1,9 @@
-"""LLM backend supporting Ollama and OpenAI-compatible APIs."""
+"""LLM backend supporting Ollama and OpenAI-compatible APIs (OpenAI, Groq, LMStudio).
+
+Ollama uses urllib (no SDK needed — local only).
+All OpenAI-compatible providers (openai, groq, lmstudio, custom) use the openai SDK,
+which handles auth, retries, and works through Cloudflare-protected endpoints.
+"""
 import json
 import urllib.request
 import urllib.error
@@ -29,12 +34,12 @@ class LLMBackend:
         self.model = model
         self.api_key = api_key
 
-        # Load endpoints from config (NO HARDCODED DEFAULTS)
-        from backend.config import ollama_host, lmstudio_host
+        from backend.config import ollama_host, lmstudio_host, groq_host
         defaults = {
             "ollama":   ollama_host(),
             "openai":   "https://api.openai.com/v1",
             "lmstudio": lmstudio_host(),
+            "groq":     groq_host(),
         }
         self.base_url = base_url or defaults.get(provider, ollama_host())
 
@@ -51,27 +56,55 @@ class LLMBackend:
         if self.provider == "ollama":
             return self._ollama_chat(messages, system_prompt)
         else:
-            return self._openai_chat(messages, system_prompt)
+            return self._openai_sdk_chat(messages, system_prompt)
 
     # ── Provider implementations ──────────────────────────────────────────────
 
     def _ollama_chat(self, messages: list[dict], system: str) -> str:
+        """Ollama via urllib — no SDK required for local calls."""
         url = f"{self.base_url}/api/chat"
         full_messages = [{"role": "system", "content": system}] + messages
         payload = {"model": self.model, "messages": full_messages, "stream": False}
-        body = self._post(url, payload, auth=False)
+        body = self._urllib_post(url, payload, auth=False)
         return body["message"]["content"]
 
-    def _openai_chat(self, messages: list[dict], system: str) -> str:
-        url = f"{self.base_url}/chat/completions"
+    def _openai_sdk_chat(self, messages: list[dict], system: str) -> str:
+        """OpenAI-compatible chat via the openai SDK (works for openai, groq, lmstudio)."""
+        try:
+            import openai
+        except ImportError:
+            raise ConnectionError(
+                "The 'openai' package is required for non-Ollama providers.\n"
+                "Install it with: uv add openai"
+            )
+        from backend.config import llm_request_timeout
         full_messages = [{"role": "system", "content": system}] + messages
-        payload = {"model": self.model, "messages": full_messages}
-        body = self._post(url, payload, auth=bool(self.api_key))
-        return body["choices"][0]["message"]["content"]
+        try:
+            client = openai.OpenAI(
+                api_key=self.api_key or "no-key",
+                base_url=self.base_url,
+                timeout=llm_request_timeout(),
+            )
+            resp = client.chat.completions.create(
+                model=self.model,
+                messages=full_messages,
+            )
+            return resp.choices[0].message.content
+        except openai.AuthenticationError as e:
+            raise ConnectionError(f"Authentication failed for {self.provider}: {e}")
+        except openai.APIConnectionError as e:
+            raise ConnectionError(
+                f"Cannot reach LLM at {self.base_url}.\n"
+                f"Is your provider running/reachable?\n"
+                f"Error: {e}"
+            )
+        except Exception as e:
+            raise ConnectionError(f"LLM request failed ({self.provider}): {e}")
 
-    def _post(self, url: str, payload: dict, auth: bool = False) -> dict:
+    def _urllib_post(self, url: str, payload: dict, auth: bool = False) -> dict:
+        """Raw urllib POST — used only for Ollama (local, no Cloudflare)."""
         data = json.dumps(payload).encode("utf-8")
-        headers = {"Content-Type": "application/json"}
+        headers = {"Content-Type": "application/json", "User-Agent": "devtrack/1.0"}
         if auth and self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
@@ -82,8 +115,8 @@ class LLMBackend:
                 return json.loads(resp.read())
         except urllib.error.URLError as e:
             raise ConnectionError(
-                f"Cannot reach LLM at {url}.\n"
-                f"Is your local LLM running? (e.g. `ollama serve`)\n"
+                f"Cannot reach Ollama at {url}.\n"
+                f"Is Ollama running? Try: ollama serve\n"
                 f"Error: {e}"
             )
 
