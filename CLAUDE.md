@@ -387,7 +387,39 @@ All user-facing documentation has been reorganized for clarity:
 
 ### Architecture
 
-Teams chats are collected via MS Graph API and stored in MongoDB. The system learns your communication style and generates personalized response suggestions.
+Teams chats are collected via MS Graph API and stored in MongoDB. The system learns your communication style and generates personalized response suggestions. Every LLM prompt in the system is augmented with two personalization signals:
+
+1. **Profile-based style instruction** — fast, always available. Captures constraints: formality, length, emoji preference, common phrases. Produced by `PersonalizedAI.get_style_instruction()`.
+
+2. **RAG few-shot examples** — retrieves the most semantically similar past responses the user wrote, using ChromaDB + `nomic-embed-text`. Shows the LLM *actual* examples of how the user writes. Much more effective at capturing voice nuance than abstract style descriptions.
+
+Both are injected globally via `backend/personalization.py`:`inject_style(prompt, context_type, query_text)`. If no profile exists the prompt is returned unchanged — fully graceful.
+
+**RAG setup** (one-time):
+```bash
+ollama pull nomic-embed-text    # Pull the embedding model
+# ChromaDB is installed automatically via: uv sync
+# Data stored at: DATA_DIR/learning/chroma/
+```
+
+**RAG sub-modules** (`backend/rag/`):
+
+| Module | Purpose |
+|---|---|
+| `embedder.py` | Ollama `/api/embed` calls; returns `None` if model unavailable |
+| `vector_store.py` | ChromaDB persistent collection wrapper; cosine similarity |
+| `sample_indexer.py` | High-level API: `index_sample()`, `index_samples()`, `retrieve_examples()` |
+
+**Injection points** (all use `inject_style()` from `backend/personalization.py`):
+
+| File | context_type | RAG query |
+|---|---|---|
+| `commit_message_enhancer.py` | `commit` | original commit message or plain change summary |
+| `description_enhancer.py` | `description` | raw user input |
+| `git_sage/agent.py` | `commit` | appended to system prompt |
+| `daily_report_generator.py` | `report` | first 200 chars of prompt |
+| `ai/create_tasks.py` | `task` | first 200 chars of prompt |
+| `project_manager.py` | `task`/`comment` | first 200 chars of prompt |
 
 ### CLI Commands
 

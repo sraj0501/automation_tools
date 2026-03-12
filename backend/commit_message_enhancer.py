@@ -25,6 +25,14 @@ except ImportError:
     GitOperations = None
     PRFinder = None
 
+try:
+    from backend.personalization import inject_style as _inject_style
+    _HAS_PERSONALIZATION = True
+except ImportError:
+    _HAS_PERSONALIZATION = False
+    def _inject_style(prompt: str, context_type: str = "general", query_text: str = None) -> str:
+        return prompt
+
 
 class CommitMessageEnhancer:
     """Enhances git commit messages using AI analysis of staged changes."""
@@ -359,6 +367,11 @@ class CommitMessageEnhancer:
                 Made some changes.
 
                 Write ONLY the improved commit message. No meta-commentary, nothing else."""
+
+            # Use the original message (or plain_changes summary) as the RAG query
+            # so we retrieve examples of how the user described similar work before.
+            rag_query = original_message if original_message and len(original_message) > 4 else plain_changes
+            prompt = _inject_style(prompt, context_type="commit", query_text=rag_query)
 
             from backend.llm.base import LLMOptions
             from backend.config import http_timeout, commit_llm_temperature, commit_llm_max_tokens

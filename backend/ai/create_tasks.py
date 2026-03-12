@@ -3,6 +3,12 @@ import pandas as pd
 from typing import List, Dict, Any, Optional
 import re
 
+try:
+    from backend.personalization import inject_style as _inject_style
+except ImportError:
+    def _inject_style(prompt: str, context_type: str = "general") -> str:
+        return prompt
+
 
 def _get_task_defaults():
     """Get task defaults from config (no hardcoded personal data)."""
@@ -141,7 +147,7 @@ Focus on:
 
 Generate tasks that are specific, measurable, and implementable.
 """
-        
+        prompt = _inject_style(prompt, context_type="task")
         return prompt
     
     def _parse_response(self, response_text: str, assignee: str, parent_work_item_id: str, starting_id: int) -> List[Dict]:

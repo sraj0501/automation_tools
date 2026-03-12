@@ -215,11 +215,18 @@ class PersonalizedAI:
             for file in [self.samples_file, self.profile_file, self.consent_file]:
                 if os.path.exists(file):
                     os.remove(file)
-            
+
+            # Wipe RAG vector store
+            try:
+                from backend.rag import get_indexer
+                get_indexer().delete_all()
+            except Exception:
+                pass
+
             self.samples = []
             self.profile = None
             self.consent_given = False
-            
+
             print("✅ Consent revoked and all data deleted.")
         else:
             # Just revoke consent, keep data
@@ -336,13 +343,20 @@ class PersonalizedAI:
         
         self.samples.append(sample)
         self._save_sample(sample)
-        
+
+        # Index into RAG vector store immediately (non-blocking; skips if unavailable)
+        try:
+            from backend.rag import get_indexer
+            get_indexer().index_sample(sample)
+        except Exception:
+            pass
+
         logger.info(f"Added communication sample from {source}/{context_type}")
-        
+
         # Trigger learning update if we have enough samples
         if len(self.samples) % 10 == 0:
             self._update_profile()
-        
+
         return True
     
     def _update_profile(self):
@@ -649,6 +663,67 @@ Response:"""
             logger.error(f"Error generating response: {e}")
             return f"Error generating response: {e}"
     
+    def get_style_instruction(self, context_type: str = "general") -> str:
+        """Return a concise style directive for injecting into any LLM prompt.
+
+        Designed to be prepended to prompts in commit_message_enhancer,
+        description_enhancer, git_sage, daily_report_generator, etc. so all
+        system outputs sound like the user wrote them.
+
+        Args:
+            context_type: "commit" | "description" | "report" | "task" |
+                          "comment" | "chat" | "email" | "general"
+        Returns:
+            A bracketed style instruction string, or "" if no profile.
+        """
+        if not self.profile:
+            return ""
+
+        ws = self.profile.writing_style
+        parts = []
+
+        formality = ws.get("formality_level", "balanced")
+        if formality == "formal":
+            parts.append("formal and professional")
+        elif formality == "casual":
+            parts.append("casual and conversational")
+        else:
+            parts.append("clear and direct")
+
+        avg_words = ws.get("avg_word_count", 50)
+        if avg_words < 40:
+            parts.append("brief and to-the-point")
+        elif avg_words > 100:
+            parts.append("thorough and detailed")
+        else:
+            parts.append("concise but complete")
+
+        if not ws.get("uses_emojis", False):
+            parts.append("no emojis")
+
+        style_desc = ", ".join(parts)
+
+        # Map caller context to stored pattern keys
+        ctx_map = {
+            "commit": "comment", "description": "comment",
+            "report": "email",   "task": "comment",
+            "chat": "chat",      "comment": "comment",
+            "email": "email",    "general": "chat",
+        }
+        pattern = self.profile.response_patterns.get(ctx_map.get(context_type, "chat"))
+
+        extra_lines = []
+        if pattern and pattern.common_phrases:
+            phrases = ", ".join(f'"{p}"' for p in pattern.common_phrases[:3])
+            extra_lines.append(f"- Naturally use phrases like: {phrases}")
+        if self.profile.preferred_pronouns:
+            extra_lines.append(
+                f"- Preferred pronouns: {', '.join(self.profile.preferred_pronouns)}"
+            )
+
+        extras = ("\n" + "\n".join(extra_lines)) if extra_lines else ""
+        return f"[STYLE: Write in the user's personal voice — {style_desc}.{extras}]"
+
     def _build_style_prompt(self) -> str:
         """Build a prompt describing user's communication style"""
         if not self.profile:

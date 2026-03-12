@@ -16,6 +16,12 @@ from backend.models.project import (
 
 logger = logging.getLogger(__name__)
 
+try:
+    from backend.personalization import inject_style as _inject_style
+except ImportError:
+    def _inject_style(prompt: str, context_type: str = "general") -> str:
+        return prompt
+
 
 class ProjectManager:
     """
@@ -489,6 +495,7 @@ Template: {project.template_type.value}
 
 Provide concise, measurable goals (one per line)."""
 
+            prompt = _inject_style(prompt, context_type="task")
             response = provider.primary.generate(prompt)
             if response and response.strip():
                 ai_goals = response.strip().split('\n')
@@ -612,6 +619,7 @@ Stakeholders: {len(project.stakeholders)} assigned
 
 Be concise and specific."""
 
+            prompt = _inject_style(prompt, context_type="comment")
             response = provider.primary.generate(prompt)
             if response and response.strip():
                 for line in response.strip().split('\n'):

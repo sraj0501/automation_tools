@@ -22,6 +22,12 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from email_reporter import EmailReporter, DailyReport, ActivitySummary
 
+try:
+    from backend.personalization import inject_style as _inject_style
+except ImportError:
+    def _inject_style(prompt: str, context_type: str = "general") -> str:
+        return prompt
+
 
 class ReportStyle(str, Enum):
     """Report formatting styles"""
@@ -195,6 +201,8 @@ Provide a JSON response with these exact fields:
 }}
 
 Keep it professional and constructive. Respond ONLY with valid JSON."""
+
+        prompt = _inject_style(prompt, context_type="report")
 
         try:
             from backend.llm.base import LLMOptions
@@ -1073,6 +1081,8 @@ Provide a JSON response with these exact fields:
 }}
 
 Be constructive and highlight patterns. Respond ONLY with valid JSON."""
+
+        prompt = _inject_style(prompt, context_type="report")
 
         try:
             from backend.llm.base import LLMOptions

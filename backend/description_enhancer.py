@@ -11,6 +11,12 @@ from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
+try:
+    from backend.personalization import inject_style as _inject_style
+except ImportError:
+    def _inject_style(prompt: str, context_type: str = "general", query_text: str = None) -> str:
+        return prompt
+
 
 @dataclass
 class EnhancedDescription:
@@ -136,6 +142,8 @@ CATEGORY: feature
 KEYWORDS: API, REST, endpoints, user-management
 
 Now enhance this input:"""
+
+        prompt = _inject_style(prompt, context_type="description", query_text=raw_input)
 
         from backend.llm.base import LLMOptions
         from backend.config import http_timeout, description_llm_temperature, description_llm_max_tokens

@@ -147,6 +147,31 @@ def learning_dir() -> Path:
     return project_root() / "Data" / "learning"
 
 
+def rag_chroma_dir() -> Path:
+    """ChromaDB persistence directory for RAG personalization.
+    From .env: PERSONALIZATION_CHROMA_DIR or DATA_DIR/learning/chroma."""
+    custom = get("PERSONALIZATION_CHROMA_DIR")
+    if custom:
+        return get_path("PERSONALIZATION_CHROMA_DIR")
+    return learning_dir() / "chroma"
+
+
+def rag_embed_model() -> str:
+    """Ollama model used for RAG embeddings. From .env: PERSONALIZATION_EMBED_MODEL."""
+    return get("PERSONALIZATION_EMBED_MODEL", "nomic-embed-text") or "nomic-embed-text"
+
+
+def rag_k() -> int:
+    """Number of few-shot examples to retrieve per RAG query.
+    From .env: PERSONALIZATION_RAG_K (default 3)."""
+    return get_int("PERSONALIZATION_RAG_K", 3) or 3
+
+
+def rag_enabled() -> bool:
+    """Enable RAG personalization. From .env: PERSONALIZATION_RAG_ENABLED (default true)."""
+    return get_bool("PERSONALIZATION_RAG_ENABLED", True)
+
+
 def log_dir() -> Path:
     """Directory for log files. From .env: LOG_DIR or PROJECT_ROOT/Data/logs."""
     log_path = get("LOG_DIR")

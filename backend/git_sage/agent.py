@@ -17,6 +17,12 @@ from .git_operations import GitOperations
 from .conflict_resolver import ConflictResolver, ConflictAnalyzer
 from .pr_finder import PRFinder
 
+try:
+    from backend.personalization import get_style_instruction as _get_style_instruction
+except ImportError:
+    def _get_style_instruction(context_type: str = "general") -> str:
+        return ""
+
 # ─── devtrack git integration ────────────────────────────────────────────────
 
 def _devtrack_git_cmd(cmd: str) -> str:
@@ -41,7 +47,7 @@ MAGENTA="\033[95m"
 BLUE  = "\033[94m"
 
 # ─── SYSTEM PROMPT ───────────────────────────────────────────────────────────
-AGENT_SYSTEM_PROMPT = """You are git-sage, an autonomous git agent running inside the user's terminal.
+_AGENT_SYSTEM_PROMPT_BASE = """You are git-sage, an autonomous git agent running inside the user's terminal.
 
 CRITICAL: You must respond with a single raw JSON object and NOTHING else — no markdown, no prose, no code fences, no explanation. Every single response must be valid JSON starting with `{` and ending with `}`.
 
@@ -137,6 +143,19 @@ Use this to decide your next action.
 """
 
 
+def _get_agent_system_prompt() -> str:
+    """Build the system prompt, appending the user's personal style if available."""
+    style = _get_style_instruction("commit")
+    if not style:
+        return _AGENT_SYSTEM_PROMPT_BASE
+    return (
+        _AGENT_SYSTEM_PROMPT_BASE
+        + "\n\n## Output Style\n"
+        + style
+        + "\nApply this style when writing `summary`, `reason`, and `question` fields."
+    )
+
+
 @dataclass
 class Checkpoint:
     label: str
@@ -201,7 +220,7 @@ class GitAgent:
     def _run_loop(self, max_steps: int) -> bool:
         """Core LLM → dispatch → feedback loop. Uses self.state.history as context."""
         for _ in range(max_steps):
-            raw = self.backend.raw_chat(self.state.history, AGENT_SYSTEM_PROMPT,
+            raw = self.backend.raw_chat(self.state.history, _get_agent_system_prompt(),
                                         json_mode=True)
             action = self._parse_action(raw)
 
