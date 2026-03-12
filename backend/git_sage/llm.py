@@ -51,24 +51,32 @@ class LLMBackend:
         messages = [{"role": "user", "content": full}]
         return self.raw_chat(messages, SIMPLE_SYSTEM_PROMPT)
 
-    def raw_chat(self, messages: list[dict], system_prompt: str) -> str:
-        """Send a full conversation history and return the assistant reply."""
+    def raw_chat(self, messages: list[dict], system_prompt: str,
+                 json_mode: bool = False) -> str:
+        """Send a full conversation history and return the assistant reply.
+
+        json_mode=True enforces structured JSON output (used by the agent loop).
+        """
         if self.provider == "ollama":
-            return self._ollama_chat(messages, system_prompt)
+            return self._ollama_chat(messages, system_prompt, json_mode)
         else:
-            return self._openai_sdk_chat(messages, system_prompt)
+            return self._openai_sdk_chat(messages, system_prompt, json_mode)
 
     # ── Provider implementations ──────────────────────────────────────────────
 
-    def _ollama_chat(self, messages: list[dict], system: str) -> str:
+    def _ollama_chat(self, messages: list[dict], system: str,
+                     json_mode: bool = False) -> str:
         """Ollama via urllib — no SDK required for local calls."""
         url = f"{self.base_url}/api/chat"
         full_messages = [{"role": "system", "content": system}] + messages
         payload = {"model": self.model, "messages": full_messages, "stream": False}
+        if json_mode:
+            payload["format"] = "json"
         body = self._urllib_post(url, payload, auth=False)
         return body["message"]["content"]
 
-    def _openai_sdk_chat(self, messages: list[dict], system: str) -> str:
+    def _openai_sdk_chat(self, messages: list[dict], system: str,
+                         json_mode: bool = False) -> str:
         """OpenAI-compatible chat via the openai SDK (works for openai, groq, lmstudio)."""
         try:
             import openai
@@ -85,10 +93,10 @@ class LLMBackend:
                 base_url=self.base_url,
                 timeout=llm_request_timeout(),
             )
-            resp = client.chat.completions.create(
-                model=self.model,
-                messages=full_messages,
-            )
+            kwargs: dict = {"model": self.model, "messages": full_messages}
+            if json_mode:
+                kwargs["response_format"] = {"type": "json_object"}
+            resp = client.chat.completions.create(**kwargs)
             return resp.choices[0].message.content
         except openai.AuthenticationError as e:
             raise ConnectionError(f"Authentication failed for {self.provider}: {e}")

@@ -173,15 +173,19 @@ class GitAgent:
         self._print_header(task)
 
         for step in range(max_steps):
-            raw = self.backend.raw_chat(self.state.history, AGENT_SYSTEM_PROMPT)
+            raw = self.backend.raw_chat(self.state.history, AGENT_SYSTEM_PROMPT,
+                                        json_mode=True)
             action = self._parse_action(raw)
 
             if action is None:
+                # Always show a snippet so the user can see what went wrong
+                snippet = raw.strip()[:400].replace("\n", " ")
                 self._log_error("LLM returned unparseable response", raw)
+                print(f"  {DIM}Raw: {snippet}{RESET}")
                 self.state.history.append({"role": "assistant", "content": raw})
                 self.state.history.append({
                     "role": "user",
-                    "content": "TOOL_RESULT: Invalid JSON response. Respond with ONLY a JSON action object.\nEXIT_CODE: 1"
+                    "content": "TOOL_RESULT: Invalid JSON. You MUST respond with ONLY a JSON object (no markdown, no prose). Choose your next action.\nEXIT_CODE: 1"
                 })
                 continue
 
