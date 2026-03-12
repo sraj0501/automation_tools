@@ -508,3 +508,50 @@ def learning_cron_schedule() -> str:
 def learning_history_days() -> int:
     """History window in days for initial collection. LEARNING_HISTORY_DAYS (default: 30)."""
     return get_int("LEARNING_HISTORY_DAYS", 30)
+
+
+# --- LLM generation parameters ---
+
+def commit_llm_temperature() -> float:
+    """Temperature for commit message generation. Lower = more focused/deterministic.
+    COMMIT_LLM_TEMPERATURE (default: 0.2)."""
+    val = get("COMMIT_LLM_TEMPERATURE", "0.2")
+    return float(val)
+
+
+def commit_llm_max_tokens() -> int:
+    """Max tokens for commit message generation. COMMIT_LLM_MAX_TOKENS (default: 400)."""
+    return get_int("COMMIT_LLM_MAX_TOKENS", 400)
+
+
+def report_llm_temperature() -> float:
+    """Temperature for report generation. REPORT_LLM_TEMPERATURE (default: 0.3)."""
+    val = get("REPORT_LLM_TEMPERATURE", "0.3")
+    return float(val)
+
+
+def report_llm_max_tokens() -> int:
+    """Max tokens for report generation. REPORT_LLM_MAX_TOKENS (default: 600)."""
+    return get_int("REPORT_LLM_MAX_TOKENS", 600)
+
+
+def personalization_llm_temperature() -> float:
+    """Temperature for personalized response generation. PERSONALIZATION_LLM_TEMPERATURE (default: 0.7)."""
+    val = get("PERSONALIZATION_LLM_TEMPERATURE", "0.7")
+    return float(val)
+
+
+def personalization_llm_max_tokens() -> int:
+    """Max tokens for personalized response generation. PERSONALIZATION_LLM_MAX_TOKENS (default: 300)."""
+    return get_int("PERSONALIZATION_LLM_MAX_TOKENS", 300)
+
+
+def description_llm_temperature() -> float:
+    """Temperature for description enhancement. DESCRIPTION_LLM_TEMPERATURE (default: 0.3)."""
+    val = get("DESCRIPTION_LLM_TEMPERATURE", "0.3")
+    return float(val)
+
+
+def description_llm_max_tokens() -> int:
+    """Max tokens for description enhancement. DESCRIPTION_LLM_MAX_TOKENS (default: 300)."""
+    return get_int("DESCRIPTION_LLM_MAX_TOKENS", 300)

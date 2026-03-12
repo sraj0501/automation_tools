@@ -636,9 +636,13 @@ Response:"""
         try:
             from backend.llm import get_provider
             from backend.llm.base import LLMOptions
+            from backend.config import personalization_llm_temperature, personalization_llm_max_tokens
             result = get_provider().generate(
                 prompt=prompt,
-                options=LLMOptions(temperature=0.7, max_tokens=300),
+                options=LLMOptions(
+                    temperature=personalization_llm_temperature(),
+                    max_tokens=personalization_llm_max_tokens(),
+                ),
             )
             return result if result else "Error: LLM unavailable"
         except Exception as e:
