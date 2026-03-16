@@ -40,16 +40,13 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 # Stage 3: Install Python dependencies once
 FROM python-base AS python-deps
 
+WORKDIR /build
+
+# Copy dependency files first for layer caching
+COPY pyproject.toml uv.lock ./
+
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system --no-cache-dir \
-        spacy \
-        en-core-web-sm@https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl \
-        dateparser \
-        sentence-transformers \
-        scikit-learn \
-        fuzzywuzzy \
-        python-Levenshtein \
-        ollama
+    uv sync --frozen --no-dev --system --extra mongodb
 
 # Stage 4: Runtime environment
 FROM python-base AS runtime
