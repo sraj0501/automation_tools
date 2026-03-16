@@ -27,5 +27,6 @@ Data/
 # Test temp dirs
 .test_commit_enhancer_tmp
 
-#Claude Files and Folders
-*.claude*
+# Claude Code — exclude machine-specific settings, keep shared memory
+.claude/settings.local.json
+.claude/worktrees/
