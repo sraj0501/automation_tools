@@ -7,6 +7,7 @@ It handles commit triggers and timer triggers, prompting for user input and
 sending responses back to Go.
 """
 
+import asyncio
 import sys
 import os
 import time
@@ -99,15 +100,22 @@ except ImportError as e:
     OutputFormat = None
     WeeklyReport = None
 
+# Import backend config for Azure sync settings and other config access
+try:
+    import backend.config as config
+except ImportError:
+    config = None
+
 # Import Task Repository and Jira client (Phase 4)
 try:
-    from backend.task_matcher import TaskRepository
+    from backend.task_matcher import TaskRepository, TaskMatcher
     from backend.config import jira_url, jira_api_token
     task_repo_available = True
 except ImportError as e:
     logger.warning(f"Task repository not available: {e}")
     task_repo_available = False
     TaskRepository = None
+    TaskMatcher = None
 
 # Import git-sage conflict resolver and work update enhancer (Phase 3)
 try:
@@ -132,6 +140,15 @@ except ImportError as e:
     logger.debug(f"Personalized AI not available: {e}")
     personalized_ai_available = False
     PersonalizedAI = None
+
+# Import Azure DevOps client for bidirectional sync
+try:
+    from backend.azure.client import AzureDevOpsClient
+    azure_client_available = True
+except ImportError as e:
+    logger.debug(f"Azure DevOps client not available: {e}")
+    azure_client_available = False
+    AzureDevOpsClient = None
 
 
 class DevTrackBridge:
@@ -206,6 +223,30 @@ class DevTrackBridge:
                     logger.info("✓ Task repository initialized (Jira not configured)")
             except Exception as e:
                 logger.warning(f"Could not initialize task repository: {e}")
+
+        # Initialize Azure DevOps client for bidirectional sync
+        self.azure_client = None
+        if azure_client_available and task_repo_available:
+            try:
+                client = AzureDevOpsClient()
+                if client.is_configured():
+                    self.azure_client = client
+                    if self.task_repo:
+                        self.task_repo.initialize_azure(client)
+                    logger.info("✓ Azure DevOps integration initialized")
+                else:
+                    logger.info("✓ Azure DevOps client available (not configured)")
+            except Exception as e:
+                logger.warning(f"Could not initialize Azure DevOps client: {e}")
+
+        # Initialize TaskMatcher for fuzzy/semantic work item matching
+        self.task_matcher = None
+        if task_repo_available and TaskMatcher is not None:
+            try:
+                self.task_matcher = TaskMatcher(use_semantic=False)
+                logger.info("✓ Task matcher initialized")
+            except Exception as e:
+                logger.warning(f"Could not initialize task matcher: {e}")
 
         # Initialize Personalized AI (Phase 6 - Talk Like You)
         self.personalized_ai = None
@@ -317,7 +358,23 @@ class DevTrackBridge:
                 if ai_summary and use_diff_analysis:
                     # Enhance with AI analysis
                     description = f"[{ai_summary.get('type', 'update')}] {description}"
-                
+
+                # Sync to Azure DevOps if enabled
+                azure_work_item_id = None
+                synced_platform = None
+                if self.azure_client and config and config.is_azure_sync_enabled():
+                    commit_info = {
+                        "commit_hash": data.get("commit_hash", ""),
+                        "commit_message": data.get("commit_message", ""),
+                        "author": data.get("author", ""),
+                    }
+                    azure_work_item_id, synced_platform = self._run_azure_sync(
+                        description=description,
+                        ticket_id=parsed.ticket_id or "",
+                        status=parsed.status or "in_progress",
+                        commit_info=commit_info,
+                    )
+
                 # Send task update with parsed data
                 task_update = create_task_update_message(
                     project=parsed.project or "automation_tools",
@@ -325,7 +382,9 @@ class DevTrackBridge:
                     description=description,
                     status=parsed.status or "in_progress",
                     time_spent=parsed.time_spent or "",
-                    synced=False
+                    synced=synced_platform is not None,
+                    azure_work_item_id=azure_work_item_id,
+                    synced_platform=synced_platform,
                 )
                 self.ipc_client.send_message(task_update)
                 logger.info("✓ Sent parsed task update to Go daemon")
@@ -339,14 +398,32 @@ class DevTrackBridge:
             else:
                 logger.info("ℹ️  NLP parser not available, sending basic update")
                 description = commit_msg
-            
+
+            # Sync to Azure DevOps if enabled (fallback path)
+            azure_work_item_id = None
+            synced_platform = None
+            if self.azure_client and config and config.is_azure_sync_enabled():
+                commit_info = {
+                    "commit_hash": data.get("commit_hash", ""),
+                    "commit_message": data.get("commit_message", ""),
+                    "author": data.get("author", ""),
+                }
+                azure_work_item_id, synced_platform = self._run_azure_sync(
+                    description=description,
+                    ticket_id="",
+                    status="in_progress",
+                    commit_info=commit_info,
+                )
+
             task_update = create_task_update_message(
                 project="automation_tools",
                 ticket_id="",
                 description=description,
                 status="in_progress",
                 time_spent="",
-                synced=False
+                synced=synced_platform is not None,
+                azure_work_item_id=azure_work_item_id,
+                synced_platform=synced_platform,
             )
             self.ipc_client.send_message(task_update)
         
@@ -356,6 +433,8 @@ class DevTrackBridge:
             logger.info(f"   ✓ AI-enhanced summary generated")
         if self.nlp_parser:
             logger.info(f"   ✓ NLP parsing completed")
+        if self.azure_client and config and config.is_azure_sync_enabled():
+            logger.info(f"   ✓ Azure DevOps sync attempted")
         logger.info("")
     
     def handle_timer_trigger(self, msg: IPCMessage):
@@ -552,24 +631,36 @@ class DevTrackBridge:
         ticket_id = ""
         status = "in_progress"
         time_spent = ""
-        
+
         if parsed:
             project = parsed.project or project
             ticket_id = parsed.ticket_id or ticket_id
             status = parsed.status or status
             time_spent = parsed.time_spent or time_spent
-        
+
         # Add category prefix if enhanced
         if enhanced and enhanced.category and enhanced.category != "other":
             final_description = f"[{enhanced.category}] {final_description}"
-        
+
+        # Step 6.5: Sync to Azure DevOps if enabled
+        azure_work_item_id = None
+        synced_platform = None
+        if self.azure_client and config and config.is_azure_sync_enabled():
+            azure_work_item_id, synced_platform = self._run_azure_sync(
+                description=final_description,
+                ticket_id=ticket_id,
+                status=status,
+            )
+
         task_update = create_task_update_message(
             project=project,
             ticket_id=ticket_id,
             description=final_description,
             status=status,
             time_spent=time_spent,
-            synced=False
+            synced=synced_platform is not None,
+            azure_work_item_id=azure_work_item_id,
+            synced_platform=synced_platform,
         )
         self.ipc_client.send_message(task_update)
         
@@ -599,13 +690,13 @@ class DevTrackBridge:
             logger.info(f"   ✓ Enhanced with Ollama (category: {enhanced.category})")
         if response_suggestion:
             logger.info(f"   ✓ Personalized response suggestion generated")
+        if synced_platform:
+            logger.info(f"   ✓ Synced to {synced_platform} (work item #{azure_work_item_id})")
         logger.info(f"   ✓ Task update sent to daemon")
         logger.info("")
 
         # Step 7: Check for and resolve merge conflicts (Phase 3 - git-sage)
         self._check_and_resolve_conflicts()
-
-        # TODO: Phase 4 - Update task management systems (Azure DevOps/GitHub/JIRA)
         
         # Phase 5 - Generate daily report if end of day
         self._check_end_of_day_report()
@@ -912,6 +1003,139 @@ class DevTrackBridge:
             logger.debug(f"Error checking for conflicts: {e}")
             # Silently continue - conflicts are not critical to work updates
 
+    async def _sync_to_azure(self, description, ticket_id=None, status=None, commit_info=None):
+        """Sync a work update or commit to Azure DevOps.
+
+        Returns:
+            Tuple of (azure_work_item_id: int | None, synced_platform: str | None)
+        """
+        if not self.azure_client or not config or not config.is_azure_sync_enabled():
+            return None, None
+
+        try:
+            # Fetch current Azure work items
+            azure_tasks = await self.task_repo.get_azure_tasks_async()
+            if not azure_tasks:
+                logger.debug("No Azure DevOps work items found for matching")
+                # Optionally create a new work item if configured
+                if config.is_azure_create_on_no_match() and description:
+                    logger.info("Creating new Azure DevOps work item (no match, create_on_no_match enabled)")
+                    wi = await self.azure_client.create_work_item(
+                        title=description[:200],
+                        description=description,
+                    )
+                    if wi:
+                        logger.info(f"✓ Created Azure DevOps work item #{wi.id}")
+                        return wi.id, "azure_devops"
+                return None, None
+
+            # Try to match by explicit ticket ID first, then fuzzy
+            match_result = None
+            threshold = config.get_azure_match_threshold()
+
+            if ticket_id and self.task_matcher:
+                match_result = self.task_matcher.match_task(
+                    ticket_id, azure_tasks, threshold=threshold
+                )
+
+            if not match_result and self.task_matcher and description:
+                match_result = self.task_matcher.match_task(
+                    description, azure_tasks, threshold=threshold
+                )
+
+            if not match_result or match_result.confidence < threshold:
+                logger.info(
+                    f"No Azure work item matched above threshold "
+                    f"({threshold}) for: {description[:80]}..."
+                )
+                if config.is_azure_create_on_no_match() and description:
+                    logger.info("Creating new Azure DevOps work item (below threshold, create_on_no_match enabled)")
+                    wi = await self.azure_client.create_work_item(
+                        title=description[:200],
+                        description=description,
+                    )
+                    if wi:
+                        logger.info(f"✓ Created Azure DevOps work item #{wi.id}")
+                        return wi.id, "azure_devops"
+                return None, None
+
+            work_item_id = int(match_result.task.id)
+            logger.info(
+                f"Matched Azure work item #{work_item_id}: "
+                f"{match_result.task.title} "
+                f"(confidence: {match_result.confidence:.0%}, "
+                f"type: {match_result.match_type})"
+            )
+
+            # Add comment if auto_comment is enabled
+            if config.is_azure_auto_comment():
+                comment_parts = []
+                if commit_info:
+                    commit_hash = commit_info.get("commit_hash", "")[:12]
+                    commit_msg = commit_info.get("commit_message", "")
+                    author = commit_info.get("author", "")
+                    comment_parts.append(
+                        f"<b>Commit</b>: {commit_hash}<br/>"
+                        f"<b>Author</b>: {author}<br/>"
+                        f"<b>Message</b>: {commit_msg}"
+                    )
+                if description:
+                    comment_parts.append(f"<b>Update</b>: {description}")
+                if status:
+                    comment_parts.append(f"<b>Status</b>: {status}")
+
+                comment_text = "<br/>".join(comment_parts) if comment_parts else description
+                success = await self.azure_client.add_comment(work_item_id, comment_text)
+                if success:
+                    logger.info(f"✓ Added comment to Azure work item #{work_item_id}")
+                else:
+                    logger.warning(f"Failed to add comment to Azure work item #{work_item_id}")
+
+            # Auto-transition state if configured and status indicates done
+            if (
+                status
+                and status.lower() in ("done", "completed", "closed", "resolved")
+                and config.is_azure_auto_transition()
+            ):
+                done_state = config.get_azure_done_state()
+                success = await self.azure_client.update_work_item_state(work_item_id, done_state)
+                if success:
+                    logger.info(f"✓ Transitioned Azure work item #{work_item_id} to '{done_state}'")
+                else:
+                    logger.warning(f"Failed to transition Azure work item #{work_item_id}")
+
+            return work_item_id, "azure_devops"
+
+        except Exception as e:
+            logger.error(f"Error syncing to Azure DevOps: {e}")
+            return None, None
+
+    def _run_azure_sync(self, description, ticket_id=None, status=None, commit_info=None):
+        """Run the async _sync_to_azure from synchronous handler code.
+
+        Returns:
+            Tuple of (azure_work_item_id: int | None, synced_platform: str | None)
+        """
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            # We are inside an existing event loop (shouldn't happen in bridge,
+            # but be safe). Create a new thread with its own loop.
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(
+                    asyncio.run,
+                    self._sync_to_azure(description, ticket_id, status, commit_info),
+                )
+                return future.result()
+        else:
+            return asyncio.run(
+                self._sync_to_azure(description, ticket_id, status, commit_info)
+            )
+
     def handle_status_query(self, msg: IPCMessage):
         """Handle status query from Go daemon"""
         logger.info("📊 Status query received")
@@ -932,6 +1156,12 @@ class DevTrackBridge:
     def handle_shutdown(self, msg: IPCMessage):
         """Handle shutdown message from Go daemon"""
         logger.info("🛑 Shutdown message received")
+        # Close async Azure client session
+        if self.azure_client:
+            try:
+                asyncio.run(self.azure_client.close())
+            except Exception:
+                pass
         self.running = False
     
     def handle_report_trigger(self, msg: IPCMessage):

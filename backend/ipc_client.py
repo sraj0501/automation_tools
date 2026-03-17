@@ -32,7 +32,7 @@ class MessageType(str, Enum):
     STATUS_QUERY = "status_query"
     SHUTDOWN = "shutdown"
     CONFIG_UPDATE = "config_update"
-    
+
     # Python -> Go
     RESPONSE = "response"
     TASK_UPDATE = "task_update"
@@ -40,10 +40,14 @@ class MessageType(str, Enum):
     ACK = "ack"
     PROMPT_REQUEST = "prompt_request"
 
+    # Bidirectional sync & webhook events
+    WEBHOOK_EVENT = "webhook_event"
+    EXTERNAL_UPDATE = "external_update"
+
 
 class IPCMessage:
     """Represents an IPC message"""
-    
+
     def __init__(
         self,
         msg_type: MessageType,
@@ -58,7 +62,7 @@ class IPCMessage:
         self.id = msg_id or f"{msg_type.value}_{int(time.time() * 1000000)}"
         self.data = data
         self.error = error
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert message to dictionary"""
         result = {
@@ -70,11 +74,11 @@ class IPCMessage:
         if self.error:
             result["error"] = self.error
         return result
-    
+
     def to_json(self) -> str:
         """Convert message to JSON string"""
         return json.dumps(self.to_dict())
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'IPCMessage':
         """Create message from dictionary"""
@@ -84,7 +88,7 @@ class IPCMessage:
             msg_id=data.get("id"),
             error=data.get("error")
         )
-    
+
     @classmethod
     def from_json(cls, json_str: str) -> 'IPCMessage':
         """Create message from JSON string"""
@@ -94,7 +98,7 @@ class IPCMessage:
 
 class IPCClient:
     """Python IPC client for communicating with Go daemon"""
-    
+
     def __init__(self, socket_path: Optional[str] = None):
         self.socket_path = socket_path or self._get_socket_path()
         self.sock: Optional[socket.socket] = None
@@ -103,12 +107,12 @@ class IPCClient:
         self.lock = Lock()
         self.handlers: Dict[MessageType, Callable] = {}
         self.listener_thread: Optional[Thread] = None
-    
+
     def _get_socket_path(self) -> str:
         """Get IPC server address (required: IPC_HOST, IPC_PORT from .env)"""
         from backend.config import ipc_host, ipc_port
         return f"{ipc_host()}:{ipc_port()}"
-    
+
     def connect(self, timeout: int = 5, retry_count: int = 3) -> bool:
         """
         Connect to the IPC server
@@ -159,30 +163,30 @@ class IPCClient:
 
         logger.error("Failed to connect to IPC server after all retries")
         return False
-    
+
     def disconnect(self):
         """Disconnect from the IPC server"""
         with self.lock:
             if not self.connected:
                 return
-            
+
             if self.sock:
                 try:
                     self.sock.close()
                 except:
                     pass
                 self.sock = None
-            
+
             self.connected = False
             logger.info("Disconnected from IPC server")
-    
+
     def send_message(self, message: IPCMessage) -> bool:
         """
         Send a message to the Go daemon
-        
+
         Args:
             message: The message to send
-            
+
         Returns:
             True if sent successfully
         """
@@ -190,7 +194,7 @@ class IPCClient:
             if not self.connected or not self.sock:
                 logger.error("Not connected to IPC server")
                 return False
-            
+
             try:
                 json_data = message.to_json()
                 # Add newline delimiter
@@ -202,14 +206,14 @@ class IPCClient:
                 logger.error(f"Failed to send message: {e}")
                 self.connected = False
                 return False
-    
+
     def receive_message(self, timeout: Optional[float] = None) -> Optional[IPCMessage]:
         """
         Receive a message from the Go daemon
-        
+
         Args:
             timeout: Receive timeout in seconds (None for blocking)
-            
+
         Returns:
             The received message or None if error
         """
@@ -217,13 +221,13 @@ class IPCClient:
             if not self.connected or not self.sock:
                 logger.error("Not connected to IPC server")
                 return None
-            
+
             try:
                 if timeout is not None:
                     self.sock.settimeout(timeout)
                 else:
                     self.sock.settimeout(None)
-                
+
                 # Read until newline
                 data = b''
                 while True:
@@ -235,51 +239,51 @@ class IPCClient:
                     if chunk == b'\n':
                         break
                     data += chunk
-                
+
                 if not data:
                     return None
-                
+
                 json_str = data.decode('utf-8')
                 message = IPCMessage.from_json(json_str)
                 logger.debug(f"Received message: {message.type}")
                 return message
-                
+
             except socket.timeout:
                 return None
             except Exception as e:
                 logger.error(f"Failed to receive message: {e}")
                 self.connected = False
                 return None
-    
+
     def register_handler(self, msg_type: MessageType, handler: Callable[[IPCMessage], None]):
         """
         Register a handler function for a message type
-        
+
         Args:
             msg_type: The message type to handle
             handler: The handler function
         """
         self.handlers[msg_type] = handler
         logger.info(f"Registered handler for message type: {msg_type}")
-    
+
     def start_listening(self):
         """Start listening for messages in a background thread"""
         if self.running:
             logger.warning("Already listening for messages")
             return
-        
+
         self.running = True
         self.listener_thread = Thread(target=self._listen_loop, daemon=True)
         self.listener_thread.start()
         logger.info("Started listening for IPC messages")
-    
+
     def stop_listening(self):
         """Stop listening for messages"""
         self.running = False
         if self.listener_thread:
             self.listener_thread.join(timeout=2)
         logger.info("Stopped listening for IPC messages")
-    
+
     def _listen_loop(self):
         """Main listening loop (runs in background thread)"""
         while self.running and self.connected:
@@ -287,13 +291,13 @@ class IPCClient:
                 message = self.receive_message(timeout=1.0)
                 if message is None:
                     continue
-                
+
                 # Handle shutdown message
                 if message.type == MessageType.SHUTDOWN:
                     logger.info("Received shutdown message")
                     self.running = False
                     break
-                
+
                 # Call registered handler
                 handler = self.handlers.get(message.type)
                 if handler:
@@ -311,7 +315,7 @@ class IPCClient:
                         self.send_message(error_msg)
                 else:
                     logger.warning(f"No handler registered for message type: {message.type}")
-            
+
             except Exception as e:
                 if self.running:
                     logger.error(f"Error in listen loop: {e}")
@@ -334,19 +338,26 @@ def create_task_update_message(
     description: str,
     status: str,
     time_spent: str,
-    synced: bool = False
+    synced: bool = False,
+    azure_work_item_id: Optional[int] = None,
+    synced_platform: Optional[str] = None,
 ) -> IPCMessage:
     """Create a task update message"""
+    data = {
+        "project": project,
+        "ticket_id": ticket_id,
+        "description": description,
+        "status": status,
+        "time_spent": time_spent,
+        "synced": synced,
+    }
+    if azure_work_item_id is not None:
+        data["azure_work_item_id"] = azure_work_item_id
+    if synced_platform is not None:
+        data["synced_platform"] = synced_platform
     return IPCMessage(
         msg_type=MessageType.TASK_UPDATE,
-        data={
-            "project": project,
-            "ticket_id": ticket_id,
-            "description": description,
-            "status": status,
-            "time_spent": time_spent,
-            "synced": synced
-        }
+        data=data,
     )
 
 
@@ -373,29 +384,29 @@ def create_ack_message(request_id: str) -> IPCMessage:
 if __name__ == "__main__":
     # Test IPC client
     client = IPCClient()
-    
+
     # Define handlers
     def handle_commit_trigger(msg: IPCMessage):
         print(f"Received commit trigger: {msg.data}")
         # Send acknowledgment
         ack = create_ack_message(msg.id)
         client.send_message(ack)
-    
+
     def handle_timer_trigger(msg: IPCMessage):
         print(f"Received timer trigger: {msg.data}")
         # Send acknowledgment
         ack = create_ack_message(msg.id)
         client.send_message(ack)
-    
+
     # Register handlers
     client.register_handler(MessageType.COMMIT_TRIGGER, handle_commit_trigger)
     client.register_handler(MessageType.TIMER_TRIGGER, handle_timer_trigger)
-    
+
     # Connect and listen
     if client.connect():
         print("Connected to IPC server")
         client.start_listening()
-        
+
         # Keep running
         try:
             while True:

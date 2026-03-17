@@ -129,6 +129,7 @@ class ProjectManager:
         """
         self._provider = provider
         self._projects: Dict[str, Project] = {}  # In-memory cache during session
+        self._sync_provider = None  # External sync provider (e.g. AzureProjectSync)
         logger.info("ProjectManager initialized")
 
     def _get_provider(self):
@@ -427,6 +428,42 @@ class ProjectManager:
             suggestions.extend(ai_suggestions)
 
         return suggestions
+
+    def set_external_sync(self, sync_provider) -> None:
+        """
+        Set the external sync provider for bidirectional project synchronization.
+
+        Args:
+            sync_provider: An object implementing sync_project_to_azure(project_id)
+                           (e.g. AzureProjectSync). Must have async methods.
+        """
+        self._sync_provider = sync_provider
+        logger.info("External sync provider set: %s", type(sync_provider).__name__)
+
+    async def sync_to_external(self, project_id: str) -> bool:
+        """
+        Sync a local project to the external system via the configured provider.
+
+        Args:
+            project_id: Project ID to sync.
+
+        Returns:
+            True if sync succeeded, False if no provider or sync failed.
+        """
+        if not self._sync_provider:
+            logger.debug("sync_to_external: no sync provider configured")
+            return False
+
+        project = self.get_project(project_id)
+        if not project:
+            logger.warning("sync_to_external: project %s not found", project_id)
+            return False
+
+        try:
+            return await self._sync_provider.sync_project_to_azure(project_id)
+        except Exception as e:
+            logger.error("sync_to_external failed for %s: %s", project_id, e)
+            return False
 
     # Private helper methods
 

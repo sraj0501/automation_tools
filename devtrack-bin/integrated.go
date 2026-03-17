@@ -136,7 +136,12 @@ func (im *IntegratedMonitor) registerIPCHandlers() {
 				UpdateText: getStringFromMap(msg.Data, "description"),
 				Status:     getStringFromMap(msg.Data, "status"),
 				Synced:     getBoolFromMap(msg.Data, "synced"),
-				Platform:   "python", // Will be updated when actually synced
+				Platform:   getStringFromMap(msg.Data, "synced_platform"),
+			}
+
+			// Use "python" as default platform if not specified
+			if record.Platform == "" {
+				record.Platform = "python"
 			}
 
 			if _, err := im.database.InsertTaskUpdate(record); err != nil {
@@ -174,6 +179,42 @@ func (im *IntegratedMonitor) registerIPCHandlers() {
 	// Handle acknowledgments from Python
 	im.ipcServer.RegisterHandler(MsgTypeAck, func(msg IPCMessage) error {
 		log.Printf("Received ACK from Python for message: %s", msg.ID)
+		return nil
+	})
+
+	// Handle webhook events (from webhook server via Python)
+	im.ipcServer.RegisterHandler(MsgTypeWebhookEvent, func(msg IPCMessage) error {
+		log.Printf("Webhook event received: %+v", msg.Data)
+
+		// Log webhook event to database
+		if im.database != nil {
+			logRecord := LogRecord{
+				Timestamp: time.Now(),
+				Level:     "info",
+				Component: "webhook",
+				Message:   fmt.Sprintf("Webhook event: %v", msg.Data),
+			}
+			im.database.InsertLog(logRecord)
+		}
+
+		return nil
+	})
+
+	// Handle external updates (from bidirectional sync)
+	im.ipcServer.RegisterHandler(MsgTypeExternalUpdate, func(msg IPCMessage) error {
+		log.Printf("External update received: %+v", msg.Data)
+
+		// Log external update to database
+		if im.database != nil {
+			logRecord := LogRecord{
+				Timestamp: time.Now(),
+				Level:     "info",
+				Component: "external_sync",
+				Message:   fmt.Sprintf("External update: %v", msg.Data),
+			}
+			im.database.InsertLog(logRecord)
+		}
+
 		return nil
 	})
 }

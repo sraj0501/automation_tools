@@ -5,6 +5,7 @@ This module implements semantic similarity matching and fuzzy string matching
 to automatically match user updates to existing tasks in Azure DevOps, GitHub, or Jira.
 """
 
+import asyncio
 import re
 from typing import List, Optional, Tuple
 from dataclasses import dataclass
@@ -399,10 +400,68 @@ class TaskRepository:
         return tasks
     
     def _get_azure_tasks(self) -> List[Task]:
-        """Fetch tasks from Azure DevOps"""
-        # Placeholder - would use actual Azure DevOps API
+        """Fetch tasks from Azure DevOps (sync wrapper around async)."""
+        if not self.azure_client:
+            return []
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            # Already inside an event loop — caller must use get_azure_tasks_async
+            logger.warning(
+                "_get_azure_tasks called inside a running event loop; "
+                "use get_azure_tasks_async instead"
+            )
+            return []
+
+        return asyncio.run(self.get_azure_tasks_async())
+
+    async def get_azure_tasks_async(self) -> List[Task]:
+        """Fetch tasks from Azure DevOps asynchronously."""
+        if not self.azure_client:
+            return []
         logger.info("Fetching tasks from Azure DevOps...")
-        return []
+        try:
+            from backend import config
+            states = config.get_azure_sync_states()
+            work_items = await self.azure_client.get_my_work_items(states=states)
+            return [
+                Task(
+                    id=str(wi.id),
+                    title=wi.title,
+                    description=wi.description or "",
+                    status=wi.state,
+                    project=wi.area_path.split("\\")[0] if wi.area_path else "",
+                    assignee=wi.assigned_to or "",
+                    tags=wi.tags,
+                    source="azure",
+                )
+                for wi in work_items
+            ]
+        except Exception as e:
+            logger.warning(f"Failed to fetch Azure DevOps tasks: {e}")
+            return []
+
+    async def get_my_tasks_async(self, source: str = "all") -> List[Task]:
+        """Async variant of get_my_tasks — required when Azure client is in use.
+
+        Jira and GitHub fetching is still synchronous (wrapped), but Azure
+        tasks are awaited properly.
+        """
+        tasks: List[Task] = []
+
+        if source in ("azure", "all") and self.azure_client:
+            tasks.extend(await self.get_azure_tasks_async())
+
+        if source in ("github", "all") and self.github_client:
+            tasks.extend(self._get_github_tasks())
+
+        if source in ("jira", "all") and self.jira_client:
+            tasks.extend(self._get_jira_tasks())
+
+        return tasks
     
     def _get_github_tasks(self) -> List[Task]:
         """Fetch tasks from GitHub"""

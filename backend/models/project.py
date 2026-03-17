@@ -84,6 +84,11 @@ class Project:
     risk_level: RiskLevel = RiskLevel.MEDIUM
     risk_description: str = ""
 
+    # External sync tracking
+    external_id: Optional[str] = None  # Azure iteration path, Jira project key, etc.
+    external_source: Optional[str] = None  # "azure_devops", "jira", "github"
+    external_sync_at: Optional[datetime] = None  # Last successful sync timestamp
+
     # Metadata
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
@@ -164,6 +169,8 @@ class Project:
             data['start_date'] = self.start_date.isoformat()
         if self.end_date:
             data['end_date'] = self.end_date.isoformat()
+        if self.external_sync_at:
+            data['external_sync_at'] = self.external_sync_at.isoformat()
 
         # Convert nested dataclasses
         if self.goals:
@@ -192,7 +199,7 @@ class Project:
             d['risk_level'] = RiskLevel(d['risk_level'])
 
         # Convert ISO format strings back to datetime
-        for date_field in ['created_at', 'updated_at', 'start_date', 'end_date']:
+        for date_field in ['created_at', 'updated_at', 'start_date', 'end_date', 'external_sync_at']:
             if isinstance(d.get(date_field), str):
                 d[date_field] = datetime.fromisoformat(d[date_field])
 

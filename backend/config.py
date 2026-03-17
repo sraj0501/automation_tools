@@ -628,3 +628,164 @@ def git_sage_base_url() -> str:
     if provider == "lmstudio": return lmstudio_host()
     if provider in ("openai", "anthropic"): return ""
     return ollama_host()
+
+
+# --- Azure DevOps Sync ---
+
+def is_azure_sync_enabled() -> bool:
+    """Check if bidirectional Azure DevOps sync is enabled. AZURE_SYNC_ENABLED (default: false)."""
+    return get_bool("AZURE_SYNC_ENABLED", False)
+
+
+def is_azure_auto_comment() -> bool:
+    """Auto-add comments on matched work items. AZURE_SYNC_AUTO_COMMENT (default: true)."""
+    return get_bool("AZURE_SYNC_AUTO_COMMENT", True)
+
+
+def is_azure_auto_transition() -> bool:
+    """Auto-transition work item state on status change. AZURE_SYNC_AUTO_TRANSITION (default: false)."""
+    return get_bool("AZURE_SYNC_AUTO_TRANSITION", False)
+
+
+def is_azure_create_on_no_match() -> bool:
+    """Create new work item when no match found. AZURE_SYNC_CREATE_ON_NO_MATCH (default: false)."""
+    return get_bool("AZURE_SYNC_CREATE_ON_NO_MATCH", False)
+
+
+def get_azure_match_threshold() -> float:
+    """Minimum confidence for auto-matching tasks (0.0-1.0). AZURE_SYNC_MATCH_THRESHOLD (default: 0.7)."""
+    val = get("AZURE_SYNC_MATCH_THRESHOLD", "0.7")
+    try:
+        threshold = float(val)
+    except (ValueError, TypeError):
+        raise ValueError(
+            f"AZURE_SYNC_MATCH_THRESHOLD must be a float, got: {val!r}"
+        )
+    if not 0.0 <= threshold <= 1.0:
+        raise ValueError(
+            f"AZURE_SYNC_MATCH_THRESHOLD must be between 0.0 and 1.0, got {threshold}"
+        )
+    return threshold
+
+
+def get_azure_sync_states() -> list:
+    """Work item states to fetch for matching. AZURE_SYNC_STATES (default: New,Active,In Progress)."""
+    val = get("AZURE_SYNC_STATES", "New,Active,In Progress")
+    return [s.strip() for s in val.split(",") if s.strip()]
+
+
+def get_azure_done_state() -> str:
+    """Target state when transitioning done items. AZURE_SYNC_DONE_STATE (default: Done)."""
+    return get("AZURE_SYNC_DONE_STATE", "Done")
+
+
+def get_azure_api_version() -> str:
+    """Azure DevOps API version. AZURE_API_VERSION (default: 7.1)."""
+    return get("AZURE_API_VERSION", "7.1")
+
+
+# --- Webhook Server ---
+
+def is_webhook_enabled() -> bool:
+    """Whether the webhook server is enabled. WEBHOOK_ENABLED (default: false)."""
+    return get_bool("WEBHOOK_ENABLED", False)
+
+
+def get_webhook_port() -> int:
+    """Webhook server listen port. WEBHOOK_PORT (default: 8089)."""
+    return get_int("WEBHOOK_PORT", 8089)
+
+
+def get_webhook_host() -> str:
+    """Webhook server listen host. WEBHOOK_HOST (default: 0.0.0.0)."""
+    return get("WEBHOOK_HOST", "0.0.0.0")
+
+
+def get_webhook_azure_username() -> str:
+    """Basic-auth username for Azure DevOps webhooks. WEBHOOK_AZURE_USERNAME (default: devtrack)."""
+    return get("WEBHOOK_AZURE_USERNAME", "devtrack")
+
+
+def get_webhook_azure_password() -> str:
+    """Basic-auth password for Azure DevOps webhooks. REQUIRED: WEBHOOK_AZURE_PASSWORD."""
+    val = get("WEBHOOK_AZURE_PASSWORD")
+    if not val:
+        raise ValueError("WEBHOOK_AZURE_PASSWORD environment variable required")
+    return val
+
+
+def get_webhook_github_secret() -> str:
+    """GitHub webhook HMAC secret (optional). WEBHOOK_GITHUB_SECRET."""
+    return get("WEBHOOK_GITHUB_SECRET", "")
+
+
+def is_webhook_notify_os() -> bool:
+    """Send OS notifications for webhook events. WEBHOOK_NOTIFY_OS (default: true)."""
+    return get_bool("WEBHOOK_NOTIFY_OS", True)
+
+
+def is_webhook_notify_terminal() -> bool:
+    """Print webhook events to terminal. WEBHOOK_NOTIFY_TERMINAL (default: true)."""
+    return get_bool("WEBHOOK_NOTIFY_TERMINAL", True)
+
+
+# --- Project Sync ---
+
+def is_project_sync_enabled() -> bool:
+    """Whether periodic project sync is enabled. PROJECT_SYNC_ENABLED (default: false)."""
+    return get_bool("PROJECT_SYNC_ENABLED", False)
+
+
+def get_project_sync_interval() -> int:
+    """Interval in seconds between project sync runs. PROJECT_SYNC_INTERVAL_SECS (default: 300)."""
+    return get_int("PROJECT_SYNC_INTERVAL_SECS", 300)
+
+
+def get_azure_sync_work_item_type() -> str:
+    """Work item type to create/query in Azure. AZURE_SYNC_WORK_ITEM_TYPE (default: Task)."""
+    return get("AZURE_SYNC_WORK_ITEM_TYPE", "Task")
+
+
+def get_azure_sync_default_area_path() -> str:
+    """Default area path for new work items. AZURE_SYNC_DEFAULT_AREA_PATH."""
+    return get("AZURE_SYNC_DEFAULT_AREA_PATH", "")
+
+
+def get_azure_sync_default_iteration_path() -> str:
+    """Default iteration path for queries/new items. AZURE_SYNC_DEFAULT_ITERATION_PATH."""
+    return get("AZURE_SYNC_DEFAULT_ITERATION_PATH", "")
+
+
+def get_azure_sync_tag() -> str:
+    """Tag applied to work items managed by DevTrack. AZURE_SYNC_TAG (default: devtrack-managed)."""
+    return get("AZURE_SYNC_TAG", "devtrack-managed")
+
+
+def get_azure_sync_state_setup() -> str:
+    """Azure state for SETUP projects. AZURE_SYNC_STATE_SETUP (default: New)."""
+    return get("AZURE_SYNC_STATE_SETUP", "New")
+
+
+def get_azure_sync_state_active() -> str:
+    """Azure state for ACTIVE projects. AZURE_SYNC_STATE_ACTIVE (default: Active)."""
+    return get("AZURE_SYNC_STATE_ACTIVE", "Active")
+
+
+def get_azure_sync_state_closed() -> str:
+    """Azure state for CLOSED projects. AZURE_SYNC_STATE_CLOSED (default: Done)."""
+    return get("AZURE_SYNC_STATE_CLOSED") or get_azure_done_state()
+
+
+def get_azure_sync_goal_state_pending() -> str:
+    """Azure state for pending goals. AZURE_SYNC_GOAL_STATE_PENDING (default: New)."""
+    return get("AZURE_SYNC_GOAL_STATE_PENDING", "New")
+
+
+def get_azure_sync_goal_state_in_progress() -> str:
+    """Azure state for in-progress goals. AZURE_SYNC_GOAL_STATE_IN_PROGRESS (default: Active)."""
+    return get("AZURE_SYNC_GOAL_STATE_IN_PROGRESS", "Active")
+
+
+def get_azure_sync_goal_state_completed() -> str:
+    """Azure state for completed goals. AZURE_SYNC_GOAL_STATE_COMPLETED (default: Done)."""
+    return get("AZURE_SYNC_GOAL_STATE_COMPLETED") or get_azure_done_state()

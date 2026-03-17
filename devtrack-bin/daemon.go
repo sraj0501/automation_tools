@@ -14,14 +14,15 @@ import (
 
 // Daemon manages the background process lifecycle
 type Daemon struct {
-	monitor      *IntegratedMonitor
-	config       *Config
-	pidFile      string
-	logFile      string
-	ctx          context.Context
-	cancel       context.CancelFunc
-	isRunning    bool
-	pythonBridge *exec.Cmd
+	monitor       *IntegratedMonitor
+	config        *Config
+	pidFile       string
+	logFile       string
+	ctx           context.Context
+	cancel        context.CancelFunc
+	isRunning     bool
+	pythonBridge  *exec.Cmd
+	webhookServer *exec.Cmd
 }
 
 // DaemonStatus represents the current daemon state
@@ -110,6 +111,12 @@ func (d *Daemon) Start() error {
 		log.Println("IPC functionality will be limited")
 	}
 
+	// Start webhook server if enabled
+	if err := d.startWebhookServer(); err != nil {
+		log.Printf("Warning: Failed to start webhook server: %v", err)
+		log.Println("Webhook functionality will be unavailable")
+	}
+
 	d.isRunning = true
 	log.Println("✓ Daemon started successfully")
 
@@ -133,6 +140,14 @@ func (d *Daemon) Stop() error {
 	}
 
 	log.Println("Stopping daemon...")
+
+	// Stop webhook server
+	if d.webhookServer != nil {
+		log.Println("Stopping webhook server...")
+		if err := d.webhookServer.Process.Kill(); err != nil {
+			log.Printf("Warning: error stopping webhook server: %v", err)
+		}
+	}
 
 	// Stop Python bridge
 	if d.pythonBridge != nil {
@@ -417,6 +432,44 @@ func (d *Daemon) startPythonBridge() error {
 
 	// Give it a moment to connect to IPC server
 	time.Sleep(time.Second)
+
+	return nil
+}
+
+// startWebhookServer starts the webhook server process if WEBHOOK_ENABLED=true
+func (d *Daemon) startWebhookServer() error {
+	if !IsWebhookEnabled() {
+		log.Println("Webhook server disabled (WEBHOOK_ENABLED is not true)")
+		return nil
+	}
+
+	log.Println("Starting webhook server...")
+
+	var cmd *exec.Cmd
+	projectRoot := os.Getenv("PROJECT_ROOT")
+	if projectRoot != "" {
+		cmd = exec.Command("uv", "run", "--directory", projectRoot, "python", "-m", "backend.webhook_server")
+		cmd.Dir = projectRoot
+	} else {
+		cmd = exec.Command("python3", "-m", "backend.webhook_server")
+	}
+
+	// Redirect output to daemon log
+	logFile, err := os.OpenFile(d.logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open log file for webhook server: %w", err)
+	}
+
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+
+	// Start the process
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start webhook server: %w", err)
+	}
+
+	d.webhookServer = cmd
+	log.Printf("✓ Webhook server started (PID: %d)", cmd.Process.Pid)
 
 	return nil
 }

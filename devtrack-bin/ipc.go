@@ -28,6 +28,10 @@ const (
 	MsgTypeError         MessageType = "error"
 	MsgTypeAck           MessageType = "ack"
 	MsgTypePromptRequest MessageType = "prompt_request"
+
+	// Bidirectional sync & webhook events
+	MsgTypeWebhookEvent   MessageType = "webhook_event"
+	MsgTypeExternalUpdate MessageType = "external_update"
 )
 
 // IPCMessage represents a message sent between Go and Python
@@ -59,12 +63,14 @@ type TimerTriggerData struct {
 
 // TaskUpdateData contains information about a task update
 type TaskUpdateData struct {
-	Project     string `json:"project"`
-	TicketID    string `json:"ticket_id"`
-	Description string `json:"description"`
-	Status      string `json:"status"`
-	TimeSpent   string `json:"time_spent"`
-	Synced      bool   `json:"synced"`
+	Project         string `json:"project"`
+	TicketID        string `json:"ticket_id"`
+	Description     string `json:"description"`
+	Status          string `json:"status"`
+	TimeSpent       string `json:"time_spent"`
+	Synced          bool   `json:"synced"`
+	AzureWorkItemID int    `json:"azure_work_item_id,omitempty"`
+	SyncedPlatform  string `json:"synced_platform,omitempty"`
 }
 
 // IPCServer manages IPC communication
@@ -425,18 +431,25 @@ func CreateTimerTriggerMessage(data TimerTriggerData) IPCMessage {
 
 // CreateTaskUpdateMessage creates a task update message
 func CreateTaskUpdateMessage(data TaskUpdateData) IPCMessage {
+	msgData := map[string]interface{}{
+		"project":     data.Project,
+		"ticket_id":   data.TicketID,
+		"description": data.Description,
+		"status":      data.Status,
+		"time_spent":  data.TimeSpent,
+		"synced":      data.Synced,
+	}
+	if data.AzureWorkItemID != 0 {
+		msgData["azure_work_item_id"] = data.AzureWorkItemID
+	}
+	if data.SyncedPlatform != "" {
+		msgData["synced_platform"] = data.SyncedPlatform
+	}
 	return IPCMessage{
 		Type:      MsgTypeTaskUpdate,
 		Timestamp: time.Now(),
 		ID:        fmt.Sprintf("task_%d", time.Now().UnixNano()),
-		Data: map[string]interface{}{
-			"project":     data.Project,
-			"ticket_id":   data.TicketID,
-			"description": data.Description,
-			"status":      data.Status,
-			"time_spent":  data.TimeSpent,
-			"synced":      data.Synced,
-		},
+		Data:      msgData,
 	}
 }
 

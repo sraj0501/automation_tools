@@ -715,3 +715,29 @@ func GetIPCConnectTimeoutSecs() int {
 	}
 	return secs
 }
+
+// IsWebhookEnabled returns whether the webhook server is enabled.
+// Reads WEBHOOK_ENABLED from .env (default: false).
+func IsWebhookEnabled() bool {
+	val := strings.TrimSpace(strings.ToLower(os.Getenv("WEBHOOK_ENABLED")))
+	return val == "true" || val == "1" || val == "yes" || val == "on"
+}
+
+// GetWebhookPort returns the webhook server listen port.
+// Reads WEBHOOK_PORT from .env (default: 8089).
+func GetWebhookPort() int {
+	val := os.Getenv("WEBHOOK_PORT")
+	if val == "" {
+		return 8089
+	}
+	port, err := strconv.Atoi(strings.TrimSpace(val))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: Invalid integer value for WEBHOOK_PORT: %s\n", val)
+		os.Exit(1)
+	}
+	if port <= 0 || port > 65535 {
+		fmt.Fprintf(os.Stderr, "ERROR: WEBHOOK_PORT must be between 1 and 65535, got: %d\n", port)
+		os.Exit(1)
+	}
+	return port
+}
