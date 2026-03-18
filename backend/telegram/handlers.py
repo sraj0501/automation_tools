@@ -1,6 +1,8 @@
 """Telegram bot command handlers for DevTrack."""
+import json
 import logging
 import os
+import re
 import sqlite3
 import subprocess
 from typing import TYPE_CHECKING
@@ -50,6 +52,8 @@ def register_handlers(app: Application, bot: "DevTrackBot"):
     app.add_handler(CommandHandler("queue", _make_handler(bot, _cmd_queue)))
     app.add_handler(CommandHandler("commits", _make_handler(bot, _cmd_commits)))
     app.add_handler(CommandHandler("health", _make_handler(bot, _cmd_health)))
+    app.add_handler(CommandHandler("issues", _make_handler(bot, _cmd_issues)))
+    app.add_handler(CommandHandler("issue", _make_handler(bot, _cmd_issue)))
 
 
 def _make_handler(bot: "DevTrackBot", handler_fn):
@@ -85,6 +89,8 @@ async def _cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/queue -- Message queue statistics\n"
         "/commits -- Deferred commit status\n"
         "/health -- Detailed service health\n"
+        "/issues -- Azure DevOps work items assigned to you\n"
+        "/issue <id> -- Full details of a specific work item\n"
         "/help -- Show this message",
         parse_mode="Markdown"
     )
@@ -271,6 +277,151 @@ async def _cmd_health(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "
         await update.message.reply_text(text, parse_mode="Markdown")
     except Exception as e:
         await update.message.reply_text(f"Error: {e}")
+
+
+async def _cmd_issues(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "DevTrackBot"):
+    """Handle /issues -- list Azure DevOps work items assigned to me (from cache)."""
+    try:
+        state_file = _get_azure_state_file()
+        if not state_file or not os.path.exists(state_file):
+            await update.message.reply_text(
+                "No Azure sync data found. Run `devtrack azure-sync` first.",
+                parse_mode="Markdown"
+            )
+            return
+
+        with open(state_file) as f:
+            data = json.load(f)
+
+        items = data.get("items", [])
+        last_sync = data.get("last_sync", "unknown")
+
+        if not items:
+            await update.message.reply_text(
+                f"No work items assigned to you.\n_Last synced: {last_sync}_",
+                parse_mode="Markdown"
+            )
+            return
+
+        # Group by state
+        by_state: dict = {}
+        for item in items:
+            state = item.get("state", "Unknown")
+            by_state.setdefault(state, []).append(item)
+
+        lines = ["*Azure DevOps — My Issues*\n"]
+        for state, state_items in sorted(by_state.items()):
+            lines.append(f"*{state}* ({len(state_items)})")
+            for item in state_items:
+                item_id = item.get("id", "?")
+                title = item.get("title", "")[:50]
+                wtype = item.get("work_item_type", "")
+                lines.append(f"  `#{item_id}` [{wtype}] {title}")
+            lines.append("")
+
+        lines.append(f"_Last synced: {last_sync}_")
+        lines.append("_Use /issue <id> for details_")
+
+        text = "\n".join(lines)
+        if len(text) > MAX_MSG_LEN - 20:
+            text = text[:MAX_MSG_LEN - 20] + "\n... (truncated)"
+        await update.message.reply_text(text, parse_mode="Markdown")
+
+    except Exception as e:
+        await update.message.reply_text(f"Error: {e}")
+
+
+async def _cmd_issue(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "DevTrackBot"):
+    """Handle /issue <id> -- fetch full work item details live from Azure DevOps."""
+    if not context.args:
+        await update.message.reply_text("Usage: /issue <work-item-id>")
+        return
+
+    try:
+        item_id = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text(f"Invalid ID: `{context.args[0]}`", parse_mode="Markdown")
+        return
+
+    await update.message.reply_text(f"Fetching work item #{item_id}...")
+
+    try:
+        from backend.azure.client import AzureDevOpsClient
+
+        client = AzureDevOpsClient()
+        if not client.is_configured():
+            await update.message.reply_text("Azure DevOps is not configured. Check your `.env`.")
+            return
+
+        wi = await client.get_work_item(item_id)
+        await client.close()
+
+        if not wi:
+            await update.message.reply_text(f"Work item #{item_id} not found or not accessible.")
+            return
+
+        lines = [
+            f"*#{wi.id} — {_escape_md(wi.title)}*",
+            "",
+            f"*Type:* {wi.work_item_type}",
+            f"*State:* {wi.state}",
+            f"*Assigned:* {wi.assigned_to or '(unassigned)'}",
+            f"*Area:* {wi.area_path}",
+        ]
+        if wi.iteration_path:
+            lines.append(f"*Iteration:* {wi.iteration_path}")
+        if wi.tags:
+            lines.append(f"*Tags:* {', '.join(wi.tags)}")
+        if wi.parent_id:
+            lines.append(f"*Parent:* #{wi.parent_id}")
+        if wi.url:
+            lines.append(f"*URL:* {wi.url}")
+
+        if wi.description:
+            clean = _strip_html(wi.description)
+            if clean:
+                lines.append("")
+                lines.append("*Description:*")
+                # Trim long descriptions
+                if len(clean) > 800:
+                    clean = clean[:800] + "..."
+                lines.append(clean)
+
+        text = "\n".join(lines)
+        if len(text) > MAX_MSG_LEN - 20:
+            text = text[:MAX_MSG_LEN - 20] + "\n... (truncated)"
+        await update.message.reply_text(text, parse_mode="Markdown")
+
+    except Exception as e:
+        await update.message.reply_text(f"Error: {e}")
+
+
+def _get_azure_state_file() -> str:
+    """Resolve path to Data/azure/sync_state.json."""
+    try:
+        from backend.config import get_path
+        data_dir = get_path("DATA_DIR")
+        return os.path.join(data_dir, "azure", "sync_state.json")
+    except Exception:
+        pass
+    project_root = os.environ.get("PROJECT_ROOT", "")
+    if project_root:
+        return os.path.join(project_root, "Data", "azure", "sync_state.json")
+    return ""
+
+
+def _strip_html(text: str) -> str:
+    """Remove HTML tags for terminal/Telegram display."""
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", "", text)
+    return text.strip()
+
+
+def _escape_md(text: str) -> str:
+    """Escape Markdown special characters in user content."""
+    for ch in r"\_*[]()~`>#+-=|{}.!":
+        text = text.replace(ch, f"\\{ch}")
+    return text
 
 
 def _get_db_path() -> str:
