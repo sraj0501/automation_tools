@@ -285,15 +285,14 @@ async def _cmd_issues(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "
         state_file = _get_azure_state_file()
         if not state_file or not os.path.exists(state_file):
             await update.message.reply_text(
-                "No Azure sync data found\\. Run `devtrack azure-sync` first\\.",
-                parse_mode="MarkdownV2"
+                "No Azure sync data found. Run <code>devtrack azure-sync</code> first.",
+                parse_mode="HTML"
             )
             return
 
         with open(state_file) as f:
             data = json.load(f)
 
-        # work_items is a dict keyed by ID
         work_items = data.get("work_items", {})
         last_sync = data.get("last_sync", "unknown")
         if last_sync and "T" in last_sync:
@@ -301,57 +300,54 @@ async def _cmd_issues(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "
 
         if not work_items:
             await update.message.reply_text(
-                f"No work items found\\.\n_Last synced: {last_sync}_\n\nRun `devtrack azure\\-sync` to refresh\\.",
-                parse_mode="MarkdownV2"
+                f"No work items found.\n<i>Last synced: {last_sync}</i>\n\n"
+                "Run <code>devtrack azure-sync</code> to refresh.",
+                parse_mode="HTML"
             )
             return
 
-        # Group by state
         by_state: dict = {}
         for item in work_items.values():
             state = item.get("state", "Unknown")
             by_state.setdefault(state, []).append(item)
 
-        messages = []
+        blocks = []
         for state in sorted(by_state.keys()):
             state_items = by_state[state]
-            block = [f"*{state}* ({len(state_items)})"]
+            lines = [f"<b>{_h(state)}</b> ({len(state_items)})"]
             for item in state_items:
                 item_id = item.get("id", "?")
-                title = item.get("title", "(no title)")
-                wtype = item.get("type", "")
-                sprint = item.get("iteration_path", "")
-                due = item.get("due_date", "")
-                desc_raw = item.get("description", "") or ""
-                desc = _strip_html(desc_raw)
-                if len(desc) > 120:
-                    desc = desc[:120] + "..."
+                title = _h(item.get("title", "(no title)"))
+                wtype = _h(item.get("type", ""))
+                sprint_raw = item.get("iteration_path", "") or ""
+                sprint = _h(sprint_raw.split("\\")[-1]) if sprint_raw else ""
+                due = _h(item.get("due_date", "") or "")
+                desc = _strip_html_entities(item.get("description", "") or "")
+                if len(desc) > 150:
+                    desc = desc[:150] + "..."
 
-                block.append(f"\n`#{item_id}` — *{title}*")
-                block.append(f"  Type: {wtype}  |  State: {state}")
+                lines.append(f"\n<code>#{item_id}</code> <b>{title}</b>")
+                lines.append(f"  {wtype}  |  {state}")
                 if sprint:
-                    block.append(f"  Sprint: {sprint.split('\\\\')[-1]}")
+                    lines.append(f"  Sprint: {sprint}")
                 if due:
-                    block.append(f"  Due: {due}")
+                    lines.append(f"  Due: {due}")
                 if desc:
-                    block.append(f"  _{desc}_")
+                    lines.append(f"  <i>{_h(desc)}</i>")
+            blocks.append("\n".join(lines))
 
-            messages.append("\n".join(block))
+        header = f"<b>Azure DevOps — My Issues</b> ({len(work_items)} total)\n\n"
+        footer = f"\n\n<i>Synced: {last_sync}</i>  |  /issue &lt;id&gt; for full details"
 
-        header = f"*Azure DevOps — My Issues* ({len(work_items)} total)\n"
-        footer = f"\n_Synced: {last_sync}_ | /issue <id> for full details"
-
-        # Send in chunks so we don't exceed Telegram's limit
         current = header
-        for block in messages:
+        for block in blocks:
             if len(current) + len(block) + len(footer) + 5 > MAX_MSG_LEN:
-                await update.message.reply_text(current, parse_mode="Markdown")
+                await update.message.reply_text(current, parse_mode="HTML")
                 current = block
             else:
-                current = current + "\n\n" + block
+                current = current + block + "\n\n"
 
-        current += footer
-        await update.message.reply_text(current, parse_mode="Markdown")
+        await update.message.reply_text(current + footer, parse_mode="HTML")
 
     except Exception as e:
         await update.message.reply_text(f"Error: {e}")
@@ -386,40 +382,39 @@ async def _cmd_issue(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "D
             await update.message.reply_text(f"Work item #{item_id} not found or not accessible.")
             return
 
+        sprint_name = wi.iteration_path.split("\\")[-1] if wi.iteration_path else ""
+
         lines = [
-            f"*#{wi.id} — {_escape_md(wi.title)}*",
+            f"<code>#{wi.id}</code> <b>{_h(wi.title)}</b>",
             "",
-            f"*Type:* {wi.work_item_type}",
-            f"*State:* {wi.state}",
-            f"*Assigned:* {wi.assigned_to or '(unassigned)'}",
-            f"*Area:* {wi.area_path}",
+            f"<b>Type:</b> {_h(wi.work_item_type)}",
+            f"<b>State:</b> {_h(wi.state)}",
+            f"<b>Assigned:</b> {_h(wi.assigned_to or '(unassigned)')}",
         ]
-        if wi.iteration_path:
-            sprint_name = wi.iteration_path.split("\\")[-1]
-            lines.append(f"*Sprint:* {sprint_name}")
+        if sprint_name:
+            lines.append(f"<b>Sprint:</b> {_h(sprint_name)}")
         if wi.due_date:
-            lines.append(f"*Due:* {wi.due_date}")
+            lines.append(f"<b>Due:</b> {_h(wi.due_date)}")
+        if wi.area_path:
+            lines.append(f"<b>Area:</b> {_h(wi.area_path)}")
         if wi.tags:
-            lines.append(f"*Tags:* {', '.join(wi.tags)}")
+            lines.append(f"<b>Tags:</b> {_h(', '.join(wi.tags))}")
         if wi.parent_id:
-            lines.append(f"*Parent:* #{wi.parent_id}")
+            lines.append(f"<b>Parent:</b> #{wi.parent_id}")
         if wi.url:
-            lines.append(f"*URL:* {wi.url}")
+            lines.append(f"<b>URL:</b> {wi.url}")
 
         if wi.description:
-            clean = _strip_html(wi.description)
+            clean = _strip_html_entities(wi.description)
             if clean:
-                lines.append("")
-                lines.append("*Description:*")
-                # Trim long descriptions
                 if len(clean) > 800:
                     clean = clean[:800] + "..."
-                lines.append(clean)
+                lines.append(f"\n<b>Description:</b>\n<i>{_h(clean)}</i>")
 
         text = "\n".join(lines)
         if len(text) > MAX_MSG_LEN - 20:
             text = text[:MAX_MSG_LEN - 20] + "\n... (truncated)"
-        await update.message.reply_text(text, parse_mode="Markdown")
+        await update.message.reply_text(text, parse_mode="HTML")
 
     except Exception as e:
         await update.message.reply_text(f"Error: {e}")
@@ -439,18 +434,24 @@ def _get_azure_state_file() -> str:
     return ""
 
 
+def _h(text: str) -> str:
+    """Escape HTML special characters for Telegram HTML parse mode."""
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _strip_html_entities(text: str) -> str:
+    """Strip HTML tags and decode common entities for display."""
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", "", text)
+    text = text.replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+    return " ".join(text.split()).strip()
+
+
 def _strip_html(text: str) -> str:
-    """Remove HTML tags for terminal/Telegram display."""
+    """Remove HTML tags for terminal display."""
     text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
     text = re.sub(r"<[^>]+>", "", text)
     return text.strip()
-
-
-def _escape_md(text: str) -> str:
-    """Escape Markdown special characters in user content."""
-    for ch in r"\_*[]()~`>#+-=|{}.!":
-        text = text.replace(ch, f"\\{ch}")
-    return text
 
 
 def _get_db_path() -> str:
