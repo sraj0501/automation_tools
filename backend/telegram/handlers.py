@@ -7,8 +7,8 @@ import sqlite3
 import subprocess
 from typing import TYPE_CHECKING
 
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
 if TYPE_CHECKING:
     from backend.telegram.bot import DevTrackBot
@@ -55,6 +55,7 @@ def register_handlers(app: Application, bot: "DevTrackBot"):
     app.add_handler(CommandHandler("issues", _make_handler(bot, _cmd_issues)))
     app.add_handler(CommandHandler("issue", _make_handler(bot, _cmd_issue)))
     app.add_handler(CommandHandler("create", _make_handler(bot, _cmd_create)))
+    app.add_handler(CallbackQueryHandler(_on_sprint_selected, pattern=r"^sprint:"))
 
 
 def _make_handler(bot: "DevTrackBot", handler_fn):
@@ -422,6 +423,16 @@ async def _cmd_issue(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "D
         await update.message.reply_text(f"Error: {e}")
 
 
+_TYPE_KEYWORDS = {
+    "bug": "Bug",
+    "task": "Task",
+    "feature": "Feature",
+    "epic": "Epic",
+    "story": "Product Backlog Item",
+    "pbi": "Product Backlog Item",
+}
+
+
 async def _cmd_create(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "DevTrackBot"):
     """Handle /create [type] <title> -- create a new Azure DevOps work item."""
     if not context.args:
@@ -429,57 +440,130 @@ async def _cmd_create(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "
             "Usage:\n"
             "<code>/create Fix the login bug</code>\n"
             "<code>/create bug Fix the login bug</code>\n"
-            "<code>/create task Review PR for sprint 2</code>",
+            "<code>/create task Review sprint PR</code>\n\n"
+            "Type keywords: bug, task, feature, epic, story, pbi",
             parse_mode="HTML"
         )
         return
 
-    # Check if first word is a type keyword
-    type_keywords = {
-        "bug": "Bug",
-        "task": "Task",
-        "feature": "Feature",
-        "epic": "Epic",
-        "story": "Product Backlog Item",
-        "pbi": "Product Backlog Item",
-    }
     first = context.args[0].lower()
-    if first in type_keywords and len(context.args) > 1:
-        work_item_type = type_keywords[first]
+    if first in _TYPE_KEYWORDS and len(context.args) > 1:
+        work_item_type = _TYPE_KEYWORDS[first]
         title = " ".join(context.args[1:])
     else:
         work_item_type = "Task"
         title = " ".join(context.args)
-
-    await update.message.reply_text(f"Creating {work_item_type}: <i>{_h(title)}</i>...", parse_mode="HTML")
 
     try:
         from backend.azure.client import AzureDevOpsClient
 
         client = AzureDevOpsClient()
         if not client.is_configured():
-            await update.message.reply_text("Azure DevOps is not configured. Check your <code>.env</code>.", parse_mode="HTML")
+            await update.message.reply_text(
+                "Azure DevOps is not configured. Check your <code>.env</code>.",
+                parse_mode="HTML"
+            )
             return
 
-        wi = await client.create_work_item(title=title, work_item_type=work_item_type)
+        # Fetch sprints in parallel with showing progress
+        await update.message.reply_text(
+            f"Fetching sprints for <b>{_h(work_item_type)}</b>: <i>{_h(title)}</i>...",
+            parse_mode="HTML"
+        )
+        iterations = await client.get_iterations()
         await client.close()
 
-        if not wi:
-            await update.message.reply_text(f"Failed to create {work_item_type}. Check Azure DevOps permissions.")
+        # Build sprint picker keyboard
+        # Each button encodes: sprint:<work_item_type>|<iteration_path>|<title>
+        buttons = []
+        for it in iterations:
+            name = it.get("name", "")
+            path = it.get("path", "") or name
+            # Truncate label for button display
+            label = name[:30]
+            payload = f"sprint:{work_item_type}|{path}|{title}"
+            if len(payload) <= 64:  # Telegram callback_data limit
+                buttons.append([InlineKeyboardButton(label, callback_data=payload)])
+
+        buttons.append([InlineKeyboardButton("No sprint (backlog)", callback_data=f"sprint:{work_item_type}||{title}")])
+
+        if not buttons:
+            # No sprints found — create without sprint
+            await _do_create(update, work_item_type, title, iteration_path=None)
             return
 
-        lines = [
-            f"✓ Created <b>{_h(wi.work_item_type)}</b> <code>#{wi.id}</code>",
-            f"<b>{_h(wi.title)}</b>",
-            f"State: {_h(wi.state)}",
-        ]
-        if wi.url:
-            lines.append(f"<a href=\"{wi.url}\">Open in Azure DevOps</a>")
-
-        await update.message.reply_text("\n".join(lines), parse_mode="HTML")
+        keyboard = InlineKeyboardMarkup(buttons)
+        await update.message.reply_text(
+            f"Which sprint for <b>{_h(work_item_type)}</b>: <i>{_h(title)}</i>?",
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
 
     except Exception as e:
         await update.message.reply_text(f"Error: {e}")
+
+
+async def _on_sprint_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Callback when user picks a sprint from the inline keyboard."""
+    query = update.callback_query
+    await query.answer()
+
+    try:
+        # payload: sprint:<type>|<iteration_path>|<title>
+        payload = query.data[len("sprint:"):]
+        parts = payload.split("|", 2)
+        if len(parts) != 3:
+            await query.edit_message_text("Invalid selection.")
+            return
+
+        work_item_type, iteration_path, title = parts
+        iteration_path = iteration_path or None
+
+        await query.edit_message_text(
+            f"Creating <b>{_h(work_item_type)}</b>: <i>{_h(title)}</i>"
+            + (f"\nSprint: {_h(iteration_path.split(chr(92))[-1])}" if iteration_path else "\nBacklog (no sprint)")
+            + "...",
+            parse_mode="HTML"
+        )
+        await _do_create(query, work_item_type, title, iteration_path)
+
+    except Exception as e:
+        await query.edit_message_text(f"Error: {e}")
+
+
+async def _do_create(ctx, work_item_type: str, title: str, iteration_path):
+    """Create the work item and send confirmation."""
+    from backend.azure.client import AzureDevOpsClient
+
+    client = AzureDevOpsClient()
+    try:
+        wi = await client.create_work_item(
+            title=title,
+            work_item_type=work_item_type,
+            iteration_path=iteration_path,
+        )
+    finally:
+        await client.close()
+
+    if not wi:
+        text = f"Failed to create {work_item_type}. Check Azure DevOps permissions."
+    else:
+        sprint_label = ""
+        if wi.iteration_path:
+            sprint_label = f"\nSprint: {_h(wi.iteration_path.split(chr(92))[-1])}"
+        url_label = f'\n<a href="{wi.url}">Open in Azure DevOps</a>' if wi.url else ""
+        text = (
+            f"✓ Created <b>{_h(wi.work_item_type)}</b> <code>#{wi.id}</code>\n"
+            f"<b>{_h(wi.title)}</b>\n"
+            f"State: {_h(wi.state)}"
+            f"{sprint_label}{url_label}"
+        )
+
+    # ctx is either a Message (from direct create) or a CallbackQuery
+    if hasattr(ctx, "edit_message_text"):
+        await ctx.edit_message_text(text, parse_mode="HTML")
+    else:
+        await ctx.message.reply_text(text, parse_mode="HTML")
 
 
 def _get_azure_state_file() -> str:
