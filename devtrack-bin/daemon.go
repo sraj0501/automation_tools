@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -21,9 +22,10 @@ type Daemon struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	isRunning     bool
-	pythonBridge  *exec.Cmd
-	webhookServer *exec.Cmd
-	telegramBot   *exec.Cmd
+	pythonBridge      *exec.Cmd
+	webhookServer     *exec.Cmd
+	telegramBot       *exec.Cmd
+	assignmentPoller  *exec.Cmd
 	startTime     time.Time
 	healthMonitor *HealthMonitor
 }
@@ -126,6 +128,11 @@ func (d *Daemon) Start() error {
 		log.Println("Telegram remote control will be unavailable")
 	}
 
+	// Start Azure assignment poller if enabled
+	if err := d.startAssignmentPoller(); err != nil {
+		log.Printf("Warning: Failed to start assignment poller: %v", err)
+	}
+
 	d.isRunning = true
 	d.startTime = time.Now()
 	log.Println("✓ Daemon started successfully")
@@ -179,6 +186,11 @@ func (d *Daemon) Stop() error {
 		if err := d.telegramBot.Process.Kill(); err != nil {
 			log.Printf("Warning: error stopping Telegram bot: %v", err)
 		}
+	}
+
+	// Stop assignment poller
+	if d.assignmentPoller != nil {
+		d.assignmentPoller.Process.Kill()
 	}
 
 	// Stop webhook server
@@ -551,6 +563,43 @@ func (d *Daemon) restartWebhookServer() error {
 	if d.healthMonitor != nil && d.webhookServer != nil && d.webhookServer.Process != nil {
 		d.healthMonitor.SetWebhookPID(d.webhookServer.Process.Pid)
 	}
+	return nil
+}
+
+// startAssignmentPoller starts the Azure DevOps assignment poller if configured
+func (d *Daemon) startAssignmentPoller() error {
+	if !IsAzurePollerEnabled() {
+		log.Println("Azure assignment poller disabled (AZURE_POLL_ENABLED is not true)")
+		return nil
+	}
+
+	// Kill any stale poller from a previous run
+	exec.Command("pkill", "-f", "assignment_poller").Run() //nolint
+
+	projectRoot := os.Getenv("PROJECT_ROOT")
+	scriptPath := filepath.Join(projectRoot, "backend", "azure", "assignment_poller.py")
+
+	var cmd *exec.Cmd
+	if projectRoot != "" {
+		cmd = exec.Command("uv", "run", "--directory", projectRoot, "python", scriptPath)
+		cmd.Dir = projectRoot
+	} else {
+		cmd = exec.Command("python3", scriptPath)
+	}
+
+	logFile, err := os.OpenFile(d.logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open log file for assignment poller: %w", err)
+	}
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start assignment poller: %w", err)
+	}
+
+	d.assignmentPoller = cmd
+	log.Printf("✓ Azure assignment poller started (PID: %d)", cmd.Process.Pid)
 	return nil
 }
 

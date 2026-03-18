@@ -850,6 +850,11 @@ func IsTelegramEnabled() bool {
 	return strings.EqualFold(val, "true") || val == "1"
 }
 
+func IsAzurePollerEnabled() bool {
+	val := os.Getenv("AZURE_POLL_ENABLED")
+	return strings.EqualFold(val, "true") || val == "1"
+}
+
 // GetHealthAutoRestartTelegram returns whether to auto-restart the Telegram bot
 func GetHealthAutoRestartTelegram() bool {
 	val := os.Getenv("HEALTH_AUTO_RESTART_TELEGRAM")

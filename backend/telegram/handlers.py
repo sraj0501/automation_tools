@@ -56,6 +56,7 @@ def register_handlers(app: Application, bot: "DevTrackBot"):
     app.add_handler(CommandHandler("issue", _make_handler(bot, _cmd_issue)))
     app.add_handler(CommandHandler("create", _make_handler(bot, _cmd_create)))
     app.add_handler(CallbackQueryHandler(_on_sprint_selected, pattern=r"^sprint:"))
+    app.add_handler(CallbackQueryHandler(_on_view_issue, pattern=r"^view_issue:"))
 
 
 def _make_handler(bot: "DevTrackBot", handler_fn):
@@ -564,6 +565,68 @@ async def _do_create(ctx, work_item_type: str, title: str, iteration_path):
         await ctx.edit_message_text(text, parse_mode="HTML")
     else:
         await ctx.message.reply_text(text, parse_mode="HTML")
+
+
+async def _on_view_issue(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Callback: View Full Details button on assignment notifications."""
+    query = update.callback_query
+    await query.answer()
+    try:
+        item_id = int(query.data.split(":", 1)[1])
+    except (ValueError, IndexError):
+        await query.answer("Invalid work item ID", show_alert=True)
+        return
+
+    await query.message.reply_text(f"Fetching work item #{item_id}...")
+
+    try:
+        from backend.azure.client import AzureDevOpsClient
+        client = AzureDevOpsClient()
+        if not client.is_configured():
+            await query.message.reply_text("Azure DevOps is not configured.")
+            return
+
+        wi = await client.get_work_item(item_id)
+        await client.close()
+
+        if not wi:
+            await query.message.reply_text(f"Work item #{item_id} not found or not accessible.")
+            return
+
+        sprint_name = wi.iteration_path.split("\\")[-1] if wi.iteration_path else ""
+        lines = [
+            f"<code>#{wi.id}</code>  <b>{_h(wi.title)}</b>",
+            "",
+            f"<b>Type:</b> {_h(wi.work_item_type)}",
+            f"<b>State:</b> {_h(wi.state)}",
+            f"<b>Assigned:</b> {_h(wi.assigned_to or '(unassigned)')}",
+        ]
+        if sprint_name:
+            lines.append(f"<b>Sprint:</b> {_h(sprint_name)}")
+        if wi.due_date:
+            lines.append(f"<b>Due:</b> {_h(wi.due_date)}")
+        if wi.area_path:
+            lines.append(f"<b>Area:</b> {_h(wi.area_path)}")
+        if wi.tags:
+            lines.append(f"<b>Tags:</b> {_h(', '.join(wi.tags))}")
+        if wi.parent_id:
+            lines.append(f"<b>Parent:</b> #{wi.parent_id}")
+        if wi.url:
+            lines.append(f'<a href="{wi.url}">Open in Azure DevOps</a>')
+        if wi.description:
+            clean = _strip_html_entities(wi.description)
+            if clean:
+                if len(clean) > 800:
+                    clean = clean[:800] + "..."
+                lines.append(f"\n<b>Description:</b>\n<i>{_h(clean)}</i>")
+
+        text = "\n".join(lines)
+        if len(text) > MAX_MSG_LEN - 20:
+            text = text[:MAX_MSG_LEN - 20] + "\n... (truncated)"
+        await query.message.reply_text(text, parse_mode="HTML")
+
+    except Exception as e:
+        await query.message.reply_text(f"Error: {e}")
 
 
 def _get_azure_state_file() -> str:
