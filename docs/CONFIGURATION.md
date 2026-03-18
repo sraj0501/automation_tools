@@ -411,7 +411,7 @@ OLLAMA_TEMPERATURE=0.9      # For creative tasks
 **Get**: https://platform.openai.com/api-keys
 
 ```bash
-OPENAI_API_KEY=sk-proj-1234567890abcdefghijklmnopqrstuvwxyz
+OPENAI_API_KEY=<your-openai-api-key>
 ```
 
 #### OPENAI_MODEL
@@ -460,7 +460,7 @@ OPENAI_MAX_TOKENS=1024
 **Get**: https://console.anthropic.com/account/keys
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-1234567890abcdefghijklmnopqrstuvwxyz
+ANTHROPIC_API_KEY=<your-anthropic-api-key>
 ```
 
 #### ANTHROPIC_MODEL
@@ -542,7 +542,7 @@ AZURE_DEVOPS_TOKEN=abcdefghijklmnopqrstuvwxyz123456
 **Get**: https://github.com/settings/tokens
 
 ```bash
-GITHUB_TOKEN=ghp_1234567890abcdefghijklmnopqrstuvwxyz
+GITHUB_TOKEN=<your-github-token>
 ```
 
 #### GITHUB_REPO
@@ -616,10 +616,9 @@ TEAMS_BOT_PASSWORD=abcdefghijklmnopqrstuvwxyz123456
 
 **What**: Teams channel to post to
 **Format**: String (hex ID or email)
-**Example**: `19:1234567890abcdef@thread.tacv2`
 
 ```bash
-TEAMS_CHANNEL_ID=19:1234567890abcdef@thread.tacv2
+TEAMS_CHANNEL_ID=<your-teams-channel-id>
 ```
 
 ### Microsoft Graph (Outlook)

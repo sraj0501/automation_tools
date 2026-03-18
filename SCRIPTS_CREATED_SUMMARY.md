@@ -187,7 +187,7 @@ AZURE_DEVOPS_PAT=your-token-here
 Required:
 ```bash
 AZURE_ORGANIZATION=spglobal          # or ORGANIZATION
-AZURE_DEVOPS_PAT=token123...         # or AZURE_API_KEY
+AZURE_DEVOPS_PAT=<your-pat>
 ```
 
 Optional:

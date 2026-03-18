@@ -14,17 +14,15 @@ Download Telegram from the [iOS App Store](https://apps.apple.com/app/telegram-m
 2. Send `/newbot`
 3. Choose a display name (e.g., "DevTrack Bot")
 4. Choose a username -- must end in `bot` (e.g., `my_devtrack_bot`)
-5. BotFather replies with a token like `your-bot-token-from-botfather`
-6. Copy this token -- you will need it for `.env`
+5. BotFather gives you a bot token — copy it for the next step
 
 ### Step 3: Get Your Chat ID
 
 1. Open a conversation with your new bot and tap **Start**
 2. Send `/start`
-3. The bot replies with your chat ID (a number like `123456789`)
-4. Copy this number
+3. The bot replies with your chat ID — copy it
 
-**Group chats:** If you want the bot in a group, add it to the group first, then send `/start` in the group. The group chat ID will be a negative number (e.g., `-1001234567890`). Use that negative number in the config.
+**Group chats:** If you want the bot in a group, add it to the group first, then send `/start` in the group. The group chat ID will be a negative number. Use that value in the config.
 
 ## Server Setup (DevTrack Side)
 
@@ -46,11 +44,11 @@ Add these variables to your `.env` file:
 TELEGRAM_ENABLED=true
 
 # Bot token from @BotFather (required)
-TELEGRAM_BOT_TOKEN=your-bot-token-from-botfather
+TELEGRAM_BOT_TOKEN=<your-bot-token>
 
 # Comma-separated chat IDs authorized to run commands
 # Leave empty to allow anyone (dev mode only -- not recommended)
-TELEGRAM_ALLOWED_CHAT_IDS=123456789
+TELEGRAM_ALLOWED_CHAT_IDS=<your-chat-id>
 
 # Notification toggles
 TELEGRAM_NOTIFY_COMMITS=true
@@ -61,7 +59,7 @@ TELEGRAM_NOTIFY_HEALTH=true
 HEALTH_AUTO_RESTART_TELEGRAM=true
 ```
 
-You can list multiple chat IDs separated by commas: `TELEGRAM_ALLOWED_CHAT_IDS=123456789,-1001234567890`
+You can list multiple chat IDs separated by commas.
 
 ### Step 3: Restart DevTrack
 
