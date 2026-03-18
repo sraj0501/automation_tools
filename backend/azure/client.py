@@ -14,6 +14,7 @@ Configuration (via .env):
 import logging
 import os
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -249,7 +250,8 @@ class AzureDevOpsClient:
         self,
         states: Optional[List[str]] = None,
         types: Optional[List[str]] = None,
-        max_results: int = 50,
+        max_results: int = 200,
+        changed_after: Optional[datetime] = None,
     ) -> List[AzureWorkItem]:
         """Fetch work items assigned to the authenticated user via WIQL."""
         conditions = ["[System.AssignedTo] = @Me"]
@@ -261,6 +263,10 @@ class AzureDevOpsClient:
         if types:
             type_list = ", ".join(f"'{t}'" for t in types)
             conditions.append(f"[System.WorkItemType] IN ({type_list})")
+
+        if changed_after:
+            ts = changed_after.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+            conditions.append(f"[System.ChangedDate] >= '{ts}'")
 
         where_clause = " AND ".join(conditions)
         wiql = (

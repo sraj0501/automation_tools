@@ -1133,7 +1133,8 @@ func (cli *CLI) handleAzureList() error {
 	return nil
 }
 
-// handleAzureSync runs a manual full bidirectional sync with Azure DevOps
+// handleAzureSync runs a manual sync with Azure DevOps.
+// Passes --full or --hours N through from CLI args.
 func (cli *CLI) handleAzureSync() error {
 	config, _ := LoadEnvConfig()
 	projectRoot := ""
@@ -1145,8 +1146,14 @@ func (cli *CLI) handleAzureSync() error {
 	}
 
 	scriptPath := filepath.Join(projectRoot, "backend", "azure", "run_sync.py")
-	args := []string{"run", "--directory", projectRoot, "python", scriptPath}
-	cmd := exec.Command("uv", args...)
+	uvArgs := []string{"run", "--directory", projectRoot, "python", scriptPath}
+
+	// Forward any flags after "azure-sync" (e.g. --full, --hours 24)
+	if len(os.Args) > 2 {
+		uvArgs = append(uvArgs, os.Args[2:]...)
+	}
+
+	cmd := exec.Command("uv", uvArgs...)
 	if projectRoot != "" {
 		cmd.Dir = projectRoot
 	}
@@ -1345,7 +1352,9 @@ func (cli *CLI) printUsage() {
 	fmt.Println("  devtrack azure-list --all             List all work items (no state filter)")
 	fmt.Println("  devtrack azure-list --state <states>  Filter by state (e.g. 'Active,New')")
 	fmt.Println("  devtrack azure-view <id>              Show full details for a work item")
-	fmt.Println("  devtrack azure-sync                   Fetch work items and save local snapshot")
+	fmt.Println("  devtrack azure-sync                   Full resync (clears cache, fetches all items)")
+	fmt.Println("  devtrack azure-sync --full            Explicit full resync")
+	fmt.Println("  devtrack azure-sync --hours 24        Only items changed in last 24h (merges)")
 	fmt.Println()
 	fmt.Println("OFFLINE RESILIENCE:")
 	fmt.Println("  devtrack queue             Show message queue stats")
