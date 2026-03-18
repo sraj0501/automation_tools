@@ -54,6 +54,7 @@ def register_handlers(app: Application, bot: "DevTrackBot"):
     app.add_handler(CommandHandler("health", _make_handler(bot, _cmd_health)))
     app.add_handler(CommandHandler("issues", _make_handler(bot, _cmd_issues)))
     app.add_handler(CommandHandler("issue", _make_handler(bot, _cmd_issue)))
+    app.add_handler(CommandHandler("create", _make_handler(bot, _cmd_create)))
 
 
 def _make_handler(bot: "DevTrackBot", handler_fn):
@@ -91,6 +92,7 @@ async def _cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/health -- Detailed service health\n"
         "/issues -- Azure DevOps work items assigned to you\n"
         "/issue <id> -- Full details of a specific work item\n"
+        "/create <title> -- Create a Task (prefix with 'bug' or 'task' to set type)\n"
         "/help -- Show this message",
         parse_mode="Markdown"
     )
@@ -415,6 +417,66 @@ async def _cmd_issue(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "D
         if len(text) > MAX_MSG_LEN - 20:
             text = text[:MAX_MSG_LEN - 20] + "\n... (truncated)"
         await update.message.reply_text(text, parse_mode="HTML")
+
+    except Exception as e:
+        await update.message.reply_text(f"Error: {e}")
+
+
+async def _cmd_create(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "DevTrackBot"):
+    """Handle /create [type] <title> -- create a new Azure DevOps work item."""
+    if not context.args:
+        await update.message.reply_text(
+            "Usage:\n"
+            "<code>/create Fix the login bug</code>\n"
+            "<code>/create bug Fix the login bug</code>\n"
+            "<code>/create task Review PR for sprint 2</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    # Check if first word is a type keyword
+    type_keywords = {
+        "bug": "Bug",
+        "task": "Task",
+        "feature": "Feature",
+        "epic": "Epic",
+        "story": "Product Backlog Item",
+        "pbi": "Product Backlog Item",
+    }
+    first = context.args[0].lower()
+    if first in type_keywords and len(context.args) > 1:
+        work_item_type = type_keywords[first]
+        title = " ".join(context.args[1:])
+    else:
+        work_item_type = "Task"
+        title = " ".join(context.args)
+
+    await update.message.reply_text(f"Creating {work_item_type}: <i>{_h(title)}</i>...", parse_mode="HTML")
+
+    try:
+        from backend.azure.client import AzureDevOpsClient
+
+        client = AzureDevOpsClient()
+        if not client.is_configured():
+            await update.message.reply_text("Azure DevOps is not configured. Check your <code>.env</code>.", parse_mode="HTML")
+            return
+
+        wi = await client.create_work_item(title=title, work_item_type=work_item_type)
+        await client.close()
+
+        if not wi:
+            await update.message.reply_text(f"Failed to create {work_item_type}. Check Azure DevOps permissions.")
+            return
+
+        lines = [
+            f"✓ Created <b>{_h(wi.work_item_type)}</b> <code>#{wi.id}</code>",
+            f"<b>{_h(wi.title)}</b>",
+            f"State: {_h(wi.state)}",
+        ]
+        if wi.url:
+            lines.append(f"<a href=\"{wi.url}\">Open in Azure DevOps</a>")
+
+        await update.message.reply_text("\n".join(lines), parse_mode="HTML")
 
     except Exception as e:
         await update.message.reply_text(f"Error: {e}")
