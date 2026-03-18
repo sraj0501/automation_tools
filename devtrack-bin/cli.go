@@ -20,7 +20,7 @@ func NewCLI() (*CLI, error) {
 	// For status/help commands, we don't need a full daemon
 	if len(os.Args) > 1 {
 		cmd := os.Args[1]
-		if cmd == "help" || cmd == "version" {
+		if cmd == "help" || cmd == "version" || cmd == "commit-queue" || cmd == "commits" || cmd == "queue" || cmd == "telegram-status" || cmd == "azure-check" {
 			return &CLI{}, nil
 		}
 	}
@@ -135,6 +135,24 @@ func (cli *CLI) Execute() error {
 		return cli.handleSkipNext()
 	case "version":
 		return cli.handleVersion()
+	case "commit-queue":
+		return cli.handleCommitQueue()
+	case "commits":
+		return cli.handleCommits()
+	case "queue":
+		return cli.handleQueueStats()
+	case "telegram-status":
+		return cli.handleTelegramStatus()
+	case "azure-check":
+		return cli.handleAzureCheck()
+	case "azure-list":
+		return cli.handleAzureList()
+	case "azure-sync":
+		return cli.handleAzureSync()
+	case "azure-view":
+		return cli.handleAzureView()
+	case "settings":
+		return cli.handleSettings()
 	case "help":
 		cli.printUsage()
 		return nil
@@ -249,34 +267,18 @@ func (cli *CLI) handleRestart() error {
 	return cli.handleStart()
 }
 
-// handleStatus shows daemon status
+// handleStatus shows daemon status with full health dashboard
 func (cli *CLI) handleStatus() error {
 	// Handle case where daemon is nil (status check without repo)
 	if cli.daemon == nil {
 		pidFile := GetPIDFilePath()
-
-		// Check if daemon is running by PID file
 		data, err := os.ReadFile(pidFile)
 		if err != nil {
-			fmt.Println("📊 DevTrack Daemon Status")
-			fmt.Println("═════════════════════════")
-			fmt.Println()
-			fmt.Println("Status:     ❌ STOPPED")
-			fmt.Println()
-			fmt.Println("Configuration:")
-			fmt.Printf("  Config:   %s\n", GetConfigPath())
-			fmt.Printf("  Logs:     %s\n", GetLogFilePath())
-			fmt.Printf("  PID file: %s\n", pidFile)
-			fmt.Println()
-			fmt.Println("Commands:")
-			fmt.Println("  devtrack start  - Start the daemon")
+			fmt.Println("DevTrack Daemon        ● Stopped")
 			return nil
 		}
 
-		fmt.Println("📊 DevTrack Daemon Status")
-		fmt.Println("═════════════════════════")
-		fmt.Println()
-		fmt.Printf("Status:     ✅ RUNNING (PID: %s)\n", strings.TrimSpace(string(data)))
+		fmt.Printf("DevTrack Daemon        ● Running (PID: %s)\n", strings.TrimSpace(string(data)))
 		fmt.Println()
 		fmt.Println("Use 'devtrack status' from repository directory for full details")
 		return nil
@@ -284,78 +286,152 @@ func (cli *CLI) handleStatus() error {
 
 	status, err := cli.daemon.Status()
 	if err != nil {
-		fmt.Printf("❌ Failed to get status: %v\n", err)
+		fmt.Printf("Failed to get status: %v\n", err)
 		return err
 	}
 
-	fmt.Println("📊 DevTrack Daemon Status")
-	fmt.Println("═════════════════════════")
+	// Header
+	if status.Running {
+		uptime := ""
+		if !status.StartTime.IsZero() {
+			uptime = fmt.Sprintf(", uptime %s", formatDuration(status.Uptime))
+		}
+		fmt.Printf("DevTrack Daemon        ● Running (PID %d%s)\n", status.PID, uptime)
+	} else {
+		fmt.Println("DevTrack Daemon        ● Stopped")
+	}
 	fmt.Println()
 
-	if status.Running {
-		fmt.Println("Status:     ✅ RUNNING")
-		fmt.Printf("PID:        %d\n", status.PID)
+	// Services section (from health snapshots)
+	db, dbErr := NewDatabase()
+	if dbErr == nil {
+		defer db.Close()
 
-		if !status.StartTime.IsZero() {
-			fmt.Printf("Uptime:     %s\n", formatDuration(status.Uptime))
-			fmt.Printf("Started:    %s\n", status.StartTime.Format(time.RFC1123))
+		snapshots, err := db.GetLatestHealthSnapshots()
+		if err == nil && len(snapshots) > 0 {
+			fmt.Println("Services:")
+			for _, snap := range snapshots {
+				icon := "●"
+				switch snap.Status {
+				case "up":
+					icon = "\033[32m●\033[0m" // green
+				case "down":
+					icon = "\033[31m●\033[0m" // red
+				case "degraded":
+					icon = "\033[33m●\033[0m" // yellow
+				case "unconfigured":
+					icon = "\033[90m○\033[0m" // gray
+				}
+
+				detail := formatHealthDetail(snap)
+				fmt.Printf("  %-22s %s %s\n", serviceDisplayName(snap.Service), icon, detail)
+			}
+			fmt.Println()
 		}
 
-		if status.TriggerCount > 0 {
-			fmt.Printf("Triggers:   %d\n", status.TriggerCount)
+		// Queue stats
+		pending, failed, sent, err := db.GetMessageQueueStats()
+		if err == nil {
+			fmt.Printf("Sync Queue:            %d pending, %d failed", pending, failed)
+			if sent > 0 {
+				fmt.Printf(" (%d sent)", sent)
+			}
+			fmt.Println()
 		}
 
-		if !status.LastTrigger.IsZero() {
-			fmt.Printf("Last:       %s\n", status.LastTrigger.Format(time.RFC1123))
+		// Deferred commit stats
+		dcPending, dcEnhanced, dcCommitted, dcExpired, err := db.GetDeferredCommitStats()
+		if err == nil && (dcPending+dcEnhanced+dcCommitted+dcExpired) > 0 {
+			parts := []string{}
+			if dcEnhanced > 0 {
+				parts = append(parts, fmt.Sprintf("%d enhanced (ready for review)", dcEnhanced))
+			}
+			if dcPending > 0 {
+				parts = append(parts, fmt.Sprintf("%d pending", dcPending))
+			}
+			if dcCommitted > 0 {
+				parts = append(parts, fmt.Sprintf("%d committed", dcCommitted))
+			}
+			fmt.Printf("Deferred Commits:      %s\n", strings.Join(parts, ", "))
 		}
-	} else {
-		fmt.Println("Status:     ❌ STOPPED")
+		fmt.Println()
 	}
 
-	fmt.Println()
-	fmt.Println("Configuration:")
-	fmt.Printf("  Config:   %s\n", status.ConfigPath)
-	fmt.Printf("  Logs:     %s\n", status.LogPath)
-	fmt.Printf("  PID file: %s\n", status.PIDPath)
-	fmt.Println()
-
 	if status.Running {
-		// Show monitoring details
+		// Scheduler info
 		if cli.daemon.monitor != nil && cli.daemon.monitor.scheduler != nil {
 			stats := cli.daemon.monitor.scheduler.GetStats()
 			workStatus := cli.daemon.monitor.scheduler.GetWorkHoursStatus()
 
-			fmt.Println("Scheduler:")
-			fmt.Printf("  Paused:       %v\n", stats["is_paused"])
-			fmt.Printf("  Interval:     %v minutes\n", stats["interval_minutes"])
-			fmt.Printf("  Next trigger: %v\n", stats["time_until_next"])
+			interval := stats["interval_minutes"]
+			nextTrigger := stats["time_until_next"]
+			paused := stats["is_paused"]
 
-			fmt.Println()
-			fmt.Println("Work Hours:")
-			fmt.Printf("  Enabled:      %v\n", workStatus["enabled"])
-			if workStatus["enabled"].(bool) {
-				fmt.Printf("  Hours:        %d:00 - %d:00\n",
-					workStatus["work_start_hour"], workStatus["work_end_hour"])
-				fmt.Printf("  In hours:     %v\n", workStatus["is_work_hours"])
+			schedLine := fmt.Sprintf("every %vm", interval)
+			if p, ok := paused.(bool); ok && p {
+				schedLine += " (PAUSED)"
+			}
+			if d, ok := nextTrigger.(time.Duration); ok && d > 0 {
+				schedLine += fmt.Sprintf(", next in %s", formatDuration(d))
+			}
+			fmt.Printf("Scheduler:             %s\n", schedLine)
+
+			if enabled, ok := workStatus["enabled"].(bool); ok && enabled {
+				inHours := workStatus["is_work_hours"]
+				startH := workStatus["work_start_hour"]
+				endH := workStatus["work_end_hour"]
+				hoursStr := "outside"
+				if ih, ok := inHours.(bool); ok && ih {
+					hoursStr = "active"
+				}
+				fmt.Printf("Work Hours:            %v:00-%v:00 (%s)\n", startH, endH, hoursStr)
 			}
 		}
 
-		fmt.Println()
-		fmt.Println("Commands:")
-		fmt.Println("  devtrack stop          - Stop the daemon")
-		fmt.Println("  devtrack restart       - Restart the daemon")
-		fmt.Println("  devtrack pause         - Pause scheduler")
-		fmt.Println("  devtrack resume        - Resume scheduler")
-		fmt.Println("  devtrack force-trigger - Force immediate trigger")
-		fmt.Println("  devtrack skip-next     - Skip next trigger")
-		fmt.Println("  devtrack send-summary  - Generate summary now")
-		fmt.Println("  devtrack logs          - View recent logs")
-	} else {
-		fmt.Println("Commands:")
-		fmt.Println("  devtrack start  - Start the daemon")
 	}
 
 	return nil
+}
+
+// serviceDisplayName returns a human-friendly name for a service
+func serviceDisplayName(service string) string {
+	switch service {
+	case "ipc":
+		return "Python IPC"
+	case "python_bridge":
+		return "Python Bridge"
+	case "ollama":
+		return "Ollama"
+	case "azure_devops":
+		return "Azure DevOps"
+	case "webhook_server":
+		return "Webhook Server"
+	case "telegram_bot":
+		return "Telegram Bot"
+	case "mongodb":
+		return "MongoDB"
+	default:
+		return service
+	}
+}
+
+// formatHealthDetail formats the detail string for a health snapshot
+func formatHealthDetail(snap HealthSnapshot) string {
+	switch snap.Status {
+	case "up":
+		if snap.LatencyMs > 0 {
+			return fmt.Sprintf("Connected (latency: %dms)", snap.LatencyMs)
+		}
+		return "Connected"
+	case "down":
+		return "Down"
+	case "degraded":
+		return "Degraded"
+	case "unconfigured":
+		return "Not configured"
+	default:
+		return snap.Status
+	}
 }
 
 // handlePause pauses the scheduler
@@ -850,6 +926,395 @@ func (cli *CLI) handleSaveReport() error {
 	return nil
 }
 
+// handleCommitQueue handles the internal commit-queue command (called by git wrapper)
+func (cli *CLI) handleCommitQueue() error {
+	// Parse flags
+	message := ""
+	branch := ""
+	repoPath := ""
+	filesStr := ""
+
+	for i := 2; i < len(os.Args); i++ {
+		switch os.Args[i] {
+		case "--message":
+			if i+1 < len(os.Args) {
+				message = os.Args[i+1]
+				i++
+			}
+		case "--branch":
+			if i+1 < len(os.Args) {
+				branch = os.Args[i+1]
+				i++
+			}
+		case "--repo":
+			if i+1 < len(os.Args) {
+				repoPath = os.Args[i+1]
+				i++
+			}
+		case "--files":
+			if i+1 < len(os.Args) {
+				filesStr = os.Args[i+1]
+				i++
+			}
+		}
+	}
+
+	if message == "" {
+		return fmt.Errorf("--message is required")
+	}
+
+	// Read diff from stdin
+	diffPatch := ""
+	stat, _ := os.Stdin.Stat()
+	if (stat.Mode() & os.ModeCharDevice) == 0 {
+		data := make([]byte, 0, 1024*1024) // 1MB max
+		buf := make([]byte, 4096)
+		for {
+			n, err := os.Stdin.Read(buf)
+			if n > 0 {
+				data = append(data, buf[:n]...)
+			}
+			if err != nil {
+				break
+			}
+			if len(data) > 1024*1024 {
+				break // cap at 1MB
+			}
+		}
+		diffPatch = string(data)
+	}
+
+	// Parse files
+	var files []string
+	if filesStr != "" {
+		files = strings.Split(filesStr, ",")
+	}
+
+	// Open database and queue
+	db, err := NewDatabase()
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+	defer db.Close()
+
+	mgr := NewDeferredCommitManager(db)
+	id, err := mgr.QueueCommit(message, diffPatch, branch, repoPath, files)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Commit queued (ID: %d)\n", id)
+	return nil
+}
+
+// handleCommits handles commits subcommands (pending, review)
+func (cli *CLI) handleCommits() error {
+	subCmd := "pending"
+	if len(os.Args) > 2 {
+		subCmd = os.Args[2]
+	}
+
+	db, err := NewDatabase()
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+	defer db.Close()
+
+	mgr := NewDeferredCommitManager(db)
+
+	switch subCmd {
+	case "pending":
+		return mgr.ListPending()
+	case "review":
+		return mgr.ReviewEnhanced()
+	default:
+		fmt.Printf("Unknown commits subcommand: %s\n", subCmd)
+		fmt.Println("Usage:")
+		fmt.Println("  devtrack commits pending  - List deferred commits")
+		fmt.Println("  devtrack commits review   - Review enhanced commits")
+		return nil
+	}
+}
+
+// handleQueueStats shows message queue statistics
+func (cli *CLI) handleQueueStats() error {
+	db, err := NewDatabase()
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+	defer db.Close()
+
+	pending, failed, sent, err := db.GetMessageQueueStats()
+	if err != nil {
+		return fmt.Errorf("failed to get queue stats: %w", err)
+	}
+
+	fmt.Println("Message Queue")
+	fmt.Println(strings.Repeat("═", 40))
+	fmt.Printf("  Pending:   %d\n", pending)
+	fmt.Printf("  Failed:    %d\n", failed)
+	fmt.Printf("  Sent:      %d\n", sent)
+	fmt.Println()
+
+	if pending > 0 {
+		messages, err := db.GetPendingMessages(10)
+		if err == nil && len(messages) > 0 {
+			fmt.Println("Pending Messages:")
+			fmt.Println(strings.Repeat("─", 40))
+			for _, m := range messages {
+				fmt.Printf("  [%s] %s (queued: %s, retries: %d)\n",
+					m.MessageType, m.MessageID,
+					m.CreatedAt.Format("15:04:05"),
+					m.RetryCount)
+			}
+			fmt.Println()
+		}
+	}
+
+	if failed > 0 {
+		fmt.Println("Note: Failed messages will be retried automatically when Python bridge reconnects.")
+		fmt.Println()
+	}
+
+	return nil
+}
+
+// handleAzureCheck verifies Azure DevOps config and connectivity
+func (cli *CLI) handleAzureCheck() error {
+	config, _ := LoadEnvConfig()
+	projectRoot := ""
+	if config != nil {
+		projectRoot = config.ProjectRoot
+	}
+	if projectRoot == "" {
+		projectRoot = os.Getenv("PROJECT_ROOT")
+	}
+
+	scriptPath := filepath.Join(projectRoot, "backend", "azure", "check.py")
+
+	args := []string{"run", "--directory", projectRoot, "python", scriptPath}
+	cmd := exec.Command("uv", args...)
+	if projectRoot != "" {
+		cmd.Dir = projectRoot
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
+
+// handleAzureList lists work items assigned to the user
+func (cli *CLI) handleAzureList() error {
+	config, _ := LoadEnvConfig()
+	projectRoot := ""
+	if config != nil {
+		projectRoot = config.ProjectRoot
+	}
+	if projectRoot == "" {
+		projectRoot = os.Getenv("PROJECT_ROOT")
+	}
+
+	scriptPath := filepath.Join(projectRoot, "backend", "azure", "list_items.py")
+	args := []string{"run", "--directory", projectRoot, "python", scriptPath}
+	args = append(args, os.Args[2:]...) // forward --all, --state flags
+	cmd := exec.Command("uv", args...)
+	if projectRoot != "" {
+		cmd.Dir = projectRoot
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// handleAzureSync runs a manual full bidirectional sync with Azure DevOps
+func (cli *CLI) handleAzureSync() error {
+	config, _ := LoadEnvConfig()
+	projectRoot := ""
+	if config != nil {
+		projectRoot = config.ProjectRoot
+	}
+	if projectRoot == "" {
+		projectRoot = os.Getenv("PROJECT_ROOT")
+	}
+
+	scriptPath := filepath.Join(projectRoot, "backend", "azure", "run_sync.py")
+	args := []string{"run", "--directory", projectRoot, "python", scriptPath}
+	cmd := exec.Command("uv", args...)
+	if projectRoot != "" {
+		cmd.Dir = projectRoot
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// handleAzureView shows details for a specific Azure DevOps work item
+func (cli *CLI) handleAzureView() error {
+	if len(os.Args) < 3 {
+		fmt.Println("Usage: devtrack azure-view <work-item-id>")
+		return fmt.Errorf("missing work item ID")
+	}
+
+	config, _ := LoadEnvConfig()
+	projectRoot := ""
+	if config != nil {
+		projectRoot = config.ProjectRoot
+	}
+	if projectRoot == "" {
+		projectRoot = os.Getenv("PROJECT_ROOT")
+	}
+
+	scriptPath := filepath.Join(projectRoot, "backend", "azure", "view_item.py")
+	args := []string{"run", "--directory", projectRoot, "python", scriptPath, os.Args[2]}
+	cmd := exec.Command("uv", args...)
+	if projectRoot != "" {
+		cmd.Dir = projectRoot
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// handleSettings shows all configuration paths and key env settings
+func (cli *CLI) handleSettings() error {
+	LoadEnvConfig()
+
+	fmt.Println("DevTrack Settings")
+	fmt.Println(strings.Repeat("=", 40))
+	fmt.Println()
+
+	fmt.Println("Files & Paths:")
+	fmt.Printf("  Config:      %s\n", GetConfigPath())
+	fmt.Printf("  Log file:    %s\n", GetLogFilePath())
+	fmt.Printf("  PID file:    %s\n", GetPIDFilePath())
+	fmt.Printf("  Database:    %s\n", GetDatabasePath())
+	fmt.Println()
+
+	fmt.Println("IPC:")
+	fmt.Printf("  Host:        %s\n", getEnvOrDefault("IPC_HOST", "127.0.0.1"))
+	fmt.Printf("  Port:        %s\n", getEnvOrDefault("IPC_PORT", "35893"))
+	fmt.Println()
+
+	fmt.Println("Azure DevOps:")
+	fmt.Printf("  Org:         %s\n", maskEmpty(os.Getenv("AZURE_ORGANIZATION")))
+	fmt.Printf("  Project:     %s\n", maskEmpty(os.Getenv("AZURE_PROJECT")))
+	pat := os.Getenv("AZURE_DEVOPS_PAT")
+	if pat == "" {
+		pat = os.Getenv("AZURE_API_KEY")
+	}
+	fmt.Printf("  PAT:         %s\n", maskSecret(pat))
+	fmt.Printf("  Sync:        %s\n", getEnvOrDefault("AZURE_SYNC_ENABLED", "false"))
+	fmt.Println()
+
+	fmt.Println("LLM:")
+	fmt.Printf("  Provider:    %s\n", getEnvOrDefault("LLM_PROVIDER", "ollama"))
+	fmt.Printf("  Ollama host: %s\n", getEnvOrDefault("OLLAMA_HOST", "(not set)"))
+	fmt.Printf("  Sage model:  %s\n", getEnvOrDefault("GIT_SAGE_DEFAULT_MODEL", "(not set)"))
+	fmt.Println()
+
+	fmt.Println("Telegram:")
+	enabled := os.Getenv("TELEGRAM_ENABLED")
+	if enabled == "" {
+		enabled = "false"
+	}
+	fmt.Printf("  Enabled:     %s\n", enabled)
+	if enabled == "true" {
+		fmt.Printf("  Bot token:   %s\n", maskSecret(os.Getenv("TELEGRAM_BOT_TOKEN")))
+		fmt.Printf("  Chat ID:     %s\n", maskEmpty(os.Getenv("TELEGRAM_CHAT_ID")))
+	}
+	fmt.Println()
+
+	fmt.Println("Webhook:")
+	webhookEnabled := getEnvOrDefault("WEBHOOK_ENABLED", "false")
+	fmt.Printf("  Enabled:     %s\n", webhookEnabled)
+	if webhookEnabled == "true" {
+		fmt.Printf("  Listen:      %s:%s\n",
+			getEnvOrDefault("WEBHOOK_HOST", "0.0.0.0"),
+			getEnvOrDefault("WEBHOOK_PORT", "8089"))
+	}
+	fmt.Println()
+
+	return nil
+}
+
+func getEnvOrDefault(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+func maskEmpty(v string) string {
+	if v == "" {
+		return "(not set)"
+	}
+	return v
+}
+
+func maskSecret(v string) string {
+	if v == "" {
+		return "(not set)"
+	}
+	if len(v) <= 8 {
+		return "****"
+	}
+	return v[:4] + strings.Repeat("*", len(v)-8) + v[len(v)-4:]
+}
+
+// handleTelegramStatus shows Telegram bot status
+func (cli *CLI) handleTelegramStatus() error {
+	// Ensure .env is loaded (this command skips NewDaemon)
+	LoadEnvConfig() // ignore error — IsTelegramEnabled will just read os.Getenv
+	if !IsTelegramEnabled() {
+		fmt.Println("Telegram bot is disabled (TELEGRAM_ENABLED is not true)")
+		return nil
+	}
+	fmt.Println("Telegram Bot Status")
+	fmt.Println("===================")
+	fmt.Println("Enabled: true")
+
+	// Check health from DB
+	db, err := NewDatabase()
+	if err != nil {
+		fmt.Println("Status: unknown (database unavailable)")
+		return nil
+	}
+	defer db.Close()
+
+	snapshots, err := db.GetLatestHealthSnapshots()
+	if err != nil {
+		fmt.Println("Status: unknown")
+		return nil
+	}
+
+	for _, snap := range snapshots {
+		if snap.Service == "telegram_bot" {
+			fmt.Printf("Status: %s\n", snap.Status)
+			if snap.Details != "" {
+				fmt.Printf("Details: %s\n", snap.Details)
+			}
+			fmt.Printf("Last checked: %s\n", snap.CheckedAt.Format(time.RFC3339))
+			return nil
+		}
+	}
+
+	fmt.Println("Status: no health data yet")
+	return nil
+}
+
 // printUsage prints CLI usage information
 func (cli *CLI) printUsage() {
 	fmt.Println("DevTrack - Developer Automation Tools")
@@ -868,21 +1333,38 @@ func (cli *CLI) printUsage() {
 	fmt.Println("  devtrack skip-next     Skip the next scheduled trigger")
 	fmt.Println("  devtrack send-summary  Generate daily summary now")
 	fmt.Println()
-	fmt.Println("INFO COMMANDS:")
-	fmt.Println("  devtrack logs          Show recent log entries")
-	fmt.Println("  devtrack db-stats      Show database statistics")
-	fmt.Println("  devtrack stats         Alias for db-stats (with analytics)")
-	fmt.Println("  devtrack version       Show version information")
-	fmt.Println("  devtrack help          Show this help message")
+	fmt.Println("GIT COMMANDS:")
+	fmt.Println("  devtrack git commit -m 'msg'   AI-enhanced commit (iterative refinement)")
+	fmt.Println("  uv run python -m backend.git_sage ask '<question>'  Ask git-sage a question")
+	fmt.Println("  uv run python -m backend.git_sage do  '<task>'      Let git-sage execute a task")
+	fmt.Println("  uv run python -m backend.git_sage interactive        Interactive git-sage session")
+	fmt.Println()
+	fmt.Println("AZURE DEVOPS:")
+	fmt.Println("  devtrack azure-check                  Check config and connectivity")
+	fmt.Println("  devtrack azure-list                   List work items assigned to you")
+	fmt.Println("  devtrack azure-list --all             List all work items (no state filter)")
+	fmt.Println("  devtrack azure-list --state <states>  Filter by state (e.g. 'Active,New')")
+	fmt.Println("  devtrack azure-view <id>              Show full details for a work item")
+	fmt.Println("  devtrack azure-sync                   Fetch work items and save local snapshot")
+	fmt.Println()
+	fmt.Println("OFFLINE RESILIENCE:")
+	fmt.Println("  devtrack queue             Show message queue stats")
+	fmt.Println("  devtrack commits pending   List deferred commits and status")
+	fmt.Println("  devtrack commits review    Review enhanced deferred commits")
+	fmt.Println()
+	fmt.Println("EMAIL REPORTS:")
+	fmt.Println("  devtrack preview-report [date]   Preview today's report (or YYYY-MM-DD)")
+	fmt.Println("  devtrack send-report <email>     Send daily report to email address")
+	fmt.Println("  devtrack save-report [date]      Save report to file")
 	fmt.Println()
 	fmt.Println("PERSONALIZED AI LEARNING:")
 	fmt.Println("  devtrack enable-learning [days]  Enable learning from communications (default 30 days)")
-	fmt.Println("  devtrack learning-reset          Wipe all learning data and start fresh")
-	fmt.Println("  devtrack learning-sync           Run delta sync now (only new messages since last run)")
+	fmt.Println("  devtrack learning-sync           Run delta sync (only new messages since last run)")
 	fmt.Println("  devtrack learning-sync --full    Force full re-sync (ignore delta state)")
 	fmt.Println("  devtrack learning-status         Show learning status and statistics")
+	fmt.Println("  devtrack learning-reset          Wipe all learning data and start fresh")
 	fmt.Println("  devtrack show-profile            Show learned communication profile")
-	fmt.Println("  devtrack test-response <text>    Test generating personalized response")
+	fmt.Println("  devtrack test-response <text>    Test generating a personalized response")
 	fmt.Println("  devtrack revoke-consent          Revoke learning consent and delete data")
 	fmt.Println()
 	fmt.Println("LEARNING CRON (configure LEARNING_CRON_SCHEDULE in .env):")
@@ -890,25 +1372,16 @@ func (cli *CLI) printUsage() {
 	fmt.Println("  devtrack learning-cron-status    Show cron entry and .env schedule settings")
 	fmt.Println("  devtrack learning-remove-cron    Remove the cron entry")
 	fmt.Println()
-	fmt.Println("EMAIL REPORTS:")
-	fmt.Println("  devtrack preview-report [date]   Preview today's report (or YYYY-MM-DD)")
-	fmt.Println("  devtrack send-report <email>     Send daily report to email address")
-	fmt.Println("  devtrack save-report [date]      Save report to file")
+	fmt.Println("TELEGRAM:")
+	fmt.Println("  devtrack telegram-status  Show Telegram bot status")
 	fmt.Println()
-	fmt.Println("TEST COMMANDS:")
-	fmt.Println("  go run . test-git         Test Git commit detection")
-	fmt.Println("  go run . test-scheduler   Test time-based scheduler")
-	fmt.Println("  go run . test-config      Test configuration")
-	fmt.Println("  go run . test-integrated  Test complete system")
-	fmt.Println()
-	fmt.Println("OTHER COMMANDS:")
+	fmt.Println("INFO COMMANDS:")
+	fmt.Println("  devtrack logs          Show recent log entries")
+	fmt.Println("  devtrack db-stats      Show database statistics")
+	fmt.Println("  devtrack stats         Alias for db-stats (with analytics)")
 	fmt.Println("  devtrack version       Show version information")
 	fmt.Println("  devtrack help          Show this help message")
-	fmt.Println()
-	fmt.Println("CONFIGURATION:")
-	fmt.Printf("  Config file: %s\n", GetConfigPath())
-	fmt.Printf("  Log file:    %s\n", GetLogFilePath())
-	fmt.Printf("  PID file:    %s\n", GetPIDFilePath())
+	fmt.Println("  devtrack settings      Show configuration paths and key env settings")
 	fmt.Println()
 }
 

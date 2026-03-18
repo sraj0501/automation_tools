@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -10,6 +11,9 @@ import (
 	"sync"
 	"time"
 )
+
+// ErrNoClients is returned when no IPC clients are connected
+var ErrNoClients = errors.New("no IPC clients connected")
 
 // MessageType defines the type of IPC message
 type MessageType string
@@ -32,6 +36,10 @@ const (
 	// Bidirectional sync & webhook events
 	MsgTypeWebhookEvent   MessageType = "webhook_event"
 	MsgTypeExternalUpdate MessageType = "external_update"
+
+	// Health monitoring
+	MsgTypePing MessageType = "ping"
+	MsgTypePong MessageType = "pong"
 )
 
 // IPCMessage represents a message sent between Go and Python
@@ -249,9 +257,7 @@ func (s *IPCServer) SendMessage(msg IPCMessage) error {
 	defer s.mu.RUnlock()
 
 	if len(s.clients) == 0 {
-		// No clients connected - this is expected initially
-		log.Printf("No IPC clients connected, message queued or dropped: %s", msg.Type)
-		return nil
+		return ErrNoClients
 	}
 
 	// Add newline delimiter
@@ -264,6 +270,20 @@ func (s *IPCServer) SendMessage(msg IPCMessage) error {
 	}
 
 	return nil
+}
+
+// HasClients returns true if at least one IPC client is connected
+func (s *IPCServer) HasClients() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.clients) > 0
+}
+
+// ClientCount returns the number of connected IPC clients
+func (s *IPCServer) ClientCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.clients)
 }
 
 // NewIPCClient creates a new IPC client

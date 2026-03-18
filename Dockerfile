@@ -46,13 +46,20 @@ WORKDIR /build
 COPY pyproject.toml uv.lock ./
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --system --extra mongodb
+    uv venv /opt/venv && \
+    VIRTUAL_ENV=/opt/venv uv sync --frozen --no-dev --extra mongodb
+
+ENV PATH="/opt/venv/bin:${PATH}"
+ENV VIRTUAL_ENV="/opt/venv"
 
 # Stage 4: Runtime environment
 FROM python-base AS runtime
 
-# Copy Python deps from cached stage
-COPY --from=python-deps /usr/local /usr/local
+# Copy Python venv from cached stage
+COPY --from=python-deps /opt/venv /opt/venv
+
+ENV PATH="/opt/venv/bin:${PATH}"
+ENV VIRTUAL_ENV="/opt/venv"
 
 # Create app user
 RUN useradd -m -u 1000 devtrack && \

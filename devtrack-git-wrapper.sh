@@ -73,6 +73,7 @@ if [ "$GIT_COMMAND" = "commit" ]; then
     COMMIT_ARGS=()
     SKIP_NEXT=false
     EXPLICIT_DRY_RUN=false  # Explicit --dry-run flag (preview only, no interaction)
+    NO_ENHANCE=false
 
     for arg in "$@"; do
         if [ "$SKIP_NEXT" = true ]; then
@@ -82,6 +83,8 @@ if [ "$GIT_COMMAND" = "commit" ]; then
             SKIP_NEXT=true
         elif [ "$arg" = "--dry-run" ] || [ "$arg" = "-n" ]; then
             EXPLICIT_DRY_RUN=true
+        elif [ "$arg" = "--no-enhance" ]; then
+            NO_ENHANCE=true
         else
             COMMIT_ARGS+=("$arg")
         fi
@@ -135,6 +138,18 @@ if [ "$GIT_COMMAND" = "commit" ]; then
 
         rm -f "$TEMP_MSG"
         exit 0
+    fi
+
+    # --no-enhance: skip AI, commit with original message directly
+    if [ "$NO_ENHANCE" = true ]; then
+        echo -e "${YELLOW}(--no-enhance: skipping AI enhancement)${NC}"
+        echo ""
+        if [ -n "$USER_MESSAGE" ]; then
+            git commit -m "$USER_MESSAGE" "${COMMIT_ARGS[@]}"
+        else
+            git commit "${COMMIT_ARGS[@]}"
+        fi
+        exit $?
     fi
 
     # Normal flow: AI enhancement with up to 5 attempts
@@ -198,13 +213,14 @@ if [ "$GIT_COMMAND" = "commit" ]; then
         echo -e "  ${GREEN}[A]${NC}ccept and commit"
         echo -e "  ${YELLOW}[E]${NC}nhance/improve message"
         echo -e "  ${YELLOW}[R]${NC}egenerate from scratch"
+        echo -e "  ${YELLOW}[Q]${NC}ueue for AI enhancement later"
         if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
             echo -e "  ${YELLOW}[C]${NC}ancel"
         else
             echo -e "  ${YELLOW}[C]${NC}ancel (last attempt)"
         fi
         echo ""
-        echo -ne "${BLUE}Choice (A/E/R/C): ${NC}"
+        echo -ne "${BLUE}Choice (A/E/R/Q/C): ${NC}"
         read -r -n 1 CHOICE
         echo ""
         echo ""
@@ -237,6 +253,33 @@ if [ "$GIT_COMMAND" = "commit" ]; then
                     echo -e "${YELLOW}✗ Maximum attempts reached. Cannot regenerate.${NC}"
                     echo ""
                 fi
+                ;;
+            [Qq])
+                # Queue for later AI enhancement
+                DIFF_PATCH=$(git diff --cached)
+                BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+                FILES_CHANGED=$(git diff --cached --name-only | tr '\n' ',' | sed 's/,$//')
+
+                # Call devtrack commit-queue
+                DEVTRACK_BIN=$(which devtrack 2>/dev/null || echo "$PROJECT_ROOT/devtrack")
+                if [ -x "$DEVTRACK_BIN" ]; then
+                    echo "$DIFF_PATCH" | "$DEVTRACK_BIN" commit-queue \
+                        --message "$ENHANCED_MESSAGE" \
+                        --branch "$BRANCH" \
+                        --repo "$REPO_ROOT" \
+                        --files "$FILES_CHANGED"
+                    if [ $? -eq 0 ]; then
+                        echo -e "${GREEN}✓ Commit queued for AI enhancement later${NC}"
+                        echo -e "${BLUE}  Run 'devtrack commits pending' to check status${NC}"
+                        echo -e "${BLUE}  Run 'devtrack commits review' when AI is available${NC}"
+                    else
+                        echo -e "${RED}✗ Failed to queue commit. You can still commit manually.${NC}"
+                    fi
+                else
+                    echo -e "${RED}✗ devtrack binary not found. Cannot queue commit.${NC}"
+                fi
+                rm -f "$TEMP_MSG"
+                exit 0
                 ;;
             [Cc])
                 echo -e "${YELLOW}✗ Commit cancelled.${NC}"

@@ -72,6 +72,9 @@ The lightweight background service that monitors and coordinates.
 | **Database** | database.go | SQLite access, trigger history, task updates |
 | **Configuration** | config.go, config_env.go | YAML struct + .env accessors |
 | **Learning** | learning.go | AI learning consent and profile management |
+| **Message Queue** | queue.go | Store-and-forward IPC messages for offline resilience |
+| **Health Monitor** | health.go | Periodic service health checks with auto-restart |
+| **Deferred Commits** | deferred_commit.go | Queue commits for later AI enhancement |
 
 #### Message Types
 
@@ -83,6 +86,8 @@ timer_trigger     → Scheduled time reached
 task_update       → Update project management system
 acknowledge       → Confirm message received
 error             → Report error back to client
+ping              → Health check request
+pong              ← Health check response
 ```
 
 #### Data Storage
@@ -92,6 +97,9 @@ SQLite database (`Data/db/devtrack.db`) stores:
 - Task updates sent to external systems
 - User preferences and learning profiles
 - Error logs and debugging info
+- Message queue (store-and-forward for offline IPC)
+- Deferred commits (commits awaiting AI enhancement)
+- Health snapshots (service health check history)
 
 ---
 
@@ -425,6 +433,50 @@ CREATE TABLE learning_profiles (
 );
 ```
 
+#### message_queue
+```sql
+CREATE TABLE message_queue (
+    id INTEGER PRIMARY KEY,
+    message_type TEXT NOT NULL,
+    message_id TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    status TEXT DEFAULT 'pending',
+    retry_count INTEGER DEFAULT 0,
+    max_retries INTEGER DEFAULT 10,
+    last_error TEXT,
+    created_at DATETIME,
+    updated_at DATETIME
+);
+```
+
+#### deferred_commits
+```sql
+CREATE TABLE deferred_commits (
+    id INTEGER PRIMARY KEY,
+    original_message TEXT NOT NULL,
+    diff_patch TEXT,
+    branch TEXT,
+    repo_path TEXT,
+    files_changed TEXT,
+    status TEXT DEFAULT 'pending',
+    enhanced_message TEXT,
+    created_at DATETIME,
+    updated_at DATETIME
+);
+```
+
+#### health_snapshots
+```sql
+CREATE TABLE health_snapshots (
+    id INTEGER PRIMARY KEY,
+    service TEXT NOT NULL,
+    status TEXT NOT NULL,
+    latency_ms INTEGER DEFAULT 0,
+    details TEXT,
+    checked_at DATETIME
+);
+```
+
 ---
 
 ## IPC Message Protocol
@@ -459,6 +511,49 @@ Each message must end with a newline (`\n`).
 | `task_update` | Python → Go | Update project management system |
 | `acknowledge` | Python → Go | Confirm message received |
 | `error` | Both | Report error condition |
+| `ping` | Go → Python | Health check request |
+| `pong` | Python → Go | Health check response |
+
+---
+
+## Offline Resilience
+
+DevTrack's Go daemon operates as a resilient local agent that works offline and syncs when services recover.
+
+### Store-and-Forward Queue
+
+```
+Trigger → MessageQueue.SendOrQueue()
+              ├── IPC Send succeeds → done
+              └── No clients → Enqueue in SQLite
+                                    ↓
+                      Drain goroutine (every 10s)
+                          → Check HasClients()
+                          → Send pending messages
+                          → Mark completed/retry
+```
+
+### Health Monitoring
+
+The daemon checks 6 services every 30 seconds:
+
+| Service | Check Method | Auto-Restart |
+|---------|-------------|--------------|
+| Python IPC | Client connection count | No |
+| Python Bridge | Process liveness (signal 0) | Yes |
+| Ollama | HTTP GET /api/tags | No |
+| Azure DevOps | Config presence check | No |
+| Webhook Server | Process liveness | Yes |
+| MongoDB | TCP dial timeout | No |
+
+### Deferred Commits
+
+When AI is unavailable during `devtrack git commit`:
+- User can queue the commit for later enhancement
+- Stored in SQLite with diff, branch, files metadata
+- `devtrack commits review` for interactive approval when AI returns
+
+See [Offline Resilience](OFFLINE_RESILIENCE.md) for full details.
 
 ---
 
@@ -493,6 +588,9 @@ Automatic merge conflict resolution and git-aware work update parsing with PR/is
 
 ### Phase 3: Event-Driven Integration
 Seamless integration of Phases 1 & 2 into python_bridge.py's real-time event pipeline.
+
+### Offline-First Resilience
+Store-and-forward message queue, deferred commit enhancement, health monitoring with auto-restart, and enhanced status dashboard.
 
 ### Future Phases
 - Dashboard and analytics

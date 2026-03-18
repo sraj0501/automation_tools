@@ -31,6 +31,7 @@ dependencies = [
     "openai>=2.24.0",
     # RAG-based personalization (vector store for few-shot style retrieval)
     "chromadb>=0.4.0",
+    "python-telegram-bot>=22.7",
 ]
 
 [project.optional-dependencies]

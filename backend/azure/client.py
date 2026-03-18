@@ -14,35 +14,41 @@ Configuration (via .env):
 import logging
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import aiohttp
 
 logger = logging.getLogger(__name__)
 
-# Config — prefer backend.config, fall back to os.getenv for standalone use
-try:
-    from backend import config as _cfg
 
-    _cfg._load_env()
+def _load_env() -> None:
+    """Load .env by walking up from this file. Idempotent via override=False."""
+    here = Path(__file__).resolve()
+    for parent in [here, *here.parents]:
+        env_file = parent / ".env"
+        if env_file.exists():
+            try:
+                from dotenv import load_dotenv
+                load_dotenv(env_file, override=False)
+            except ImportError:
+                pass
+            return
 
-    def _env(key: str, default: str = "") -> str:
-        return _cfg.get(key, default)
 
-    def _env_int(key: str, default: int = 0) -> int:
-        return _cfg.get_int(key, default)
-except ImportError:
-    _cfg = None
+_load_env()
 
-    def _env(key: str, default: str = "") -> str:
-        return os.getenv(key, default)
 
-    def _env_int(key: str, default: int = 0) -> int:
-        val = os.getenv(key, "")
-        try:
-            return int(val) if val else default
-        except ValueError:
-            return default
+def _env(key: str, default: str = "") -> str:
+    return os.getenv(key, default)
+
+
+def _env_int(key: str, default: int = 0) -> int:
+    val = os.getenv(key, "")
+    try:
+        return int(val) if val else default
+    except ValueError:
+        return default
 
 
 # ---------------------------------------------------------------------------

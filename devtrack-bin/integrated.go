@@ -13,11 +13,12 @@ import (
 
 // IntegratedMonitor combines Git monitoring and time-based scheduling
 type IntegratedMonitor struct {
-	gitMonitor *GitMonitor
-	scheduler  *Scheduler
-	config     *Config
-	ipcServer  *IPCServer
-	database   *Database
+	gitMonitor   *GitMonitor
+	scheduler    *Scheduler
+	config       *Config
+	ipcServer    *IPCServer
+	database     *Database
+	messageQueue *MessageQueue
 }
 
 // NewIntegratedMonitor creates a new integrated monitoring system
@@ -57,6 +58,9 @@ func NewIntegratedMonitor(repoPath string) (*IntegratedMonitor, error) {
 	// Register IPC handlers
 	monitor.registerIPCHandlers()
 
+	// Create message queue for offline resilience
+	monitor.messageQueue = NewMessageQueue(database, ipcServer)
+
 	// Create scheduler with shared trigger handler
 	scheduler := NewScheduler(config, monitor.handleTrigger)
 	monitor.scheduler = scheduler
@@ -86,12 +90,23 @@ func (im *IntegratedMonitor) Start() error {
 	}
 	log.Println("✓ Scheduler started")
 
+	// Start message queue drain goroutine
+	if im.messageQueue != nil {
+		im.messageQueue.Start()
+		log.Println("✓ Message queue started")
+	}
+
 	return nil
 }
 
 // Stop stops all monitoring
 func (im *IntegratedMonitor) Stop() {
 	log.Println("Stopping integrated monitoring system...")
+
+	// Stop message queue
+	if im.messageQueue != nil {
+		im.messageQueue.Stop()
+	}
 
 	// Send shutdown message to Python
 	if im.ipcServer != nil {
@@ -337,8 +352,16 @@ func (im *IntegratedMonitor) handleTrigger(event TriggerEvent) {
 		}
 	}
 
-	// Send IPC message to Python
-	if im.ipcServer != nil {
+	// Send IPC message to Python (with store-and-forward)
+	if im.messageQueue != nil {
+		if err := im.messageQueue.SendOrQueue(ipcMsg); err != nil {
+			log.Printf("Failed to send/queue IPC message: %v", err)
+		} else if im.ipcServer.HasClients() {
+			log.Println("✓ Sent trigger to Python via IPC")
+		} else {
+			log.Println("✓ Trigger queued for delivery when Python reconnects")
+		}
+	} else if im.ipcServer != nil {
 		if err := im.ipcServer.SendMessage(ipcMsg); err != nil {
 			log.Printf("Failed to send IPC message: %v", err)
 		} else {

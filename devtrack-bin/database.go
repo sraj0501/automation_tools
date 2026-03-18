@@ -68,6 +68,44 @@ type LogRecord struct {
 	Data      string // JSON data
 }
 
+// QueuedMessage represents a message in the store-and-forward queue
+type QueuedMessage struct {
+	ID          int64
+	MessageType string
+	MessageID   string
+	Payload     string // JSON
+	Status      string // "pending", "sent", "failed", "expired"
+	RetryCount  int
+	MaxRetries  int
+	LastError   string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+// DeferredCommitRecord represents a commit queued for later AI enhancement
+type DeferredCommitRecord struct {
+	ID              int64
+	OriginalMessage string
+	DiffPatch       string
+	Branch          string
+	RepoPath        string
+	FilesChanged    string // JSON array
+	Status          string // "pending", "enhanced", "committed", "expired"
+	EnhancedMessage string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+// HealthSnapshot represents a point-in-time health check result
+type HealthSnapshot struct {
+	ID        int64
+	Service   string
+	Status    string // "up", "down", "degraded", "unconfigured"
+	LatencyMs int
+	Details   string // JSON
+	CheckedAt time.Time
+}
+
 // ReportRecord represents a generated report in the database
 type ReportRecord struct {
 	ID             int64
@@ -217,6 +255,44 @@ func (d *Database) initSchema() error {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 
+	-- Message queue table: store-and-forward for offline resilience
+	CREATE TABLE IF NOT EXISTS message_queue (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		message_type TEXT NOT NULL,
+		message_id TEXT NOT NULL,
+		payload TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'pending',
+		retry_count INTEGER DEFAULT 0,
+		max_retries INTEGER DEFAULT 10,
+		last_error TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	-- Deferred commits table: commits queued for later AI enhancement
+	CREATE TABLE IF NOT EXISTS deferred_commits (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		original_message TEXT NOT NULL,
+		diff_patch TEXT,
+		branch TEXT,
+		repo_path TEXT,
+		files_changed TEXT,
+		status TEXT NOT NULL DEFAULT 'pending',
+		enhanced_message TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	-- Health snapshots table: point-in-time health check results
+	CREATE TABLE IF NOT EXISTS health_snapshots (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		service TEXT NOT NULL,
+		status TEXT NOT NULL,
+		latency_ms INTEGER DEFAULT 0,
+		details TEXT,
+		checked_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
 	-- Create indexes for common queries
 	CREATE INDEX IF NOT EXISTS idx_triggers_timestamp ON triggers(timestamp);
 	CREATE INDEX IF NOT EXISTS idx_triggers_type ON triggers(trigger_type);
@@ -231,6 +307,10 @@ func (d *Database) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_logs_component ON logs(component);
 	CREATE INDEX IF NOT EXISTS idx_reports_date ON reports(report_date);
 	CREATE INDEX IF NOT EXISTS idx_reports_type ON reports(report_type);
+	CREATE INDEX IF NOT EXISTS idx_message_queue_status ON message_queue(status);
+	CREATE INDEX IF NOT EXISTS idx_deferred_commits_status ON deferred_commits(status);
+	CREATE INDEX IF NOT EXISTS idx_health_snapshots_service ON health_snapshots(service);
+	CREATE INDEX IF NOT EXISTS idx_health_snapshots_checked ON health_snapshots(checked_at);
 	`
 
 	_, err := d.db.Exec(schema)
@@ -815,4 +895,443 @@ func (d *Database) GetReportByDate(reportDate time.Time, reportType string) (*Re
 	}
 
 	return &record, nil
+}
+
+// --- Message Queue CRUD ---
+
+// EnqueueMessage inserts a message into the store-and-forward queue
+func (d *Database) EnqueueMessage(msg QueuedMessage) (int64, error) {
+	query := `
+		INSERT INTO message_queue (message_type, message_id, payload, status, retry_count, max_retries, last_error, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+
+	now := time.Now()
+	result, err := d.db.Exec(query,
+		msg.MessageType,
+		msg.MessageID,
+		msg.Payload,
+		"pending",
+		0,
+		msg.MaxRetries,
+		"",
+		now,
+		now,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("failed to enqueue message: %w", err)
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get last insert id: %w", err)
+	}
+
+	return id, nil
+}
+
+// GetPendingMessages retrieves pending messages from the queue
+func (d *Database) GetPendingMessages(limit int) ([]QueuedMessage, error) {
+	query := `
+		SELECT id, message_type, message_id, payload, status, retry_count, max_retries, last_error, created_at, updated_at
+		FROM message_queue
+		WHERE status = 'pending'
+		ORDER BY created_at ASC
+		LIMIT ?
+	`
+
+	rows, err := d.db.Query(query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query pending messages: %w", err)
+	}
+	defer rows.Close()
+
+	var messages []QueuedMessage
+	for rows.Next() {
+		var msg QueuedMessage
+		err := rows.Scan(
+			&msg.ID,
+			&msg.MessageType,
+			&msg.MessageID,
+			&msg.Payload,
+			&msg.Status,
+			&msg.RetryCount,
+			&msg.MaxRetries,
+			&msg.LastError,
+			&msg.CreatedAt,
+			&msg.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan queued message: %w", err)
+		}
+		messages = append(messages, msg)
+	}
+
+	return messages, nil
+}
+
+// MarkMessageSent marks a queued message as sent
+func (d *Database) MarkMessageSent(id int64) error {
+	query := `
+		UPDATE message_queue
+		SET status = 'sent', updated_at = ?
+		WHERE id = ?
+	`
+
+	_, err := d.db.Exec(query, time.Now(), id)
+	if err != nil {
+		return fmt.Errorf("failed to mark message as sent: %w", err)
+	}
+
+	return nil
+}
+
+// MarkMessageFailed marks a queued message as failed and increments retry count
+func (d *Database) MarkMessageFailed(id int64, errMsg string) error {
+	query := `
+		UPDATE message_queue
+		SET status = CASE WHEN retry_count + 1 >= max_retries THEN 'failed' ELSE 'pending' END,
+			retry_count = retry_count + 1,
+			last_error = ?,
+			updated_at = ?
+		WHERE id = ?
+	`
+
+	_, err := d.db.Exec(query, errMsg, time.Now(), id)
+	if err != nil {
+		return fmt.Errorf("failed to mark message as failed: %w", err)
+	}
+
+	return nil
+}
+
+// RequeueFailedMessages requeues failed messages that haven't exhausted retries
+func (d *Database) RequeueFailedMessages() (int, error) {
+	query := `
+		UPDATE message_queue
+		SET status = 'pending', updated_at = ?
+		WHERE status = 'failed' AND retry_count < max_retries
+	`
+
+	result, err := d.db.Exec(query, time.Now())
+	if err != nil {
+		return 0, fmt.Errorf("failed to requeue failed messages: %w", err)
+	}
+
+	count, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	return int(count), nil
+}
+
+// GetMessageQueueStats returns counts of messages by status
+func (d *Database) GetMessageQueueStats() (pending int, failed int, sent int, err error) {
+	query := `
+		SELECT
+			COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END), 0)
+		FROM message_queue
+	`
+
+	err = d.db.QueryRow(query).Scan(&pending, &failed, &sent)
+	if err != nil {
+		err = fmt.Errorf("failed to get message queue stats: %w", err)
+	}
+
+	return
+}
+
+// CleanOldMessages deletes sent messages older than the retention period
+func (d *Database) CleanOldMessages(retentionDays int) error {
+	cutoff := time.Now().AddDate(0, 0, -retentionDays)
+
+	_, err := d.db.Exec("DELETE FROM message_queue WHERE status = 'sent' AND created_at < ?", cutoff)
+	if err != nil {
+		return fmt.Errorf("failed to clean old messages: %w", err)
+	}
+
+	return nil
+}
+
+// --- Deferred Commits CRUD ---
+
+// InsertDeferredCommit inserts a deferred commit record
+func (d *Database) InsertDeferredCommit(record DeferredCommitRecord) (int64, error) {
+	query := `
+		INSERT INTO deferred_commits (original_message, diff_patch, branch, repo_path, files_changed, status, enhanced_message, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+
+	now := time.Now()
+	result, err := d.db.Exec(query,
+		record.OriginalMessage,
+		record.DiffPatch,
+		record.Branch,
+		record.RepoPath,
+		record.FilesChanged,
+		"pending",
+		"",
+		now,
+		now,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("failed to insert deferred commit: %w", err)
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get last insert id: %w", err)
+	}
+
+	return id, nil
+}
+
+// GetPendingDeferredCommits retrieves deferred commits awaiting enhancement
+func (d *Database) GetPendingDeferredCommits() ([]DeferredCommitRecord, error) {
+	query := `
+		SELECT id, original_message, diff_patch, branch, repo_path, files_changed, status, enhanced_message, created_at, updated_at
+		FROM deferred_commits
+		WHERE status = 'pending'
+		ORDER BY created_at ASC
+	`
+
+	rows, err := d.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query pending deferred commits: %w", err)
+	}
+	defer rows.Close()
+
+	var records []DeferredCommitRecord
+	for rows.Next() {
+		var record DeferredCommitRecord
+		err := rows.Scan(
+			&record.ID,
+			&record.OriginalMessage,
+			&record.DiffPatch,
+			&record.Branch,
+			&record.RepoPath,
+			&record.FilesChanged,
+			&record.Status,
+			&record.EnhancedMessage,
+			&record.CreatedAt,
+			&record.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan deferred commit: %w", err)
+		}
+		records = append(records, record)
+	}
+
+	return records, nil
+}
+
+// GetEnhancedDeferredCommits retrieves deferred commits that have been enhanced
+func (d *Database) GetEnhancedDeferredCommits() ([]DeferredCommitRecord, error) {
+	query := `
+		SELECT id, original_message, diff_patch, branch, repo_path, files_changed, status, enhanced_message, created_at, updated_at
+		FROM deferred_commits
+		WHERE status = 'enhanced'
+		ORDER BY created_at ASC
+	`
+
+	rows, err := d.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query enhanced deferred commits: %w", err)
+	}
+	defer rows.Close()
+
+	var records []DeferredCommitRecord
+	for rows.Next() {
+		var record DeferredCommitRecord
+		err := rows.Scan(
+			&record.ID,
+			&record.OriginalMessage,
+			&record.DiffPatch,
+			&record.Branch,
+			&record.RepoPath,
+			&record.FilesChanged,
+			&record.Status,
+			&record.EnhancedMessage,
+			&record.CreatedAt,
+			&record.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan deferred commit: %w", err)
+		}
+		records = append(records, record)
+	}
+
+	return records, nil
+}
+
+// MarkDeferredCommitEnhanced marks a deferred commit as enhanced with the new message
+func (d *Database) MarkDeferredCommitEnhanced(id int64, enhancedMsg string) error {
+	query := `
+		UPDATE deferred_commits
+		SET status = 'enhanced', enhanced_message = ?, updated_at = ?
+		WHERE id = ?
+	`
+
+	_, err := d.db.Exec(query, enhancedMsg, time.Now(), id)
+	if err != nil {
+		return fmt.Errorf("failed to mark deferred commit as enhanced: %w", err)
+	}
+
+	return nil
+}
+
+// MarkDeferredCommitCommitted marks a deferred commit as committed
+func (d *Database) MarkDeferredCommitCommitted(id int64) error {
+	query := `
+		UPDATE deferred_commits
+		SET status = 'committed', updated_at = ?
+		WHERE id = ?
+	`
+
+	_, err := d.db.Exec(query, time.Now(), id)
+	if err != nil {
+		return fmt.Errorf("failed to mark deferred commit as committed: %w", err)
+	}
+
+	return nil
+}
+
+// MarkDeferredCommitExpired marks a deferred commit as expired
+func (d *Database) MarkDeferredCommitExpired(id int64) error {
+	query := `
+		UPDATE deferred_commits
+		SET status = 'expired', updated_at = ?
+		WHERE id = ?
+	`
+
+	_, err := d.db.Exec(query, time.Now(), id)
+	if err != nil {
+		return fmt.Errorf("failed to mark deferred commit as expired: %w", err)
+	}
+
+	return nil
+}
+
+// GetDeferredCommitByID retrieves a deferred commit by ID
+func (d *Database) GetDeferredCommitByID(id int64) (*DeferredCommitRecord, error) {
+	query := `
+		SELECT id, original_message, diff_patch, branch, repo_path, files_changed, status, enhanced_message, created_at, updated_at
+		FROM deferred_commits
+		WHERE id = ?
+	`
+
+	var record DeferredCommitRecord
+	err := d.db.QueryRow(query, id).Scan(
+		&record.ID,
+		&record.OriginalMessage,
+		&record.DiffPatch,
+		&record.Branch,
+		&record.RepoPath,
+		&record.FilesChanged,
+		&record.Status,
+		&record.EnhancedMessage,
+		&record.CreatedAt,
+		&record.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get deferred commit: %w", err)
+	}
+
+	return &record, nil
+}
+
+// GetDeferredCommitStats returns counts of deferred commits by status
+func (d *Database) GetDeferredCommitStats() (pending int, enhanced int, committed int, expired int, err error) {
+	query := `
+		SELECT
+			COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN status = 'enhanced' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN status = 'committed' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN status = 'expired' THEN 1 ELSE 0 END), 0)
+		FROM deferred_commits
+	`
+
+	err = d.db.QueryRow(query).Scan(&pending, &enhanced, &committed, &expired)
+	if err != nil {
+		err = fmt.Errorf("failed to get deferred commit stats: %w", err)
+	}
+
+	return
+}
+
+// --- Health Snapshots CRUD ---
+
+// InsertHealthSnapshot inserts a health check snapshot
+func (d *Database) InsertHealthSnapshot(snap HealthSnapshot) error {
+	query := `
+		INSERT INTO health_snapshots (service, status, latency_ms, details, checked_at)
+		VALUES (?, ?, ?, ?, ?)
+	`
+
+	_, err := d.db.Exec(query,
+		snap.Service,
+		snap.Status,
+		snap.LatencyMs,
+		snap.Details,
+		snap.CheckedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to insert health snapshot: %w", err)
+	}
+
+	return nil
+}
+
+// GetLatestHealthSnapshots retrieves the latest health snapshot per service
+func (d *Database) GetLatestHealthSnapshots() ([]HealthSnapshot, error) {
+	query := `
+		SELECT h.id, h.service, h.status, h.latency_ms, h.details, h.checked_at
+		FROM health_snapshots h
+		INNER JOIN (
+			SELECT service, MAX(checked_at) AS max_checked
+			FROM health_snapshots
+			GROUP BY service
+		) latest ON h.service = latest.service AND h.checked_at = latest.max_checked
+		ORDER BY h.service ASC
+	`
+
+	rows, err := d.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query latest health snapshots: %w", err)
+	}
+	defer rows.Close()
+
+	var snapshots []HealthSnapshot
+	for rows.Next() {
+		var snap HealthSnapshot
+		err := rows.Scan(
+			&snap.ID,
+			&snap.Service,
+			&snap.Status,
+			&snap.LatencyMs,
+			&snap.Details,
+			&snap.CheckedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan health snapshot: %w", err)
+		}
+		snapshots = append(snapshots, snap)
+	}
+
+	return snapshots, nil
+}
+
+// CleanOldHealthSnapshots deletes health snapshots older than the retention period
+func (d *Database) CleanOldHealthSnapshots(retentionDays int) error {
+	cutoff := time.Now().AddDate(0, 0, -retentionDays)
+
+	_, err := d.db.Exec("DELETE FROM health_snapshots WHERE checked_at < ?", cutoff)
+	if err != nil {
+		return fmt.Errorf("failed to clean old health snapshots: %w", err)
+	}
+
+	return nil
 }

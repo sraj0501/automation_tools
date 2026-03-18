@@ -23,6 +23,9 @@ type Daemon struct {
 	isRunning     bool
 	pythonBridge  *exec.Cmd
 	webhookServer *exec.Cmd
+	telegramBot   *exec.Cmd
+	startTime     time.Time
+	healthMonitor *HealthMonitor
 }
 
 // DaemonStatus represents the current daemon state
@@ -117,8 +120,32 @@ func (d *Daemon) Start() error {
 		log.Println("Webhook functionality will be unavailable")
 	}
 
+	// Start Telegram bot if enabled
+	if err := d.startTelegramBot(); err != nil {
+		log.Printf("Warning: Failed to start Telegram bot: %v", err)
+		log.Println("Telegram remote control will be unavailable")
+	}
+
 	d.isRunning = true
+	d.startTime = time.Now()
 	log.Println("✓ Daemon started successfully")
+
+	// Start health monitor
+	hm := NewHealthMonitor(d.monitor.database, d.monitor.ipcServer)
+	if d.pythonBridge != nil && d.pythonBridge.Process != nil {
+		hm.SetPythonPID(d.pythonBridge.Process.Pid)
+	}
+	if d.webhookServer != nil && d.webhookServer.Process != nil {
+		hm.SetWebhookPID(d.webhookServer.Process.Pid)
+	}
+	if d.telegramBot != nil && d.telegramBot.Process != nil {
+		hm.SetTelegramPID(d.telegramBot.Process.Pid)
+	}
+	hm.SetRestartCallbacks(d.restartPythonBridge, d.restartWebhookServer)
+	hm.SetTelegramRestartCallback(d.restartTelegramBot)
+	hm.Start()
+	d.healthMonitor = hm
+	log.Println("✓ Health monitor started")
 
 	// Setup signal handlers for graceful shutdown
 	d.setupSignalHandlers()
@@ -140,6 +167,19 @@ func (d *Daemon) Stop() error {
 	}
 
 	log.Println("Stopping daemon...")
+
+	// Stop health monitor
+	if d.healthMonitor != nil {
+		d.healthMonitor.Stop()
+	}
+
+	// Stop Telegram bot
+	if d.telegramBot != nil {
+		log.Println("Stopping Telegram bot...")
+		if err := d.telegramBot.Process.Kill(); err != nil {
+			log.Printf("Warning: error stopping Telegram bot: %v", err)
+		}
+	}
 
 	// Stop webhook server
 	if d.webhookServer != nil {
@@ -222,8 +262,12 @@ func (d *Daemon) Status() (*DaemonStatus, error) {
 			}
 		}
 
-		// Calculate uptime from log file
-		if info, err := os.Stat(d.logFile); err == nil {
+		// Calculate uptime from daemon start time
+		if !d.startTime.IsZero() {
+			status.StartTime = d.startTime
+			status.Uptime = time.Since(d.startTime)
+		} else if info, err := os.Stat(d.pidFile); err == nil {
+			// PID file is written once at startup — its mtime is the start time
 			status.StartTime = info.ModTime()
 			status.Uptime = time.Since(status.StartTime)
 		}
@@ -471,6 +515,95 @@ func (d *Daemon) startWebhookServer() error {
 	d.webhookServer = cmd
 	log.Printf("✓ Webhook server started (PID: %d)", cmd.Process.Pid)
 
+	return nil
+}
+
+// restartPythonBridge restarts the Python bridge process
+func (d *Daemon) restartPythonBridge() error {
+	// Kill old process if still around
+	if d.pythonBridge != nil && d.pythonBridge.Process != nil {
+		d.pythonBridge.Process.Kill()
+		d.pythonBridge.Process.Wait()
+	}
+
+	if err := d.startPythonBridge(); err != nil {
+		return err
+	}
+
+	// Update health monitor PID
+	if d.healthMonitor != nil && d.pythonBridge != nil && d.pythonBridge.Process != nil {
+		d.healthMonitor.SetPythonPID(d.pythonBridge.Process.Pid)
+	}
+	return nil
+}
+
+// restartWebhookServer restarts the webhook server process
+func (d *Daemon) restartWebhookServer() error {
+	if d.webhookServer != nil && d.webhookServer.Process != nil {
+		d.webhookServer.Process.Kill()
+		d.webhookServer.Process.Wait()
+	}
+
+	if err := d.startWebhookServer(); err != nil {
+		return err
+	}
+
+	if d.healthMonitor != nil && d.webhookServer != nil && d.webhookServer.Process != nil {
+		d.healthMonitor.SetWebhookPID(d.webhookServer.Process.Pid)
+	}
+	return nil
+}
+
+// startTelegramBot starts the Telegram bot process if TELEGRAM_ENABLED=true
+func (d *Daemon) startTelegramBot() error {
+	if !IsTelegramEnabled() {
+		log.Println("Telegram bot disabled (TELEGRAM_ENABLED is not true)")
+		return nil
+	}
+
+	log.Println("Starting Telegram bot...")
+
+	var cmd *exec.Cmd
+	projectRoot := os.Getenv("PROJECT_ROOT")
+	if projectRoot != "" {
+		cmd = exec.Command("uv", "run", "--directory", projectRoot, "python", "-m", "backend.telegram")
+		cmd.Dir = projectRoot
+	} else {
+		cmd = exec.Command("python3", "-m", "backend.telegram")
+	}
+
+	logFile, err := os.OpenFile(d.logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open log file for Telegram bot: %w", err)
+	}
+
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start Telegram bot: %w", err)
+	}
+
+	d.telegramBot = cmd
+	log.Printf("✓ Telegram bot started (PID: %d)", cmd.Process.Pid)
+
+	return nil
+}
+
+// restartTelegramBot restarts the Telegram bot process
+func (d *Daemon) restartTelegramBot() error {
+	if d.telegramBot != nil && d.telegramBot.Process != nil {
+		d.telegramBot.Process.Kill()
+		d.telegramBot.Process.Wait()
+	}
+
+	if err := d.startTelegramBot(); err != nil {
+		return err
+	}
+
+	if d.healthMonitor != nil && d.telegramBot != nil && d.telegramBot.Process != nil {
+		d.healthMonitor.SetTelegramPID(d.telegramBot.Process.Pid)
+	}
 	return nil
 }
 

@@ -35,7 +35,9 @@ func main() {
 			cmd == "force-trigger" || cmd == "send-summary" || cmd == "skip-next" ||
 			cmd == "learning-sync" || cmd == "learning-setup-cron" ||
 			cmd == "learning-remove-cron" || cmd == "learning-cron-status" ||
-			cmd == "learning-reset" {
+			cmd == "learning-reset" ||
+			cmd == "commit-queue" || cmd == "commits" || cmd == "queue" ||
+			cmd == "telegram-status" || cmd == "azure-check" || cmd == "azure-list" || cmd == "azure-sync" || cmd == "azure-view" || cmd == "settings" {
 			cli, err := NewCLI()
 			if err != nil {
 				fmt.Printf("Error initializing CLI: %v\n", err)
@@ -67,6 +69,7 @@ func printBasicUsage() {
 	fmt.Println("SCHEDULER: pause | resume | force-trigger | skip-next | send-summary")
 	fmt.Println("INFO:      logs | db-stats | stats | version | help")
 	fmt.Println("GIT:       git commit -m 'message'   (AI-enhanced commit)")
+	fmt.Println("COMMITS:   commits pending | commits review")
 	fmt.Println("REPORTS:   preview-report | send-report | save-report")
 	fmt.Println()
 	fmt.Println("Run 'devtrack help' for full usage.")

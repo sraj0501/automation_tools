@@ -741,3 +741,120 @@ func GetWebhookPort() int {
 	}
 	return port
 }
+
+// GetHealthCheckIntervalSecs returns the health check interval in seconds
+func GetHealthCheckIntervalSecs() int {
+	val := os.Getenv("HEALTH_CHECK_INTERVAL_SECS")
+	if val == "" {
+		return 30 // sensible default for health checks
+	}
+	secs := mustParseInt("HEALTH_CHECK_INTERVAL_SECS", val)
+	if secs <= 0 {
+		fmt.Fprintf(os.Stderr, "ERROR: HEALTH_CHECK_INTERVAL_SECS must be > 0, got: %d\n", secs)
+		os.Exit(1)
+	}
+	return secs
+}
+
+// GetHealthAutoRestartPython returns whether to auto-restart the Python bridge on failure
+func GetHealthAutoRestartPython() bool {
+	val := os.Getenv("HEALTH_AUTO_RESTART_PYTHON")
+	if val == "" {
+		return true
+	}
+	return mustParseBool("HEALTH_AUTO_RESTART_PYTHON", val)
+}
+
+// GetHealthAutoRestartWebhook returns whether to auto-restart the webhook server on failure
+func GetHealthAutoRestartWebhook() bool {
+	val := os.Getenv("HEALTH_AUTO_RESTART_WEBHOOK")
+	if val == "" {
+		return true
+	}
+	return mustParseBool("HEALTH_AUTO_RESTART_WEBHOOK", val)
+}
+
+// GetHealthMaxRestartsPerHour returns the maximum number of auto-restarts allowed per hour
+func GetHealthMaxRestartsPerHour() int {
+	val := os.Getenv("HEALTH_MAX_RESTARTS_PER_HOUR")
+	if val == "" {
+		return 3
+	}
+	n := mustParseInt("HEALTH_MAX_RESTARTS_PER_HOUR", val)
+	if n < 0 {
+		fmt.Fprintf(os.Stderr, "ERROR: HEALTH_MAX_RESTARTS_PER_HOUR must be >= 0, got: %d\n", n)
+		os.Exit(1)
+	}
+	return n
+}
+
+// GetQueueDrainIntervalSecs returns the store-and-forward queue drain interval in seconds
+func GetQueueDrainIntervalSecs() int {
+	val := os.Getenv("QUEUE_DRAIN_INTERVAL_SECS")
+	if val == "" {
+		return 10
+	}
+	secs := mustParseInt("QUEUE_DRAIN_INTERVAL_SECS", val)
+	if secs <= 0 {
+		fmt.Fprintf(os.Stderr, "ERROR: QUEUE_DRAIN_INTERVAL_SECS must be > 0, got: %d\n", secs)
+		os.Exit(1)
+	}
+	return secs
+}
+
+// GetQueueMaxRetries returns the maximum number of retries for queued items
+func GetQueueMaxRetries() int {
+	val := os.Getenv("QUEUE_MAX_RETRIES")
+	if val == "" {
+		return 10
+	}
+	n := mustParseInt("QUEUE_MAX_RETRIES", val)
+	if n < 0 {
+		fmt.Fprintf(os.Stderr, "ERROR: QUEUE_MAX_RETRIES must be >= 0, got: %d\n", n)
+		os.Exit(1)
+	}
+	return n
+}
+
+// GetQueueRetentionDays returns how many days to retain completed/failed queue items
+func GetQueueRetentionDays() int {
+	val := os.Getenv("QUEUE_RETENTION_DAYS")
+	if val == "" {
+		return 7
+	}
+	days := mustParseInt("QUEUE_RETENTION_DAYS", val)
+	if days <= 0 {
+		fmt.Fprintf(os.Stderr, "ERROR: QUEUE_RETENTION_DAYS must be > 0, got: %d\n", days)
+		os.Exit(1)
+	}
+	return days
+}
+
+// GetDeferredCommitExpiryHours returns the expiry time for deferred commit enhancements in hours
+func GetDeferredCommitExpiryHours() int {
+	val := os.Getenv("DEFERRED_COMMIT_EXPIRY_HOURS")
+	if val == "" {
+		return 72
+	}
+	hours := mustParseInt("DEFERRED_COMMIT_EXPIRY_HOURS", val)
+	if hours <= 0 {
+		fmt.Fprintf(os.Stderr, "ERROR: DEFERRED_COMMIT_EXPIRY_HOURS must be > 0, got: %d\n", hours)
+		os.Exit(1)
+	}
+	return hours
+}
+
+// IsTelegramEnabled returns whether the Telegram bot is enabled
+func IsTelegramEnabled() bool {
+	val := os.Getenv("TELEGRAM_ENABLED")
+	return strings.EqualFold(val, "true") || val == "1"
+}
+
+// GetHealthAutoRestartTelegram returns whether to auto-restart the Telegram bot
+func GetHealthAutoRestartTelegram() bool {
+	val := os.Getenv("HEALTH_AUTO_RESTART_TELEGRAM")
+	if val == "" {
+		return true // default: auto-restart
+	}
+	return strings.EqualFold(val, "true") || val == "1"
+}

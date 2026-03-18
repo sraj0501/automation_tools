@@ -32,6 +32,8 @@ Practical guides for common tasks:
 2. **[LLM Configuration Guide](LLM_GUIDE.md)** - Setup AI providers (Ollama, OpenAI, Anthropic)
 3. **[Configuration Reference](CONFIGURATION.md)** - All .env variables with required configuration
 4. **[Personalization Features](PERSONALIZATION.md)** - "Talk Like You" AI and response generation
+5. **[Offline Resilience](OFFLINE_RESILIENCE.md)** - Store-and-forward, health monitoring, deferred commits
+6. **[Azure DevOps Integration](AZURE_DEVOPS.md)** - Bidirectional sync, webhooks, work item management
 
 ---
 
@@ -43,6 +45,7 @@ For power users and developers:
 2. **[Git Workflow Details](../GIT_COMMIT_WORKFLOW.md)** - Detailed git commit workflow
 3. **[LLM Hybrid Strategy](LLM_STRATEGY.md)** - Multi-provider LLM architecture
 4. **[TUI Flows](TUI_FLOWS.md)** - Terminal user interface design and flows
+5. **[Offline Resilience Details](OFFLINE_RESILIENCE.md)** - Full offline-first resilience documentation
 
 ---
 
@@ -111,6 +114,10 @@ Detailed reference documentation:
 1. Read [Personalization Features](PERSONALIZATION.md)
 2. Check [Talk Like You Implementation](../PERSONALIZATION_AGENT_PROGRESS.md)
 
+### "I want to understand offline resilience"
+1. Read [Offline Resilience](OFFLINE_RESILIENCE.md)
+2. Check [Architecture Overview](ARCHITECTURE.md) (Offline Resilience section)
+
 ### "I'm having problems"
 1. Check [Troubleshooting Guide](TROUBLESHOOTING.md)
 2. Review [Known Issues](../KNOWN_ISSUES.md)
@@ -138,7 +145,7 @@ automation_tools/
 └── SESSION_SUMMARY.md                     # Latest session summary
 ```
 
-### docs/ Directory (23 Consolidated Files)
+### docs/ Directory (24 Consolidated Files)
 
 **Getting Started**
 - INDEX.md (this file)
@@ -156,6 +163,7 @@ automation_tools/
 - GIT_FEATURES.md
 - LLM_GUIDE.md
 - PERSONALIZATION.md
+- OFFLINE_RESILIENCE.md
 - REFACTORING.md
 
 **Advanced Topics**

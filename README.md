@@ -17,6 +17,7 @@ Start here to find what you need:
 | **LLM Configuration** | Read [LLM Guide](docs/LLM_GUIDE.md) |
 | **Phase Status** | See [Roadmap & Phases](docs/PHASES.md) |
 | **Development Guide** | Check [CLAUDE.md](CLAUDE.md) (for developers) |
+| **Offline resilience** | See [Offline Resilience](docs/OFFLINE_RESILIENCE.md) |
 | **All Documentation** | See [Complete Index](docs/INDEX.md) |
 
 ---
@@ -108,6 +109,14 @@ For detailed setup, see [Installation Guide](docs/INSTALLATION.md) and [Configur
 - **Communication**: Microsoft Teams, Outlook
 - **Task Tracking**: Automatic updates to linked tasks and stories
 
+### Offline-First Resilience
+
+- **Store-and-Forward**: Triggers queued in SQLite when Python bridge is offline, auto-delivered on reconnect
+- **Deferred Commits**: Queue commits for AI enhancement later when Ollama is down
+- **Health Monitoring**: Periodic checks on all services (IPC, Ollama, MongoDB, Azure DevOps, webhook)
+- **Auto-Restart**: Crashed Python bridge or webhook server automatically restarted (rate-limited)
+- **Health Dashboard**: `devtrack status` shows full service health, queue stats, deferred commits
+
 ---
 
 ## Technology Stack
@@ -140,8 +149,8 @@ For detailed setup, see [Installation Guide](docs/INSTALLATION.md) and [Configur
 
 ## Project Status
 
-**Current Phase**: Phase 3 Complete (Advanced Features - In Progress)
-**Overall Progress**: ~85% Complete
+**Current Phase**: Phase 4+ (Advanced Features & Offline Resilience)
+**Overall Progress**: ~90% Complete
 
 ### Completed Phases
 
@@ -152,6 +161,7 @@ For detailed setup, see [Installation Guide](docs/INSTALLATION.md) and [Configur
 ### Current Phase (Phase 4+)
 
 - Enhanced Integrations and advanced features
+- Offline-first resilience (store-and-forward, health monitoring, deferred commits)
 - Dashboard and analytics
 - Mobile notifications
 - Plugin system
@@ -231,6 +241,16 @@ devtrack pause              # Pause scheduled triggers
 devtrack resume             # Resume scheduler
 devtrack force-trigger      # Trigger immediately
 devtrack skip-next          # Skip next scheduled trigger
+
+# Git (AI-Enhanced)
+devtrack git commit -m "msg"          # AI-enhanced commit
+devtrack git commit -m "msg" --no-enhance  # Skip AI enhancement
+devtrack git history                  # Show commit history
+
+# Offline Resilience
+devtrack queue               # Message queue stats
+devtrack commits pending     # List deferred commits
+devtrack commits review      # Review AI-enhanced commits
 
 # Information
 devtrack logs               # View recent logs

@@ -789,3 +789,46 @@ def get_azure_sync_goal_state_in_progress() -> str:
 def get_azure_sync_goal_state_completed() -> str:
     """Azure state for completed goals. AZURE_SYNC_GOAL_STATE_COMPLETED (default: Done)."""
     return get("AZURE_SYNC_GOAL_STATE_COMPLETED") or get_azure_done_state()
+
+
+# ── Telegram bot ─────────────────────────────────────────────────────────────
+
+def is_telegram_enabled() -> bool:
+    """Whether the Telegram bot is enabled. TELEGRAM_ENABLED."""
+    return get_bool("TELEGRAM_ENABLED", False)
+
+
+def get_telegram_bot_token() -> str:
+    """Telegram bot token from @BotFather. TELEGRAM_BOT_TOKEN (required if enabled)."""
+    return get("TELEGRAM_BOT_TOKEN", "")
+
+
+def get_telegram_allowed_chat_ids() -> list:
+    """Comma-separated list of authorized Telegram chat IDs. TELEGRAM_ALLOWED_CHAT_IDS."""
+    raw = get("TELEGRAM_ALLOWED_CHAT_IDS", "")
+    if not raw:
+        return []
+    ids = []
+    for part in raw.split(","):
+        part = part.strip()
+        if part:
+            try:
+                ids.append(int(part))
+            except ValueError:
+                pass
+    return ids
+
+
+def is_telegram_notify_commits() -> bool:
+    """Send commit notifications to Telegram. TELEGRAM_NOTIFY_COMMITS."""
+    return get_bool("TELEGRAM_NOTIFY_COMMITS", True)
+
+
+def is_telegram_notify_triggers() -> bool:
+    """Send timer trigger notifications to Telegram. TELEGRAM_NOTIFY_TRIGGERS."""
+    return get_bool("TELEGRAM_NOTIFY_TRIGGERS", True)
+
+
+def is_telegram_notify_health() -> bool:
+    """Send health alert notifications to Telegram. TELEGRAM_NOTIFY_HEALTH."""
+    return get_bool("TELEGRAM_NOTIFY_HEALTH", True)

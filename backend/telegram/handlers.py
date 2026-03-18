@@ -1,0 +1,301 @@
+"""Telegram bot command handlers for DevTrack."""
+import logging
+import os
+import sqlite3
+import subprocess
+from typing import TYPE_CHECKING
+
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
+
+if TYPE_CHECKING:
+    from backend.telegram.bot import DevTrackBot
+
+logger = logging.getLogger(__name__)
+
+# Maximum Telegram message length
+MAX_MSG_LEN = 4096
+
+
+def _devtrack_bin() -> str:
+    """Resolve the devtrack binary path from PROJECT_ROOT."""
+    project_root = os.environ.get("PROJECT_ROOT", "")
+    if project_root:
+        candidate = os.path.join(project_root, "devtrack")
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    # Fallback: assume it's in PATH
+    return "devtrack"
+
+
+def _devtrack_env() -> dict:
+    """Build subprocess environment with DEVTRACK_ENV_FILE set."""
+    env = os.environ.copy()
+    if "DEVTRACK_ENV_FILE" not in env:
+        project_root = env.get("PROJECT_ROOT", "")
+        if project_root:
+            env["DEVTRACK_ENV_FILE"] = os.path.join(project_root, ".env")
+    return env
+
+
+def register_handlers(app: Application, bot: "DevTrackBot"):
+    """Register all command handlers."""
+    app.add_handler(CommandHandler("start", _cmd_start))
+    app.add_handler(CommandHandler("help", _cmd_help))
+    app.add_handler(CommandHandler("status", _make_handler(bot, _cmd_status)))
+    app.add_handler(CommandHandler("logs", _make_handler(bot, _cmd_logs)))
+    app.add_handler(CommandHandler("trigger", _make_handler(bot, _cmd_trigger)))
+    app.add_handler(CommandHandler("pause", _make_handler(bot, _cmd_pause)))
+    app.add_handler(CommandHandler("resume", _make_handler(bot, _cmd_resume)))
+    app.add_handler(CommandHandler("queue", _make_handler(bot, _cmd_queue)))
+    app.add_handler(CommandHandler("commits", _make_handler(bot, _cmd_commits)))
+    app.add_handler(CommandHandler("health", _make_handler(bot, _cmd_health)))
+
+
+def _make_handler(bot: "DevTrackBot", handler_fn):
+    """Wrap a handler with auth check."""
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not await bot._check_auth(update):
+            return
+        await handler_fn(update, context, bot)
+    return wrapper
+
+
+async def _cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /start command (no auth needed)."""
+    chat_id = update.effective_chat.id
+    await update.message.reply_text(
+        f"DevTrack Bot\n\n"
+        f"Your chat ID: `{chat_id}`\n\n"
+        f"Add this to `TELEGRAM_ALLOWED_CHAT_IDS` in your `.env` to authorize.\n\n"
+        f"Use /help for available commands.",
+        parse_mode="Markdown"
+    )
+
+
+async def _cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /help command (no auth needed)."""
+    await update.message.reply_text(
+        "*DevTrack Bot Commands*\n\n"
+        "/status -- Daemon status and service health\n"
+        "/logs -- Recent daemon log lines\n"
+        "/trigger -- Force an immediate work update trigger\n"
+        "/pause -- Pause the scheduler\n"
+        "/resume -- Resume the scheduler\n"
+        "/queue -- Message queue statistics\n"
+        "/commits -- Deferred commit status\n"
+        "/health -- Detailed service health\n"
+        "/help -- Show this message",
+        parse_mode="Markdown"
+    )
+
+
+async def _cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "DevTrackBot"):
+    """Handle /status -- show daemon status."""
+    try:
+        result = subprocess.run(
+            [_devtrack_bin(), "status"],
+            capture_output=True, text=True, timeout=10, env=_devtrack_env()
+        )
+        output = result.stdout or result.stderr or "No output"
+        # Truncate if too long
+        if len(output) > MAX_MSG_LEN - 20:
+            output = output[:MAX_MSG_LEN - 20] + "\n... (truncated)"
+        await update.message.reply_text(f"```\n{output}\n```", parse_mode="Markdown")
+    except subprocess.TimeoutExpired:
+        await update.message.reply_text("Status command timed out")
+    except FileNotFoundError:
+        await update.message.reply_text("`devtrack` binary not found in PATH")
+    except Exception as e:
+        await update.message.reply_text(f"Error: {e}")
+
+
+async def _cmd_logs(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "DevTrackBot"):
+    """Handle /logs -- show recent log lines."""
+    try:
+        # Get line count from args (default 20)
+        lines = 20
+        if context.args:
+            try:
+                lines = min(int(context.args[0]), 50)  # Cap at 50
+            except ValueError:
+                pass
+
+        result = subprocess.run(
+            [_devtrack_bin(), "logs", "-n", str(lines)],
+            capture_output=True, text=True, timeout=10, env=_devtrack_env()
+        )
+        output = result.stdout or result.stderr or "No logs available"
+        if len(output) > MAX_MSG_LEN - 20:
+            output = output[-(MAX_MSG_LEN - 20):]  # Keep tail
+        await update.message.reply_text(f"```\n{output}\n```", parse_mode="Markdown")
+    except Exception as e:
+        await update.message.reply_text(f"Error: {e}")
+
+
+async def _cmd_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "DevTrackBot"):
+    """Handle /trigger -- force immediate work update."""
+    try:
+        result = subprocess.run(
+            [_devtrack_bin(), "force-trigger"],
+            capture_output=True, text=True, timeout=10, env=_devtrack_env()
+        )
+        output = result.stdout or result.stderr or "Trigger sent"
+        await update.message.reply_text(output.strip())
+    except Exception as e:
+        await update.message.reply_text(f"Error: {e}")
+
+
+async def _cmd_pause(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "DevTrackBot"):
+    """Handle /pause -- pause scheduler."""
+    try:
+        result = subprocess.run(
+            [_devtrack_bin(), "pause"],
+            capture_output=True, text=True, timeout=10, env=_devtrack_env()
+        )
+        output = result.stdout or result.stderr or "Paused"
+        await update.message.reply_text(output.strip())
+    except Exception as e:
+        await update.message.reply_text(f"Error: {e}")
+
+
+async def _cmd_resume(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "DevTrackBot"):
+    """Handle /resume -- resume scheduler."""
+    try:
+        result = subprocess.run(
+            [_devtrack_bin(), "resume"],
+            capture_output=True, text=True, timeout=10, env=_devtrack_env()
+        )
+        output = result.stdout or result.stderr or "Resumed"
+        await update.message.reply_text(output.strip())
+    except Exception as e:
+        await update.message.reply_text(f"Error: {e}")
+
+
+async def _cmd_queue(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "DevTrackBot"):
+    """Handle /queue -- show message queue stats."""
+    try:
+        db_path = _get_db_path()
+        if not db_path:
+            await update.message.reply_text("Database not found")
+            return
+
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT status, COUNT(*) FROM message_queue GROUP BY status")
+        rows = cursor.fetchall()
+        conn.close()
+
+        if not rows:
+            await update.message.reply_text("Message queue is empty")
+            return
+
+        text = "*Message Queue*\n\n"
+        for status, count in rows:
+            text += f"- {status}: {count}\n"
+
+        await update.message.reply_text(text, parse_mode="Markdown")
+    except Exception as e:
+        await update.message.reply_text(f"Error: {e}")
+
+
+async def _cmd_commits(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "DevTrackBot"):
+    """Handle /commits -- show deferred commit status."""
+    try:
+        db_path = _get_db_path()
+        if not db_path:
+            await update.message.reply_text("Database not found")
+            return
+
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT status, COUNT(*) FROM deferred_commits GROUP BY status")
+        rows = cursor.fetchall()
+        conn.close()
+
+        if not rows:
+            await update.message.reply_text("No deferred commits")
+            return
+
+        text = "*Deferred Commits*\n\n"
+        for status, count in rows:
+            text += f"- {status}: {count}\n"
+
+        await update.message.reply_text(text, parse_mode="Markdown")
+    except Exception as e:
+        await update.message.reply_text(f"Error: {e}")
+
+
+async def _cmd_health(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "DevTrackBot"):
+    """Handle /health -- show detailed service health."""
+    try:
+        db_path = _get_db_path()
+        if not db_path:
+            await update.message.reply_text("Database not found")
+            return
+
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        # Get latest health snapshot per service
+        cursor.execute("""
+            SELECT service, status, latency_ms, details, checked_at
+            FROM health_snapshots h1
+            WHERE checked_at = (
+                SELECT MAX(checked_at) FROM health_snapshots h2 WHERE h2.service = h1.service
+            )
+            ORDER BY service
+        """)
+        rows = cursor.fetchall()
+        conn.close()
+
+        if not rows:
+            await update.message.reply_text("No health data available yet")
+            return
+
+        text = "*Service Health*\n\n"
+        status_map = {
+            "up": "UP", "down": "DOWN", "degraded": "DEGRADED", "unconfigured": "N/A"
+        }
+
+        for service, status, latency_ms, details, checked_at in rows:
+            name = _service_display_name(service)
+            label = status_map.get(status, status)
+            line = f"*{name}*: {label}"
+            if latency_ms and latency_ms > 0:
+                line += f" ({latency_ms}ms)"
+            text += line + "\n"
+
+        await update.message.reply_text(text, parse_mode="Markdown")
+    except Exception as e:
+        await update.message.reply_text(f"Error: {e}")
+
+
+def _get_db_path() -> str:
+    """Get the SQLite database path."""
+    from backend.config import get_path
+    try:
+        db_dir = get_path("DATABASE_DIR")
+        db_file = os.environ.get("DATABASE_FILE_NAME", "devtrack.db")
+        path = os.path.join(db_dir, db_file)
+        if os.path.exists(path):
+            return path
+    except Exception:
+        pass
+    return ""
+
+
+def _service_display_name(service: str) -> str:
+    """Human-readable service name."""
+    names = {
+        "ipc": "Python IPC",
+        "python_bridge": "Python Bridge",
+        "ollama": "Ollama",
+        "azure_devops": "Azure DevOps",
+        "webhook_server": "Webhook Server",
+        "mongodb": "MongoDB",
+        "telegram_bot": "Telegram Bot",
+    }
+    return names.get(service, service)
