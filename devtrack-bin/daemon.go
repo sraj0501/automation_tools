@@ -561,6 +561,9 @@ func (d *Daemon) startTelegramBot() error {
 		return nil
 	}
 
+	// Kill any stale bot processes from a previous daemon run before starting a new one
+	exec.Command("pkill", "-f", "backend.telegram").Run() //nolint
+
 	log.Println("Starting Telegram bot...")
 
 	var cmd *exec.Cmd
