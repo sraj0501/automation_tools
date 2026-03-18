@@ -285,47 +285,73 @@ async def _cmd_issues(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "
         state_file = _get_azure_state_file()
         if not state_file or not os.path.exists(state_file):
             await update.message.reply_text(
-                "No Azure sync data found. Run `devtrack azure-sync` first.",
-                parse_mode="Markdown"
+                "No Azure sync data found\\. Run `devtrack azure-sync` first\\.",
+                parse_mode="MarkdownV2"
             )
             return
 
         with open(state_file) as f:
             data = json.load(f)
 
-        items = data.get("items", [])
+        # work_items is a dict keyed by ID
+        work_items = data.get("work_items", {})
         last_sync = data.get("last_sync", "unknown")
+        if last_sync and "T" in last_sync:
+            last_sync = last_sync.split("T")[0]
 
-        if not items:
+        if not work_items:
             await update.message.reply_text(
-                f"No work items assigned to you.\n_Last synced: {last_sync}_",
-                parse_mode="Markdown"
+                f"No work items found\\.\n_Last synced: {last_sync}_\n\nRun `devtrack azure\\-sync` to refresh\\.",
+                parse_mode="MarkdownV2"
             )
             return
 
         # Group by state
         by_state: dict = {}
-        for item in items:
+        for item in work_items.values():
             state = item.get("state", "Unknown")
             by_state.setdefault(state, []).append(item)
 
-        lines = ["*Azure DevOps — My Issues*\n"]
-        for state, state_items in sorted(by_state.items()):
-            lines.append(f"*{state}* ({len(state_items)})")
+        messages = []
+        for state in sorted(by_state.keys()):
+            state_items = by_state[state]
+            block = [f"*{state}* ({len(state_items)})"]
             for item in state_items:
                 item_id = item.get("id", "?")
-                title = item.get("title", "")[:50]
-                wtype = item.get("work_item_type", "")
-                lines.append(f"  `#{item_id}` [{wtype}] {title}")
-            lines.append("")
+                title = item.get("title", "(no title)")
+                wtype = item.get("type", "")
+                sprint = item.get("iteration_path", "")
+                due = item.get("due_date", "")
+                desc_raw = item.get("description", "") or ""
+                desc = _strip_html(desc_raw)
+                if len(desc) > 120:
+                    desc = desc[:120] + "..."
 
-        lines.append(f"_Last synced: {last_sync}_")
-        lines.append("_Use /issue <id> for details_")
+                block.append(f"\n`#{item_id}` — *{title}*")
+                block.append(f"  Type: {wtype}  |  State: {state}")
+                if sprint:
+                    block.append(f"  Sprint: {sprint.split('\\\\')[-1]}")
+                if due:
+                    block.append(f"  Due: {due}")
+                if desc:
+                    block.append(f"  _{desc}_")
 
-        text = "\n".join(lines)
-        if len(text) > MAX_MSG_LEN - 20:
-            text = text[:MAX_MSG_LEN - 20] + "\n... (truncated)"
-        await update.message.reply_text(text, parse_mode="Markdown")
+            messages.append("\n".join(block))
+
+        header = f"*Azure DevOps — My Issues* ({len(work_items)} total)\n"
+        footer = f"\n_Synced: {last_sync}_ | /issue <id> for full details"
+
+        # Send in chunks so we don't exceed Telegram's limit
+        current = header
+        for block in messages:
+            if len(current) + len(block) + len(footer) + 5 > MAX_MSG_LEN:
+                await update.message.reply_text(current, parse_mode="Markdown")
+                current = block
+            else:
+                current = current + "\n\n" + block
+
+        current += footer
+        await update.message.reply_text(current, parse_mode="Markdown")
 
     except Exception as e:
         await update.message.reply_text(f"Error: {e}")
@@ -369,7 +395,10 @@ async def _cmd_issue(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "D
             f"*Area:* {wi.area_path}",
         ]
         if wi.iteration_path:
-            lines.append(f"*Iteration:* {wi.iteration_path}")
+            sprint_name = wi.iteration_path.split("\\")[-1]
+            lines.append(f"*Sprint:* {sprint_name}")
+        if wi.due_date:
+            lines.append(f"*Due:* {wi.due_date}")
         if wi.tags:
             lines.append(f"*Tags:* {', '.join(wi.tags)}")
         if wi.parent_id:

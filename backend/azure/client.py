@@ -70,6 +70,7 @@ class AzureWorkItem:
     tags: List[str] = field(default_factory=list)
     url: str = ""
     parent_id: Optional[int] = None
+    due_date: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -211,6 +212,14 @@ class AzureDevOpsClient:
                 except (ValueError, IndexError):
                     pass
 
+        due_date = (
+            fields.get("Microsoft.VSTS.Scheduling.TargetDate")
+            or fields.get("Microsoft.VSTS.Scheduling.FinishDate")
+        )
+        # Trim to date portion only (Azure returns ISO datetime strings)
+        if due_date and "T" in due_date:
+            due_date = due_date.split("T")[0]
+
         return AzureWorkItem(
             id=data.get("id", 0),
             title=fields.get("System.Title", ""),
@@ -223,6 +232,7 @@ class AzureDevOpsClient:
             tags=tags,
             url=data.get("_links", {}).get("html", {}).get("href", ""),
             parent_id=parent_id,
+            due_date=due_date,
         )
 
     # -- read operations ----------------------------------------------------

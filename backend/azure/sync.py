@@ -70,11 +70,13 @@ class AzureSync:
                 str(wi.id): {
                     "id": wi.id,
                     "title": wi.title,
+                    "description": wi.description,
                     "state": wi.state,
                     "type": wi.work_item_type,
                     "assigned_to": wi.assigned_to,
                     "area_path": wi.area_path,
                     "iteration_path": wi.iteration_path,
+                    "due_date": wi.due_date,
                     "tags": wi.tags,
                     "url": wi.url,
                     "synced_at": datetime.now(timezone.utc).isoformat(),
