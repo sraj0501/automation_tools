@@ -1,6 +1,7 @@
 """Telegram bot for DevTrack remote control."""
 import asyncio
 import logging
+import os
 import threading
 from typing import Optional, Set
 
@@ -124,25 +125,32 @@ class DevTrackBot:
 
 
 def _format_ipc_event(message: IPCMessage) -> str:
-    """Format an IPC event for Telegram display."""
+    """Format an IPC event for Telegram display. Returns empty string to suppress."""
     data = message.data or {}
     if message.type == MessageType.COMMIT_TRIGGER:
+        if os.environ.get("TELEGRAM_NOTIFY_COMMITS", "false").lower() != "true":
+            return ""
         branch = data.get("branch", "")
         msg = data.get("message", "")
         text = "*Commit detected*\n"
         if branch:
             text += f"Branch: `{branch}`\n"
         if msg:
-            # Truncate long messages
             if len(msg) > 200:
                 msg = msg[:200] + "..."
             text += f"Message: {msg}\n"
         return text
     elif message.type == MessageType.TIMER_TRIGGER:
+        if os.environ.get("TELEGRAM_NOTIFY_TRIGGERS", "true").lower() != "true":
+            return ""
         return "*Timer trigger fired* -- work update prompt sent"
     elif message.type == MessageType.REPORT_TRIGGER:
+        if os.environ.get("TELEGRAM_NOTIFY_TRIGGERS", "true").lower() != "true":
+            return ""
         return "*Report generation triggered*"
     elif message.type == MessageType.WEBHOOK_EVENT:
+        if os.environ.get("TELEGRAM_NOTIFY_HEALTH", "true").lower() != "true":
+            return ""
         source = data.get("source", "unknown")
         event = data.get("event_type", "unknown")
         title = data.get("title", "")
