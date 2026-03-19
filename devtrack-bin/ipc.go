@@ -40,6 +40,9 @@ const (
 	// Health monitoring
 	MsgTypePing MessageType = "ping"
 	MsgTypePong MessageType = "pong"
+
+	// Workspace management
+	MsgTypeWorkspaceReload MessageType = "workspace_reload"
 )
 
 // IPCMessage represents a message sent between Go and Python
@@ -60,6 +63,10 @@ type CommitTriggerData struct {
 	Timestamp     string   `json:"timestamp"`
 	FilesChanged  []string `json:"files_changed"`
 	Branch        string   `json:"branch"`
+	// Workspace routing fields (omitempty — zero value = fall back to priority chain)
+	WorkspaceName string `json:"workspace_name,omitempty"`
+	PMPlatform    string `json:"pm_platform,omitempty"`
+	PMProject     string `json:"pm_project,omitempty"`
 }
 
 // TimerTriggerData contains information about a scheduled trigger
@@ -67,6 +74,10 @@ type TimerTriggerData struct {
 	Timestamp    string `json:"timestamp"`
 	IntervalMins int    `json:"interval_mins"`
 	TriggerCount int    `json:"trigger_count"`
+	// Workspace routing fields (omitempty — populated from most-recently-active workspace)
+	WorkspaceName string `json:"workspace_name,omitempty"`
+	PMPlatform    string `json:"pm_platform,omitempty"`
+	PMProject     string `json:"pm_project,omitempty"`
 }
 
 // TaskUpdateData contains information about a task update
@@ -419,33 +430,53 @@ func getSocketPath() (string, error) {
 
 // CreateCommitTriggerMessage creates a commit trigger message
 func CreateCommitTriggerMessage(data CommitTriggerData) IPCMessage {
+	msgData := map[string]interface{}{
+		"repo_path":      data.RepoPath,
+		"commit_hash":    data.CommitHash,
+		"commit_message": data.CommitMessage,
+		"author":         data.Author,
+		"timestamp":      data.Timestamp,
+		"files_changed":  data.FilesChanged,
+		"branch":         data.Branch,
+	}
+	if data.WorkspaceName != "" {
+		msgData["workspace_name"] = data.WorkspaceName
+	}
+	if data.PMPlatform != "" {
+		msgData["pm_platform"] = data.PMPlatform
+	}
+	if data.PMProject != "" {
+		msgData["pm_project"] = data.PMProject
+	}
 	return IPCMessage{
 		Type:      MsgTypeCommitTrigger,
 		Timestamp: time.Now(),
 		ID:        fmt.Sprintf("commit_%d", time.Now().UnixNano()),
-		Data: map[string]interface{}{
-			"repo_path":      data.RepoPath,
-			"commit_hash":    data.CommitHash,
-			"commit_message": data.CommitMessage,
-			"author":         data.Author,
-			"timestamp":      data.Timestamp,
-			"files_changed":  data.FilesChanged,
-			"branch":         data.Branch,
-		},
+		Data:      msgData,
 	}
 }
 
 // CreateTimerTriggerMessage creates a timer trigger message
 func CreateTimerTriggerMessage(data TimerTriggerData) IPCMessage {
+	msgData := map[string]interface{}{
+		"timestamp":     data.Timestamp,
+		"interval_mins": data.IntervalMins,
+		"trigger_count": data.TriggerCount,
+	}
+	if data.WorkspaceName != "" {
+		msgData["workspace_name"] = data.WorkspaceName
+	}
+	if data.PMPlatform != "" {
+		msgData["pm_platform"] = data.PMPlatform
+	}
+	if data.PMProject != "" {
+		msgData["pm_project"] = data.PMProject
+	}
 	return IPCMessage{
 		Type:      MsgTypeTimerTrigger,
 		Timestamp: time.Now(),
 		ID:        fmt.Sprintf("timer_%d", time.Now().UnixNano()),
-		Data: map[string]interface{}{
-			"timestamp":     data.Timestamp,
-			"interval_mins": data.IntervalMins,
-			"trigger_count": data.TriggerCount,
-		},
+		Data:      msgData,
 	}
 }
 

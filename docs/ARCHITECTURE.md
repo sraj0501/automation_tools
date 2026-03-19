@@ -81,14 +81,36 @@ The lightweight background service that monitors and coordinates.
 Go daemon and Python bridge communicate using JSON-delimited messages over TCP:
 
 ```
-commit_trigger    → Git commit detected
-timer_trigger     → Scheduled time reached
-task_update       → Update project management system
-acknowledge       → Confirm message received
-error             → Report error back to client
-ping              → Health check request
-pong              ← Health check response
+commit_trigger      → Git commit detected (includes workspace_name, pm_platform, pm_project)
+timer_trigger       → Scheduled time reached (includes workspace context in multi-repo mode)
+task_update         → Update project management system
+acknowledge         → Confirm message received
+error               → Report error back to client
+ping                → Health check request
+pong                ← Health check response
+workspace_reload    → Reload workspaces.yaml and restart monitors
 ```
+
+#### Multi-Repo Mode
+
+When `workspaces.yaml` is present, `IntegratedMonitor` starts one `WorkspaceMonitor` per enabled workspace instead of a single `GitMonitor`. Each monitor fires `handleCommitForWorkspace`, embedding `workspace_name`, `pm_platform`, and `pm_project` into the IPC trigger message.
+
+```
+workspaces.yaml
+      │
+      ▼
+IntegratedMonitor
+  ├── WorkspaceMonitor (work-api, pm_platform=azure)
+  │     └── GitMonitor → commit_trigger {pm_platform: "azure", workspace_name: "work-api"}
+  ├── WorkspaceMonitor (oss-lib, pm_platform=github)
+  │     └── GitMonitor → commit_trigger {pm_platform: "github", workspace_name: "oss-lib"}
+  └── WorkspaceMonitor (internal-tools, pm_platform=gitlab)
+        └── GitMonitor → commit_trigger {pm_platform: "gitlab", workspace_name: "internal-tools"}
+```
+
+Python bridge reads `pm_platform` from the trigger data and calls `_route_pm_sync()`, which dispatches directly to the declared platform without running the priority chain.
+
+When `workspaces.yaml` is absent, a single `WorkspaceMonitor` is created from `DEVTRACK_WORKSPACE` with empty workspace fields — the priority chain runs as before.
 
 #### Data Storage
 
@@ -155,9 +177,11 @@ The smart processing engine that handles AI, NLP, and integrations.
 
 | Module | Purpose |
 |--------|---------|
-| **backend/jira/client.py** | Jira REST API client |
-| **backend/github/pr_analyzer.py** | GitHub PR analysis |
+| **backend/workspace_router.py** | Routes PM sync calls to the correct platform based on `pm_platform` from workspaces.yaml |
 | **backend/azure/client.py** | Azure DevOps work item fetching/updating |
+| **backend/gitlab/client.py** | GitLab issue fetching, commenting, creating |
+| **backend/github/client.py** | GitHub issue fetching, commenting, creating (GHE-ready) |
+| **backend/jira/client.py** | Jira REST API client |
 | **backend/msgraph_python/** | Microsoft Graph integration (Teams, Outlook) |
 
 ---

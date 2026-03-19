@@ -716,6 +716,21 @@ func GetIPCConnectTimeoutSecs() int {
 	return secs
 }
 
+// GetWorkspacesFilePath returns the path to workspaces.yaml.
+// Reads WORKSPACES_FILE env var; defaults to $PROJECT_ROOT/workspaces.yaml.
+// The file is optional — absence means single-repo mode (backward compat).
+func GetWorkspacesFilePath() string {
+	if val := os.Getenv("WORKSPACES_FILE"); val != "" {
+		return expandPath(val)
+	}
+	config, err := LoadEnvConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: Failed to load configuration: %v\n", err)
+		os.Exit(1)
+	}
+	return filepath.Join(config.ProjectRoot, "workspaces.yaml")
+}
+
 // IsWebhookEnabled returns whether the webhook server is enabled.
 // Reads WEBHOOK_ENABLED from .env (default: false).
 func IsWebhookEnabled() bool {

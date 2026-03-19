@@ -20,10 +20,15 @@ const (
 
 // TriggerEvent represents an event that triggers a prompt
 type TriggerEvent struct {
-	Type      TriggerType
-	Timestamp time.Time
-	Source    string
-	Data      interface{}
+	Type          TriggerType
+	Timestamp     time.Time
+	Source        string
+	Data          interface{}
+	// Workspace context (populated for commit triggers in multi-repo mode)
+	RepoPath      string
+	WorkspaceName string
+	PMPlatform    string
+	PMProject     string
 }
 
 // Scheduler manages time-based triggers and scheduling

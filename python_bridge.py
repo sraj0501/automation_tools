@@ -168,6 +168,15 @@ except ImportError as e:
     github_client_available = False
     GitHubClient = None
 
+# Import WorkspaceRouter for per-repo PM platform routing
+try:
+    from backend.workspace_router import WorkspaceRouter
+    workspace_router_available = True
+except ImportError as e:
+    logger.debug(f"WorkspaceRouter not available: {e}")
+    workspace_router_available = False
+    WorkspaceRouter = None
+
 
 class DevTrackBridge:
     """Main bridge between Go daemon and Python AI layer"""
@@ -292,6 +301,19 @@ class DevTrackBridge:
             except Exception as e:
                 logger.warning(f"Could not initialize GitHub client: {e}")
 
+        # Initialize WorkspaceRouter for workspace-aware PM routing
+        self.workspace_router = None
+        if workspace_router_available and WorkspaceRouter is not None:
+            try:
+                self.workspace_router = WorkspaceRouter(
+                    azure_client=self.azure_client,
+                    gitlab_client=self.gitlab_client,
+                    github_client=self.github_client,
+                )
+                logger.info("✓ WorkspaceRouter initialized")
+            except Exception as e:
+                logger.warning(f"Could not initialize WorkspaceRouter: {e}")
+
         # Initialize Personalized AI (Phase 6 - Talk Like You)
         self.personalized_ai = None
         if personalized_ai_available:
@@ -403,49 +425,22 @@ class DevTrackBridge:
                     # Enhance with AI analysis
                     description = f"[{ai_summary.get('type', 'update')}] {description}"
 
-                # Sync to Azure DevOps if enabled
+                # Route to the correct PM platform
                 azure_work_item_id = None
                 synced_platform = None
-                if self.azure_client and config and config.is_azure_sync_enabled():
-                    commit_info = {
-                        "commit_hash": data.get("commit_hash", ""),
-                        "commit_message": data.get("commit_message", ""),
-                        "author": data.get("author", ""),
-                    }
-                    azure_work_item_id, synced_platform = self._run_azure_sync(
-                        description=description,
-                        ticket_id=parsed.ticket_id or "",
-                        status=parsed.status or "in_progress",
-                        commit_info=commit_info,
-                    )
-
-                # Sync to GitLab if Azure didn't match and GitLab is enabled
-                if not azure_work_item_id and self.gitlab_client and config and config.is_gitlab_sync_enabled():
-                    commit_info = {
-                        "commit_hash": data.get("commit_hash", ""),
-                        "commit_message": data.get("commit_message", ""),
-                        "author": data.get("author", ""),
-                    }
-                    azure_work_item_id, synced_platform = self._run_gitlab_sync(
-                        description=description,
-                        ticket_id=parsed.ticket_id or "",
-                        status=parsed.status or "in_progress",
-                        commit_info=commit_info,
-                    )
-
-                # Sync to GitHub if neither Azure nor GitLab matched
-                if not azure_work_item_id and self.github_client and config and config.is_github_sync_enabled():
-                    commit_info = {
-                        "commit_hash": data.get("commit_hash", ""),
-                        "commit_message": data.get("commit_message", ""),
-                        "author": data.get("author", ""),
-                    }
-                    azure_work_item_id, synced_platform = self._run_github_sync(
-                        description=description,
-                        ticket_id=parsed.ticket_id or "",
-                        status=parsed.status or "in_progress",
-                        commit_info=commit_info,
-                    )
+                commit_info_dict = {
+                    "commit_hash": data.get("commit_hash", ""),
+                    "commit_message": data.get("commit_message", ""),
+                    "author": data.get("author", ""),
+                }
+                azure_work_item_id, synced_platform = self._route_pm_sync(
+                    pm_platform=data.get("pm_platform", ""),
+                    pm_project=data.get("pm_project", ""),
+                    description=description,
+                    ticket_id=parsed.ticket_id or "",
+                    status=parsed.status or "in_progress",
+                    commit_info=commit_info_dict,
+                )
 
                 # Send task update with parsed data
                 task_update = create_task_update_message(
@@ -471,49 +466,22 @@ class DevTrackBridge:
                 logger.info("ℹ️  NLP parser not available, sending basic update")
                 description = commit_msg
 
-            # Sync to Azure DevOps if enabled (fallback path)
+            # Route to the correct PM platform (fallback path — no NLP)
             azure_work_item_id = None
             synced_platform = None
-            if self.azure_client and config and config.is_azure_sync_enabled():
-                commit_info = {
-                    "commit_hash": data.get("commit_hash", ""),
-                    "commit_message": data.get("commit_message", ""),
-                    "author": data.get("author", ""),
-                }
-                azure_work_item_id, synced_platform = self._run_azure_sync(
-                    description=description,
-                    ticket_id="",
-                    status="in_progress",
-                    commit_info=commit_info,
-                )
-
-            # Sync to GitLab if Azure didn't match and GitLab is enabled
-            if not azure_work_item_id and self.gitlab_client and config and config.is_gitlab_sync_enabled():
-                commit_info = {
-                    "commit_hash": data.get("commit_hash", ""),
-                    "commit_message": data.get("commit_message", ""),
-                    "author": data.get("author", ""),
-                }
-                azure_work_item_id, synced_platform = self._run_gitlab_sync(
-                    description=description,
-                    ticket_id="",
-                    status="in_progress",
-                    commit_info=commit_info,
-                )
-
-            # Sync to GitHub if neither Azure nor GitLab matched
-            if not azure_work_item_id and self.github_client and config and config.is_github_sync_enabled():
-                commit_info = {
-                    "commit_hash": data.get("commit_hash", ""),
-                    "commit_message": data.get("commit_message", ""),
-                    "author": data.get("author", ""),
-                }
-                azure_work_item_id, synced_platform = self._run_github_sync(
-                    description=description,
-                    ticket_id="",
-                    status="in_progress",
-                    commit_info=commit_info,
-                )
+            commit_info_dict = {
+                "commit_hash": data.get("commit_hash", ""),
+                "commit_message": data.get("commit_message", ""),
+                "author": data.get("author", ""),
+            }
+            azure_work_item_id, synced_platform = self._route_pm_sync(
+                pm_platform=data.get("pm_platform", ""),
+                pm_project=data.get("pm_project", ""),
+                description=description,
+                ticket_id="",
+                status="in_progress",
+                commit_info=commit_info_dict,
+            )
 
             task_update = create_task_update_message(
                 project="automation_tools",
@@ -742,31 +710,16 @@ class DevTrackBridge:
         if enhanced and enhanced.category and enhanced.category != "other":
             final_description = f"[{enhanced.category}] {final_description}"
 
-        # Step 6.5: Sync to Azure DevOps if enabled
+        # Step 6.5: Route to the correct PM platform
         azure_work_item_id = None
         synced_platform = None
-        if self.azure_client and config and config.is_azure_sync_enabled():
-            azure_work_item_id, synced_platform = self._run_azure_sync(
-                description=final_description,
-                ticket_id=ticket_id,
-                status=status,
-            )
-
-        # Sync to GitLab if Azure didn't match and GitLab is enabled
-        if not azure_work_item_id and self.gitlab_client and config and config.is_gitlab_sync_enabled():
-            azure_work_item_id, synced_platform = self._run_gitlab_sync(
-                description=final_description,
-                ticket_id=ticket_id,
-                status=status,
-            )
-
-        # Sync to GitHub if neither Azure nor GitLab matched
-        if not azure_work_item_id and self.github_client and config and config.is_github_sync_enabled():
-            azure_work_item_id, synced_platform = self._run_github_sync(
-                description=final_description,
-                ticket_id=ticket_id,
-                status=status,
-            )
+        azure_work_item_id, synced_platform = self._route_pm_sync(
+            pm_platform=data.get("pm_platform", ""),
+            pm_project=data.get("pm_project", ""),
+            description=final_description,
+            ticket_id=ticket_id,
+            status=status,
+        )
 
         task_update = create_task_update_message(
             project=project,
@@ -1225,6 +1178,56 @@ class DevTrackBridge:
         except Exception as e:
             logger.error(f"Error syncing to Azure DevOps: {e}")
             return None, None
+
+    def _route_pm_sync(self, pm_platform, pm_project, description, ticket_id=None, status=None, commit_info=None):
+        """Route a PM sync call to the correct platform based on workspace config.
+
+        When pm_platform is non-empty (set via workspaces.yaml), dispatches
+        directly to that platform. Falls back to the legacy priority chain
+        (Azure → GitLab → GitHub) when pm_platform is empty.
+
+        Returns:
+            Tuple of (work_item_id: int | None, synced_platform: str | None)
+        """
+        platform = (pm_platform or "").strip().lower()
+
+        if platform == "none":
+            logger.debug("Workspace pm_platform=none: skipping PM sync")
+            return None, None
+
+        if platform == "azure":
+            logger.info(f"Workspace routing → Azure (pm_project={pm_project!r})")
+            return self._run_azure_sync(description, ticket_id, status, commit_info)
+
+        if platform == "gitlab":
+            logger.info(f"Workspace routing → GitLab (pm_project={pm_project!r})")
+            return self._run_gitlab_sync(description, ticket_id, status, commit_info)
+
+        if platform == "github":
+            logger.info(f"Workspace routing → GitHub")
+            return self._run_github_sync(description, ticket_id, status, commit_info)
+
+        if platform == "jira":
+            logger.info("Workspace routing → Jira (not yet implemented)")
+            return None, None
+
+        # Empty or unknown pm_platform → legacy priority chain
+        if platform:
+            logger.warning(f"Unknown pm_platform={platform!r}, falling back to priority chain")
+
+        # Priority chain: Azure → GitLab → GitHub
+        work_item_id, synced_platform = None, None
+
+        if not work_item_id and self.azure_client and config and config.is_azure_sync_enabled():
+            work_item_id, synced_platform = self._run_azure_sync(description, ticket_id, status, commit_info)
+
+        if not work_item_id and self.gitlab_client and config and config.is_gitlab_sync_enabled():
+            work_item_id, synced_platform = self._run_gitlab_sync(description, ticket_id, status, commit_info)
+
+        if not work_item_id and self.github_client and config and config.is_github_sync_enabled():
+            work_item_id, synced_platform = self._run_github_sync(description, ticket_id, status, commit_info)
+
+        return work_item_id, synced_platform
 
     def _run_azure_sync(self, description, ticket_id=None, status=None, commit_info=None):
         """Run the async _sync_to_azure from synchronous handler code.

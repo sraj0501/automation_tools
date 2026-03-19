@@ -1,0 +1,33 @@
+# workspaces.yaml — Multi-repo monitoring configuration
+#
+# Place this file at your PROJECT_ROOT (or set WORKSPACES_FILE in .env).
+# Absence of this file = backward-compat single-repo mode (DEVTRACK_WORKSPACE used).
+#
+# pm_platform options: azure | gitlab | github | jira | none
+# pm_project: optional platform-specific project key (GitLab project ID, Azure project name, etc.)
+
+version: "1"
+workspaces:
+  - name: "work-api"
+    path: "~/work/api"
+    pm_platform: "azure"
+    pm_project: ""          # leave blank to use AZURE_DEVOPS_PROJECT from .env
+    enabled: true
+    ignore_branches: ["main", "master"]
+    tags: ["work"]
+
+  - name: "oss-lib"
+    path: "~/oss/my-lib"
+    pm_platform: "github"
+    pm_project: ""          # uses GITHUB_OWNER/GITHUB_REPO from .env
+    enabled: true
+    ignore_branches: []
+    tags: ["oss"]
+
+  - name: "internal-tools"
+    path: "~/work/tools"
+    pm_platform: "gitlab"
+    pm_project: "12345"     # GitLab project ID (overrides GITLAB_PROJECT_ID from .env)
+    enabled: true
+    ignore_branches: []
+    tags: ["work"]

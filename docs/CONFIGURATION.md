@@ -524,11 +524,100 @@ AZURE_DEVOPS_PROJECT=MyProject
 **Secret**: YES
 **Required**: Yes (if using Azure)
 **Permissions**: Work Items (Read & Write)
-**Get**: https://dev.azure.com
+**Get**: Azure DevOps → User settings → Personal access tokens
 
 ```bash
-AZURE_DEVOPS_TOKEN=abcdefghijklmnopqrstuvwxyz123456
+AZURE_DEVOPS_TOKEN=<your-pat>
 ```
+
+#### Azure Bidirectional Sync
+
+| Variable | Default | Description |
+|---|---|---|
+| `AZURE_SYNC_ENABLED` | `false` | Enable automatic work item sync on commits/timer triggers |
+| `AZURE_SYNC_AUTO_COMMENT` | `true` | Post a comment on the matched work item |
+| `AZURE_SYNC_AUTO_TRANSITION` | `false` | Transition the work item state when status is `done` |
+| `AZURE_SYNC_CREATE_ON_NO_MATCH` | `false` | Create a new work item when no match is found |
+| `AZURE_SYNC_MATCH_THRESHOLD` | `0.7` | Fuzzy-match confidence threshold (0.0–1.0) |
+| `AZURE_SYNC_DONE_STATE` | `Done` | State to set when transitioning a done work item |
+
+```bash
+AZURE_SYNC_ENABLED=true
+AZURE_SYNC_AUTO_COMMENT=true
+AZURE_SYNC_AUTO_TRANSITION=false
+AZURE_SYNC_CREATE_ON_NO_MATCH=false
+AZURE_SYNC_MATCH_THRESHOLD=0.7
+AZURE_SYNC_DONE_STATE=Done
+```
+
+See [Azure DevOps Guide](AZURE_DEVOPS.md) for full setup.
+
+### GitLab
+
+#### GITLAB_URL
+
+**What**: GitLab instance URL
+**Format**: URL
+**Default**: `https://gitlab.com`
+
+```bash
+GITLAB_URL=https://gitlab.com
+# or for self-hosted:
+GITLAB_URL=https://gitlab.mycompany.com
+```
+
+#### GITLAB_PAT
+
+**What**: GitLab Personal Access Token
+**Format**: String
+**Secret**: YES
+**Scopes**: `api`, `read_user`
+**Get**: GitLab → Settings → Access Tokens
+
+```bash
+GITLAB_PAT=<your-gitlab-pat>
+```
+
+#### GITLAB_PROJECT_ID
+
+**What**: Numeric project ID (from Settings → General)
+**Format**: Integer
+**Required**: Yes for create/comment operations
+
+```bash
+GITLAB_PROJECT_ID=12345678
+```
+
+#### GitLab Bidirectional Sync
+
+| Variable | Default | Description |
+|---|---|---|
+| `GITLAB_SYNC_ENABLED` | `false` | Enable background sync and auto-comment on commits |
+| `GITLAB_AUTO_COMMENT` | `true` | Post a comment on matched issues |
+| `GITLAB_AUTO_TRANSITION` | `false` | Close matched issues when status is `done` |
+| `GITLAB_CREATE_ON_NO_MATCH` | `false` | Create a new issue when no match is found |
+| `GITLAB_MATCH_THRESHOLD` | `0.6` | Fuzzy-match confidence threshold (0.0–1.0) |
+| `GITLAB_DONE_STATE` | `closed` | State to set when transitioning a done issue |
+| `GITLAB_SYNC_LABEL` | `devtrack` | Label added to issues DevTrack creates |
+
+```bash
+GITLAB_SYNC_ENABLED=true
+GITLAB_AUTO_COMMENT=true
+GITLAB_AUTO_TRANSITION=false
+GITLAB_CREATE_ON_NO_MATCH=false
+GITLAB_MATCH_THRESHOLD=0.6
+GITLAB_DONE_STATE=closed
+GITLAB_SYNC_LABEL=devtrack
+```
+
+#### GitLab Assignment Poller
+
+| Variable | Default | Description |
+|---|---|---|
+| `GITLAB_POLL_ENABLED` | `false` | Poll for new issue assignments |
+| `GITLAB_POLL_INTERVAL_MINS` | `5` | How often to check (minutes) |
+
+See [GitLab Guide](GITLAB.md) for full setup.
 
 ### GitHub
 
@@ -539,20 +628,77 @@ AZURE_DEVOPS_TOKEN=abcdefghijklmnopqrstuvwxyz123456
 **Secret**: YES
 **Required**: Yes (if using GitHub)
 **Scopes**: `repo`, `read:org`
-**Get**: https://github.com/settings/tokens
+**Get**: GitHub → Settings → Developer settings → Personal access tokens
 
 ```bash
 GITHUB_TOKEN=<your-github-token>
 ```
 
-#### GITHUB_REPO
+#### GITHUB_OWNER
 
-**What**: GitHub repository (owner/name)
-**Format**: `owner/repo`
-**Example**: `john-doe/my-project`
+**What**: GitHub username or organization that owns the repository
+**Format**: String
 
 ```bash
-GITHUB_REPO=john-doe/my-project
+GITHUB_OWNER=my-username-or-org
+```
+
+#### GITHUB_REPO
+
+**What**: GitHub repository name (without owner prefix)
+**Format**: String
+**Example**: `my-project`
+
+```bash
+GITHUB_REPO=my-project
+```
+
+#### GITHUB_API_URL
+
+**What**: GitHub API base URL
+**Format**: URL
+**Default**: `https://api.github.com` (leave blank for github.com)
+**Note**: Set this only for GitHub Enterprise Server
+
+```bash
+# github.com — leave blank
+GITHUB_API_URL=
+
+# GitHub Enterprise
+GITHUB_API_URL=https://github.mycompany.com/api/v3
+```
+
+#### GITHUB_API_VERSION
+
+**What**: GitHub REST API version header sent with every request
+**Format**: Date string `YYYY-MM-DD`
+**Default**: `2022-11-28`
+**Note**: Only change this if GitHub deprecates the current version
+
+```bash
+GITHUB_API_VERSION=2022-11-28
+```
+
+#### GitHub Bidirectional Sync
+
+| Variable | Default | Description |
+|---|---|---|
+| `GITHUB_SYNC_ENABLED` | `false` | Enable automatic issue sync on commits/timer triggers |
+| `GITHUB_AUTO_COMMENT` | `true` | Post a comment on the matched issue |
+| `GITHUB_AUTO_TRANSITION` | `false` | Close the issue when status is `done`/`completed` |
+| `GITHUB_CREATE_ON_NO_MATCH` | `false` | Open a new issue when no match is found |
+| `GITHUB_MATCH_THRESHOLD` | `0.6` | Fuzzy-match confidence threshold (0.0–1.0) |
+| `GITHUB_DONE_STATE` | `closed` | State to set when transitioning a done issue |
+| `GITHUB_SYNC_LABEL` | `devtrack` | Label added to issues DevTrack creates |
+
+```bash
+GITHUB_SYNC_ENABLED=true
+GITHUB_AUTO_COMMENT=true
+GITHUB_AUTO_TRANSITION=false
+GITHUB_CREATE_ON_NO_MATCH=false
+GITHUB_MATCH_THRESHOLD=0.6
+GITHUB_DONE_STATE=closed
+GITHUB_SYNC_LABEL=devtrack
 ```
 
 ### Jira
@@ -585,7 +731,7 @@ JIRA_USERNAME=user@company.com
 **Get**: https://id.atlassian.com/manage-profile/security/api-tokens
 
 ```bash
-JIRA_API_TOKEN=abcdefghijklmnopqrstuvwxyz123456
+JIRA_API_TOKEN=<your-api-token>
 ```
 
 ### Microsoft Teams
@@ -609,7 +755,7 @@ TEAMS_BOT_ID=123e4567-e89b-12d3-a456-426614174000
 **Get**: Azure Portal → App registrations → Certificates & secrets
 
 ```bash
-TEAMS_BOT_PASSWORD=abcdefghijklmnopqrstuvwxyz123456
+TEAMS_BOT_PASSWORD=<your-api-token>
 ```
 
 #### TEAMS_CHANNEL_ID
@@ -641,7 +787,7 @@ MSGRAPH_CLIENT_ID=123e4567-e89b-12d3-a456-426614174000
 **Get**: Azure Portal → App registrations → Certificates & secrets
 
 ```bash
-MSGRAPH_CLIENT_SECRET=abcdefghijklmnopqrstuvwxyz123456
+MSGRAPH_CLIENT_SECRET=<your-api-token>
 ```
 
 #### MSGRAPH_TENANT_ID
@@ -941,12 +1087,12 @@ OLLAMA_MODEL=mistral
 OLLAMA_TEMPERATURE=0.7
 
 # Optional: Fallback providers
-# OPENAI_API_KEY=sk-...
+# OPENAI_API_KEY=<your-openai-key>
 # OPENAI_MODEL=gpt-4
 # OPENAI_TEMPERATURE=0.7
 # OPENAI_MAX_TOKENS=1024
 
-# ANTHROPIC_API_KEY=sk-ant-...
+# ANTHROPIC_API_KEY=<your-anthropic-key>
 # ANTHROPIC_MODEL=claude-3-opus
 # ANTHROPIC_MAX_TOKENS=1024
 
@@ -956,11 +1102,12 @@ OLLAMA_TEMPERATURE=0.7
 # Azure DevOps
 # AZURE_DEVOPS_ORG=my-org
 # AZURE_DEVOPS_PROJECT=MyProject
-# AZURE_DEVOPS_TOKEN=...
+# AZURE_DEVOPS_TOKEN=<your-pat>
 
 # GitHub
-# GITHUB_TOKEN=ghp_...
-# GITHUB_REPO=user/repo
+# GITHUB_TOKEN=<your-github-token>
+# GITHUB_OWNER=my-username-or-org
+# GITHUB_REPO=my-repo
 
 # Jira
 # JIRA_HOST=https://company.atlassian.net
@@ -1064,15 +1211,16 @@ DATABASE_DIR=/var/devtrack/db
 LOG_DIR=/var/devtrack/logs
 
 LLM_PROVIDER=openai
-OPENAI_API_KEY=sk-...
+OPENAI_API_KEY=<your-openai-key>
 OPENAI_MODEL=gpt-4
 
 AZURE_DEVOPS_ORG=mycompany
 AZURE_DEVOPS_PROJECT=CoreServices
-AZURE_DEVOPS_TOKEN=...
+AZURE_DEVOPS_TOKEN=<your-azure-pat>
 
-GITHUB_TOKEN=ghp_...
-GITHUB_REPO=mycompany/core-services
+GITHUB_TOKEN=<your-github-token>
+GITHUB_OWNER=mycompany
+GITHUB_REPO=core-services
 
 WORK_UPDATE_TIMER_INTERVAL=60
 LEARNING_ENABLED=true
@@ -1090,6 +1238,36 @@ LLM_PROVIDER=ollama
 OLLAMA_URL=http://host.docker.internal:11434
 OLLAMA_MODEL=mistral
 ```
+
+---
+
+## Multi-Repo Monitoring
+
+### WORKSPACES_FILE
+
+**What**: Path to `workspaces.yaml` for multi-repo monitoring
+**Format**: Absolute path
+**Default**: `$PROJECT_ROOT/workspaces.yaml`
+**Note**: This variable is optional. If the file does not exist, single-repo mode is used.
+
+```bash
+# Use default location ($PROJECT_ROOT/workspaces.yaml) — omit this var
+# OR override the location:
+WORKSPACES_FILE=/path/to/my/workspaces.yaml
+```
+
+### DEVTRACK_WORKSPACE (single-repo mode)
+
+**What**: The single Git repository to monitor
+**Format**: Absolute path
+**Required**: YES when `workspaces.yaml` is absent
+**Note**: Ignored when `workspaces.yaml` is present and has enabled workspaces
+
+```bash
+DEVTRACK_WORKSPACE=/path/to/your/project
+```
+
+For multi-repo routing and the `workspaces.yaml` schema, see [Multi-Repo Guide](MULTI_REPO.md).
 
 ---
 

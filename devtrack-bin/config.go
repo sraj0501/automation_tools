@@ -25,6 +25,71 @@ type RepositoryConfig struct {
 	Ignore  []string `yaml:"ignore"` // Branches or paths to ignore
 }
 
+// WorkspaceConfig represents a single monitored repo in workspaces.yaml
+type WorkspaceConfig struct {
+	Name           string   `yaml:"name"`
+	Path           string   `yaml:"path"`
+	PMPlatform     string   `yaml:"pm_platform"`    // "azure" | "gitlab" | "github" | "jira" | "none" | ""
+	PMProject      string   `yaml:"pm_project"`     // optional platform-specific project ID/key
+	Enabled        bool     `yaml:"enabled"`
+	IgnoreBranches []string `yaml:"ignore_branches"`
+	Tags           []string `yaml:"tags"`
+}
+
+// WorkspacesConfig is the top-level structure of workspaces.yaml
+type WorkspacesConfig struct {
+	Version    string            `yaml:"version"`
+	Workspaces []WorkspaceConfig `yaml:"workspaces"`
+}
+
+// LoadWorkspacesConfig loads workspaces.yaml if it exists.
+// Returns (nil, nil) when the file does not exist (backward compat: single-repo mode).
+func LoadWorkspacesConfig() (*WorkspacesConfig, error) {
+	path := GetWorkspacesFilePath()
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil, nil
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to check workspaces file: %w", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read workspaces file: %w", err)
+	}
+
+	cfg := &WorkspacesConfig{}
+	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse workspaces file: %w", err)
+	}
+
+	// Expand ~ in paths
+	for i := range cfg.Workspaces {
+		cfg.Workspaces[i].Path = expandWorkspacePath(cfg.Workspaces[i].Path)
+	}
+
+	return cfg, nil
+}
+
+// expandWorkspacePath expands ~ to home directory in workspace paths
+func expandWorkspacePath(path string) string {
+	if len(path) >= 2 && path[:2] == "~/" {
+		homeDir, _ := os.UserHomeDir()
+		return filepath.Join(homeDir, path[2:])
+	}
+	return path
+}
+
+// GetEnabledWorkspaces returns all enabled workspace configs
+func (wc *WorkspacesConfig) GetEnabledWorkspaces() []WorkspaceConfig {
+	var enabled []WorkspaceConfig
+	for _, ws := range wc.Workspaces {
+		if ws.Enabled {
+			enabled = append(enabled, ws)
+		}
+	}
+	return enabled
+}
+
 // Settings contains general application settings
 type Settings struct {
 	PromptInterval int                `yaml:"prompt_interval"` // Minutes between prompts
