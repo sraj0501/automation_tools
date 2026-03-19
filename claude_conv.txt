@@ -1,2 +1,0 @@
-Next session, just say "start on the GitLab + PM Agent plan" and I'll read docs/PLAN_GITLAB_PM_AGENT.md and launch both agents in parallel. Rest
-  well!

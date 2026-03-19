@@ -1,5 +1,19 @@
 # syntax=docker/dockerfile:1.6
-# Multi-stage Dockerfile for DevTrack
+#
+# Dockerfile — DevTrack Managed Cloud Backend
+#
+# This is NOT for running DevTrack locally. The local version is a native
+# Go binary — just `devtrack start`. No Docker required for local use.
+#
+# This image is for the managed cloud mode backend:
+#   - Cloud AI pipeline (NLP + LLM processing)
+#   - Always-on Telegram bot
+#   - Public webhook receiver
+#   - Cloud API (FastAPI)
+#
+# Build:  docker build -t devtrack-cloud .
+# Run:    docker compose up (see docker-compose.yml for infra dependencies)
+#
 # Stage 1: Build Go application
 FROM golang:1.24-bookworm AS go-builder
 

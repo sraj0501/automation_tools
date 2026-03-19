@@ -1,5 +1,20 @@
+# docker-compose.yml
+# Local development infrastructure for DevTrack.
+# Spins up MongoDB, Redis, and PostgreSQL — used by:
+#   - Personalization / RAG (MongoDB)
+#   - Managed cloud mode backend (all three)
+#
+# DevTrack itself runs natively (Go binary + uv Python), NOT in Docker.
+# See docs/INSTALLATION.md for setup.
+#
+# Usage:
+#   docker compose up -d      # start services
+#   docker compose down       # stop services
+#   docker compose down -v    # stop + wipe volumes
+
 services:
   # ── MongoDB ──────────────────────────────────────────────────────────────────
+  # Used by: personalization (RAG samples, user profiles), managed mode
   mongo:
     image: mongo:7
     container_name: devtrack-mongo
@@ -21,6 +36,7 @@ services:
       retries: 5
 
   # ── Redis ─────────────────────────────────────────────────────────────────────
+  # Used by: managed cloud mode (event queue, WebSocket pub/sub)
   redis:
     image: redis:7-alpine
     container_name: devtrack-redis
@@ -43,6 +59,7 @@ services:
       retries: 5
 
   # ── PostgreSQL ────────────────────────────────────────────────────────────────
+  # Used by: managed cloud mode (user accounts, API keys, team config)
   postgres:
     image: postgres:16-alpine
     container_name: devtrack-postgres
@@ -63,56 +80,10 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── DevTrack application ──────────────────────────────────────────────────────
-  devtrack:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: devtrack-app
-    restart: unless-stopped
-    environment:
-      - OLLAMA_HOST=${OLLAMA_HOST:-http://host.docker.internal:11434}
-      - DEVTRACK_DATA_DIR=/home/devtrack/.local/share/devtrack
-      - DEVTRACK_CONFIG_DIR=/home/devtrack/.config/devtrack
-      - WORKSPACE_DIR=/workspace
-    volumes:
-      # Persistent data storage
-      - devtrack-data:/home/devtrack/.local/share/devtrack
-      - devtrack-config:/home/devtrack/.config/devtrack
-      # Workspace mount (read/write access to user's files)
-      - type: bind
-        source: ${DEVTRACK_WORKSPACE:-.}
-        target: /workspace
-      # Mount home directory to access all git repositories
-      - type: bind
-        source: ${HOME}
-        target: /home/host
-    networks:
-      - devtrack-network
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      mongo:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    stdin_open: true
-    tty: true
-    command: ["--help"]
-
 volumes:
-  devtrack-data:
-    driver: local
-  devtrack-config:
-    driver: local
   mongo-data:
-    driver: local
   redis-data:
-    driver: local
   postgres-data:
-    driver: local
 
 networks:
   devtrack-network:
