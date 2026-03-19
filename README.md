@@ -41,29 +41,20 @@
 
 ---
 
-## 5-Minute Setup
+## Setup
 
 ```bash
-# 1. Clone and configure
-git clone https://github.com/yourusername/automation_tools.git
+git clone https://github.com/sraj0501/automation_tools.git
 cd automation_tools
-cp .env_sample .env
-nano .env   # Set PROJECT_ROOT, DEVTRACK_WORKSPACE, DATA_DIR
-
-# 2. Install Python deps
-uv sync
-uv run python -m spacy download en_core_web_sm
-
-# 3. Build the Go daemon
-cd devtrack-bin && go build -o devtrack . && mv devtrack ~/.local/bin/
-cd ..
-
-# 4. Start
-devtrack start
-devtrack status
+chmod +x setup_local.sh
+./setup_local.sh
 ```
 
-See [Installation Guide](docs/INSTALLATION.md) for the full walkthrough.
+The script handles everything: dependency checks, Python env, spaCy model, Go binary build, `~/.local/bin` install, and `.env` bootstrap.
+
+See [Installation Guide](docs/INSTALLATION.md) for a manual walkthrough or Windows instructions.
+
+To uninstall: `./uninstall.sh`
 
 ---
 
