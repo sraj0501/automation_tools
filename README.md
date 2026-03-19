@@ -9,7 +9,8 @@
 
 - **Watches your Git commits** and fires AI-enhanced work update prompts at the right moments
 - **Understands natural language** — "Working on PR #42 auth bug (2 hours)" extracts the ticket, time, and status automatically
-- **Syncs to Azure DevOps and GitLab** — comments on matched work items, transitions states, creates missing items
+- **Syncs to Azure DevOps, GitLab, and GitHub** — comments on matched work items, transitions states, creates missing items
+- **Monitors multiple repos** — each repo routes to its own PM platform via `workspaces.yaml`
 - **Learns your communication style** from Teams messages and writes updates in your voice
 - **Runs 100% locally** — Ollama for AI, SQLite for storage, no cloud required
 - **Works offline** — queues everything and syncs when connectivity returns
@@ -31,6 +32,8 @@
 | Set up AI commits / git-sage | [Git Features](docs/GIT_FEATURES.md) · [git-sage](docs/GIT_SAGE.md) |
 | Connect Azure DevOps | [Azure DevOps Guide](docs/AZURE_DEVOPS.md) |
 | Connect GitLab | [GitLab Guide](docs/GITLAB.md) |
+| Connect GitHub | [GitHub Guide](docs/GITHUB.md) |
+| Monitor multiple repos | [Multi-Repo Guide](docs/MULTI_REPO.md) |
 | Use the Telegram bot | [Telegram Bot Setup](docs/TELEGRAM_BOT.md) |
 | Use the PM Agent (`/plan`) | [PM Agent Guide](docs/PM_AGENT.md) |
 | Set up AI providers | [LLM Guide](docs/LLM_GUIDE.md) |
@@ -41,29 +44,20 @@
 
 ---
 
-## 5-Minute Setup
+## Setup
 
 ```bash
-# 1. Clone and configure
-git clone https://github.com/yourusername/automation_tools.git
+git clone https://github.com/sraj0501/automation_tools.git
 cd automation_tools
-cp .env_sample .env
-nano .env   # Set PROJECT_ROOT, DEVTRACK_WORKSPACE, DATA_DIR
-
-# 2. Install Python deps
-uv sync
-uv run python -m spacy download en_core_web_sm
-
-# 3. Build the Go daemon
-cd devtrack-bin && go build -o devtrack . && mv devtrack ~/.local/bin/
-cd ..
-
-# 4. Start
-devtrack start
-devtrack status
+chmod +x setup_local.sh
+./setup_local.sh
 ```
 
-See [Installation Guide](docs/INSTALLATION.md) for the full walkthrough.
+The script handles everything: dependency checks, Python env, spaCy model, Go binary build, `~/.local/bin` install, and `.env` bootstrap.
+
+See [Installation Guide](docs/INSTALLATION.md) for a manual walkthrough or Windows instructions.
+
+To uninstall: `./uninstall.sh`
 
 ---
 
@@ -81,12 +75,29 @@ uv run python -m backend.git_sage do "squash my last 5 commits"
 uv run python -m backend.git_sage ask "how do I rebase onto main?"
 ```
 
-### Azure DevOps & GitLab
+### Project Management — Azure DevOps, GitLab, GitHub
 ```bash
 devtrack azure-list          # work items assigned to you
 devtrack azure-sync          # pull everything from Azure
 devtrack gitlab-list         # GitLab issues assigned to you
 devtrack gitlab-view 12345 42
+# GitHub: managed via Telegram /github, /githubissue, /githubcreate
+```
+
+### Multi-Repo Monitoring
+```yaml
+# workspaces.yaml — each repo routes to its own PM platform
+workspaces:
+  - name: work-api
+    path: ~/work/api
+    pm_platform: azure
+  - name: oss-lib
+    path: ~/oss/my-lib
+    pm_platform: github
+```
+```bash
+devtrack workspace list       # all monitored repos + status
+devtrack workspace add <path> --name my-repo --platform gitlab
 ```
 
 ### PM Agent (via Telegram)

@@ -150,6 +150,33 @@ except ImportError as e:
     azure_client_available = False
     AzureDevOpsClient = None
 
+# Import GitLab client for bidirectional sync
+try:
+    from backend.gitlab.client import GitLabClient
+    gitlab_client_available = True
+except ImportError as e:
+    logger.debug(f"GitLab client not available: {e}")
+    gitlab_client_available = False
+    GitLabClient = None
+
+# Import GitHub client for bidirectional sync
+try:
+    from backend.github.client import GitHubClient
+    github_client_available = True
+except ImportError as e:
+    logger.debug(f"GitHub client not available: {e}")
+    github_client_available = False
+    GitHubClient = None
+
+# Import WorkspaceRouter for per-repo PM platform routing
+try:
+    from backend.workspace_router import WorkspaceRouter
+    workspace_router_available = True
+except ImportError as e:
+    logger.debug(f"WorkspaceRouter not available: {e}")
+    workspace_router_available = False
+    WorkspaceRouter = None
+
 
 class DevTrackBridge:
     """Main bridge between Go daemon and Python AI layer"""
@@ -247,6 +274,45 @@ class DevTrackBridge:
                 logger.info("✓ Task matcher initialized")
             except Exception as e:
                 logger.warning(f"Could not initialize task matcher: {e}")
+
+        # Initialize GitLab client for bidirectional sync
+        self.gitlab_client = None
+        if gitlab_client_available:
+            try:
+                client = GitLabClient()
+                if client.is_configured():
+                    self.gitlab_client = client
+                    logger.info("✓ GitLab integration initialized")
+                else:
+                    logger.info("✓ GitLab client available (not configured)")
+            except Exception as e:
+                logger.warning(f"Could not initialize GitLab client: {e}")
+
+        # Initialize GitHub client for bidirectional sync
+        self.github_client = None
+        if github_client_available:
+            try:
+                client = GitHubClient()
+                if client.is_configured():
+                    self.github_client = client
+                    logger.info("✓ GitHub integration initialized")
+                else:
+                    logger.info("✓ GitHub client available (not configured)")
+            except Exception as e:
+                logger.warning(f"Could not initialize GitHub client: {e}")
+
+        # Initialize WorkspaceRouter for workspace-aware PM routing
+        self.workspace_router = None
+        if workspace_router_available and WorkspaceRouter is not None:
+            try:
+                self.workspace_router = WorkspaceRouter(
+                    azure_client=self.azure_client,
+                    gitlab_client=self.gitlab_client,
+                    github_client=self.github_client,
+                )
+                logger.info("✓ WorkspaceRouter initialized")
+            except Exception as e:
+                logger.warning(f"Could not initialize WorkspaceRouter: {e}")
 
         # Initialize Personalized AI (Phase 6 - Talk Like You)
         self.personalized_ai = None
@@ -359,21 +425,22 @@ class DevTrackBridge:
                     # Enhance with AI analysis
                     description = f"[{ai_summary.get('type', 'update')}] {description}"
 
-                # Sync to Azure DevOps if enabled
+                # Route to the correct PM platform
                 azure_work_item_id = None
                 synced_platform = None
-                if self.azure_client and config and config.is_azure_sync_enabled():
-                    commit_info = {
-                        "commit_hash": data.get("commit_hash", ""),
-                        "commit_message": data.get("commit_message", ""),
-                        "author": data.get("author", ""),
-                    }
-                    azure_work_item_id, synced_platform = self._run_azure_sync(
-                        description=description,
-                        ticket_id=parsed.ticket_id or "",
-                        status=parsed.status or "in_progress",
-                        commit_info=commit_info,
-                    )
+                commit_info_dict = {
+                    "commit_hash": data.get("commit_hash", ""),
+                    "commit_message": data.get("commit_message", ""),
+                    "author": data.get("author", ""),
+                }
+                azure_work_item_id, synced_platform = self._route_pm_sync(
+                    pm_platform=data.get("pm_platform", ""),
+                    pm_project=data.get("pm_project", ""),
+                    description=description,
+                    ticket_id=parsed.ticket_id or "",
+                    status=parsed.status or "in_progress",
+                    commit_info=commit_info_dict,
+                )
 
                 # Send task update with parsed data
                 task_update = create_task_update_message(
@@ -399,21 +466,22 @@ class DevTrackBridge:
                 logger.info("ℹ️  NLP parser not available, sending basic update")
                 description = commit_msg
 
-            # Sync to Azure DevOps if enabled (fallback path)
+            # Route to the correct PM platform (fallback path — no NLP)
             azure_work_item_id = None
             synced_platform = None
-            if self.azure_client and config and config.is_azure_sync_enabled():
-                commit_info = {
-                    "commit_hash": data.get("commit_hash", ""),
-                    "commit_message": data.get("commit_message", ""),
-                    "author": data.get("author", ""),
-                }
-                azure_work_item_id, synced_platform = self._run_azure_sync(
-                    description=description,
-                    ticket_id="",
-                    status="in_progress",
-                    commit_info=commit_info,
-                )
+            commit_info_dict = {
+                "commit_hash": data.get("commit_hash", ""),
+                "commit_message": data.get("commit_message", ""),
+                "author": data.get("author", ""),
+            }
+            azure_work_item_id, synced_platform = self._route_pm_sync(
+                pm_platform=data.get("pm_platform", ""),
+                pm_project=data.get("pm_project", ""),
+                description=description,
+                ticket_id="",
+                status="in_progress",
+                commit_info=commit_info_dict,
+            )
 
             task_update = create_task_update_message(
                 project="automation_tools",
@@ -642,15 +710,16 @@ class DevTrackBridge:
         if enhanced and enhanced.category and enhanced.category != "other":
             final_description = f"[{enhanced.category}] {final_description}"
 
-        # Step 6.5: Sync to Azure DevOps if enabled
+        # Step 6.5: Route to the correct PM platform
         azure_work_item_id = None
         synced_platform = None
-        if self.azure_client and config and config.is_azure_sync_enabled():
-            azure_work_item_id, synced_platform = self._run_azure_sync(
-                description=final_description,
-                ticket_id=ticket_id,
-                status=status,
-            )
+        azure_work_item_id, synced_platform = self._route_pm_sync(
+            pm_platform=data.get("pm_platform", ""),
+            pm_project=data.get("pm_project", ""),
+            description=final_description,
+            ticket_id=ticket_id,
+            status=status,
+        )
 
         task_update = create_task_update_message(
             project=project,
@@ -1110,6 +1179,56 @@ class DevTrackBridge:
             logger.error(f"Error syncing to Azure DevOps: {e}")
             return None, None
 
+    def _route_pm_sync(self, pm_platform, pm_project, description, ticket_id=None, status=None, commit_info=None):
+        """Route a PM sync call to the correct platform based on workspace config.
+
+        When pm_platform is non-empty (set via workspaces.yaml), dispatches
+        directly to that platform. Falls back to the legacy priority chain
+        (Azure → GitLab → GitHub) when pm_platform is empty.
+
+        Returns:
+            Tuple of (work_item_id: int | None, synced_platform: str | None)
+        """
+        platform = (pm_platform or "").strip().lower()
+
+        if platform == "none":
+            logger.debug("Workspace pm_platform=none: skipping PM sync")
+            return None, None
+
+        if platform == "azure":
+            logger.info(f"Workspace routing → Azure (pm_project={pm_project!r})")
+            return self._run_azure_sync(description, ticket_id, status, commit_info)
+
+        if platform == "gitlab":
+            logger.info(f"Workspace routing → GitLab (pm_project={pm_project!r})")
+            return self._run_gitlab_sync(description, ticket_id, status, commit_info)
+
+        if platform == "github":
+            logger.info(f"Workspace routing → GitHub")
+            return self._run_github_sync(description, ticket_id, status, commit_info)
+
+        if platform == "jira":
+            logger.info("Workspace routing → Jira (not yet implemented)")
+            return None, None
+
+        # Empty or unknown pm_platform → legacy priority chain
+        if platform:
+            logger.warning(f"Unknown pm_platform={platform!r}, falling back to priority chain")
+
+        # Priority chain: Azure → GitLab → GitHub
+        work_item_id, synced_platform = None, None
+
+        if not work_item_id and self.azure_client and config and config.is_azure_sync_enabled():
+            work_item_id, synced_platform = self._run_azure_sync(description, ticket_id, status, commit_info)
+
+        if not work_item_id and self.gitlab_client and config and config.is_gitlab_sync_enabled():
+            work_item_id, synced_platform = self._run_gitlab_sync(description, ticket_id, status, commit_info)
+
+        if not work_item_id and self.github_client and config and config.is_github_sync_enabled():
+            work_item_id, synced_platform = self._run_github_sync(description, ticket_id, status, commit_info)
+
+        return work_item_id, synced_platform
+
     def _run_azure_sync(self, description, ticket_id=None, status=None, commit_info=None):
         """Run the async _sync_to_azure from synchronous handler code.
 
@@ -1136,6 +1255,276 @@ class DevTrackBridge:
                 self._sync_to_azure(description, ticket_id, status, commit_info)
             )
 
+    async def _sync_to_gitlab(self, description, ticket_id=None, status=None, commit_info=None):
+        """Sync a work update or commit to GitLab.
+
+        Returns:
+            Tuple of (issue_iid: int | None, synced_platform: str | None)
+        """
+        if not self.gitlab_client or not config or not config.is_gitlab_sync_enabled():
+            return None, None
+
+        try:
+            project_id = config.get_gitlab_default_project_id()
+
+            # Fetch current GitLab issues assigned to user
+            gitlab_issues = await self.gitlab_client.get_my_issues(state="opened")
+            if not gitlab_issues:
+                logger.debug("No GitLab issues found for matching")
+                if config.is_gitlab_create_on_no_match() and description and project_id:
+                    logger.info("Creating new GitLab issue (no match, create_on_no_match enabled)")
+                    issue = await self.gitlab_client.create_issue(
+                        project_id=project_id,
+                        title=description[:200],
+                        description=description,
+                        labels=[config.get_gitlab_sync_label()],
+                    )
+                    if issue:
+                        logger.info(f"✓ Created GitLab issue #{issue.iid} in project {project_id}")
+                        return issue.iid, "gitlab"
+                return None, None
+
+            # Convert issues to a format TaskMatcher can use
+            # TaskMatcher expects objects with .id, .title attributes
+            threshold = config.get_gitlab_match_threshold()
+            match_result = None
+
+            if ticket_id and self.task_matcher:
+                match_result = self.task_matcher.match_task(
+                    ticket_id, gitlab_issues, threshold=threshold
+                )
+
+            if not match_result and self.task_matcher and description:
+                match_result = self.task_matcher.match_task(
+                    description, gitlab_issues, threshold=threshold
+                )
+
+            if not match_result or match_result.confidence < threshold:
+                logger.info(
+                    f"No GitLab issue matched above threshold "
+                    f"({threshold}) for: {description[:80]}..."
+                )
+                if config.is_gitlab_create_on_no_match() and description and project_id:
+                    logger.info("Creating new GitLab issue (below threshold, create_on_no_match enabled)")
+                    issue = await self.gitlab_client.create_issue(
+                        project_id=project_id,
+                        title=description[:200],
+                        description=description,
+                        labels=[config.get_gitlab_sync_label()],
+                    )
+                    if issue:
+                        logger.info(f"✓ Created GitLab issue #{issue.iid} in project {project_id}")
+                        return issue.iid, "gitlab"
+                return None, None
+
+            matched_issue = match_result.task
+            issue_iid = matched_issue.iid
+            issue_project_id = matched_issue.project_id or project_id
+            logger.info(
+                f"Matched GitLab issue #{issue_iid}: "
+                f"{matched_issue.title} "
+                f"(confidence: {match_result.confidence:.0%}, "
+                f"type: {match_result.match_type})"
+            )
+
+            # Add comment if auto_comment is enabled
+            if config.is_gitlab_auto_comment() and issue_project_id:
+                comment_parts = []
+                if commit_info:
+                    commit_hash = commit_info.get("commit_hash", "")[:12]
+                    commit_msg = commit_info.get("commit_message", "")
+                    author = commit_info.get("author", "")
+                    comment_parts.append(
+                        f"**Commit**: {commit_hash}  \n"
+                        f"**Author**: {author}  \n"
+                        f"**Message**: {commit_msg}"
+                    )
+                if description:
+                    comment_parts.append(f"**Update**: {description}")
+                if status:
+                    comment_parts.append(f"**Status**: {status}")
+
+                comment_text = "\n\n".join(comment_parts) if comment_parts else description
+                success = await self.gitlab_client.add_comment(issue_project_id, issue_iid, comment_text)
+                if success:
+                    logger.info(f"✓ Added comment to GitLab issue #{issue_iid}")
+                else:
+                    logger.warning(f"Failed to add comment to GitLab issue #{issue_iid}")
+
+            # Auto-close issue if status indicates done
+            if (
+                status
+                and status.lower() in ("done", "completed", "closed", "resolved")
+                and config.is_gitlab_auto_transition()
+                and issue_project_id
+            ):
+                success = await self.gitlab_client.close_issue(issue_project_id, issue_iid)
+                if success:
+                    logger.info(f"✓ Closed GitLab issue #{issue_iid}")
+                else:
+                    logger.warning(f"Failed to close GitLab issue #{issue_iid}")
+
+            return issue_iid, "gitlab"
+
+        except Exception as e:
+            logger.error(f"Error syncing to GitLab: {e}")
+            return None, None
+
+    def _run_gitlab_sync(self, description, ticket_id=None, status=None, commit_info=None):
+        """Run the async _sync_to_gitlab from synchronous handler code.
+
+        Returns:
+            Tuple of (issue_iid: int | None, synced_platform: str | None)
+        """
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(
+                    asyncio.run,
+                    self._sync_to_gitlab(description, ticket_id, status, commit_info),
+                )
+                return future.result()
+        else:
+            return asyncio.run(
+                self._sync_to_gitlab(description, ticket_id, status, commit_info)
+            )
+
+    async def _sync_to_github(self, description, ticket_id=None, status=None, commit_info=None):
+        """Sync a work update or commit to GitHub.
+
+        Returns:
+            Tuple of (issue_number: int | None, synced_platform: str | None)
+        """
+        if not self.github_client or not config or not config.is_github_sync_enabled():
+            return None, None
+
+        try:
+            # Fetch open GitHub issues assigned to the user
+            github_issues = await self.github_client.get_my_issues(state="open")
+            if not github_issues:
+                logger.debug("No GitHub issues found for matching")
+                if config.is_github_create_on_no_match() and description:
+                    logger.info("Creating new GitHub issue (no match, create_on_no_match enabled)")
+                    issue = await self.github_client.create_issue(
+                        title=description[:200],
+                        body=description,
+                        labels=[config.get_github_sync_label()],
+                    )
+                    if issue:
+                        logger.info(f"✓ Created GitHub issue #{issue.number}")
+                        return issue.number, "github"
+                return None, None
+
+            threshold = config.get_github_match_threshold()
+            match_result = None
+
+            if ticket_id and self.task_matcher:
+                match_result = self.task_matcher.match_task(
+                    ticket_id, github_issues, threshold=threshold
+                )
+
+            if not match_result and self.task_matcher and description:
+                match_result = self.task_matcher.match_task(
+                    description, github_issues, threshold=threshold
+                )
+
+            if not match_result or match_result.confidence < threshold:
+                logger.info(
+                    f"No GitHub issue matched above threshold "
+                    f"({threshold}) for: {description[:80]}..."
+                )
+                if config.is_github_create_on_no_match() and description:
+                    logger.info("Creating new GitHub issue (below threshold, create_on_no_match enabled)")
+                    issue = await self.github_client.create_issue(
+                        title=description[:200],
+                        body=description,
+                        labels=[config.get_github_sync_label()],
+                    )
+                    if issue:
+                        logger.info(f"✓ Created GitHub issue #{issue.number}")
+                        return issue.number, "github"
+                return None, None
+
+            matched_issue = match_result.task
+            issue_number = matched_issue.number
+            logger.info(
+                f"Matched GitHub issue #{issue_number}: "
+                f"{matched_issue.title} "
+                f"(confidence: {match_result.confidence:.0%}, "
+                f"type: {match_result.match_type})"
+            )
+
+            # Add comment if auto_comment is enabled
+            if config.is_github_auto_comment():
+                comment_parts = []
+                if commit_info:
+                    commit_hash = commit_info.get("commit_hash", "")[:12]
+                    commit_msg = commit_info.get("commit_message", "")
+                    author = commit_info.get("author", "")
+                    comment_parts.append(
+                        f"**Commit**: {commit_hash}  \n"
+                        f"**Author**: {author}  \n"
+                        f"**Message**: {commit_msg}"
+                    )
+                if description:
+                    comment_parts.append(f"**Update**: {description}")
+                if status:
+                    comment_parts.append(f"**Status**: {status}")
+
+                comment_text = "\n\n".join(comment_parts) if comment_parts else description
+                success = await self.github_client.add_comment(issue_number, comment_text)
+                if success:
+                    logger.info(f"✓ Added comment to GitHub issue #{issue_number}")
+                else:
+                    logger.warning(f"Failed to add comment to GitHub issue #{issue_number}")
+
+            # Auto-close if status indicates done
+            if (
+                status
+                and status.lower() in ("done", "completed", "closed", "resolved")
+                and config.is_github_auto_transition()
+            ):
+                success = await self.github_client.close_issue(issue_number)
+                if success:
+                    logger.info(f"✓ Closed GitHub issue #{issue_number}")
+                else:
+                    logger.warning(f"Failed to close GitHub issue #{issue_number}")
+
+            return issue_number, "github"
+
+        except Exception as e:
+            logger.error(f"Error syncing to GitHub: {e}")
+            return None, None
+
+    def _run_github_sync(self, description, ticket_id=None, status=None, commit_info=None):
+        """Run the async _sync_to_github from synchronous handler code.
+
+        Returns:
+            Tuple of (issue_number: int | None, synced_platform: str | None)
+        """
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(
+                    asyncio.run,
+                    self._sync_to_github(description, ticket_id, status, commit_info),
+                )
+                return future.result()
+        else:
+            return asyncio.run(
+                self._sync_to_github(description, ticket_id, status, commit_info)
+            )
+
     def handle_status_query(self, msg: IPCMessage):
         """Handle status query from Go daemon"""
         logger.info("📊 Status query received")
@@ -1160,6 +1549,16 @@ class DevTrackBridge:
         if self.azure_client:
             try:
                 asyncio.run(self.azure_client.close())
+            except Exception:
+                pass
+        if self.gitlab_client:
+            try:
+                asyncio.run(self.gitlab_client.close())
+            except Exception:
+                pass
+        if self.github_client:
+            try:
+                asyncio.run(self.github_client.close())
             except Exception:
                 pass
         self.running = False

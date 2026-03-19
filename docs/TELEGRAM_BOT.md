@@ -110,6 +110,25 @@ Then send `/status` to your bot on Telegram -- you should get a response with da
 | `/gitlabissue <project_id> <iid>` | Yes | View full details for an issue (live fetch) |
 | `/gitlabcreate` | Yes | Create a new issue interactively (milestone picker shown) |
 
+### GitHub Commands
+
+| Command | Auth Required | Description |
+|---------|:---:|-------------|
+| `/github` | Yes | List open issues assigned to you (live from API) |
+| `/githubissue <number>` | Yes | View full details for a specific issue |
+| `/githubcreate [bug\|feature\|task] <title>` | Yes | Create a new issue (type prefix is optional) |
+
+**Examples:**
+```
+/github
+/githubissue 42
+/githubcreate bug Login page crashes on Safari
+/githubcreate feature Add dark mode support
+/githubcreate Improve CI pipeline speed
+```
+
+Requires `GITHUB_TOKEN`, `GITHUB_OWNER`, and `GITHUB_REPO` in `.env`. See [GitHub Guide](GITHUB.md).
+
 ### PM Agent
 
 | Command | Auth Required | Description |

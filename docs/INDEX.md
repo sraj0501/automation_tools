@@ -30,12 +30,14 @@
 |-------|---------------|
 | [AZURE_DEVOPS.md](AZURE_DEVOPS.md) | Azure DevOps sync, webhooks, assignment poller, work item creation |
 | [GITLAB.md](GITLAB.md) | GitLab sync, issue browsing, assignment poller, Telegram commands |
+| [GITHUB.md](GITHUB.md) | GitHub sync, issue browsing, bidirectional sync, Telegram commands |
+| [MULTI_REPO.md](MULTI_REPO.md) | Monitor multiple repos, each routed to its own PM platform via workspaces.yaml |
 | [PM_AGENT.md](PM_AGENT.md) | AI decomposition of problems into Epic → Story → Task hierarchies |
 
 ### Remote Control
 | Guide | What it covers |
 |-------|---------------|
-| [TELEGRAM_BOT.md](TELEGRAM_BOT.md) | Full bot setup, all commands (Azure, GitLab, PM Agent, scheduler) |
+| [TELEGRAM_BOT.md](TELEGRAM_BOT.md) | Full bot setup, all commands (Azure, GitLab, GitHub, PM Agent, scheduler) |
 
 ### AI & Personalization
 | Guide | What it covers |
@@ -90,6 +92,8 @@ docs/
 ├── Integrations
 │   ├── AZURE_DEVOPS.md       Azure DevOps sync, webhooks, API reference
 │   ├── GITLAB.md             GitLab sync, issue management, poller
+│   ├── GITHUB.md             GitHub sync, issue management, Telegram commands
+│   ├── MULTI_REPO.md         Multi-repo monitoring via workspaces.yaml
 │   ├── PM_AGENT.md           AI work item decomposition
 │   └── TELEGRAM_BOT.md       Telegram remote control
 │

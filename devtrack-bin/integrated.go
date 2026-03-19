@@ -11,28 +11,31 @@ import (
 	"time"
 )
 
-// IntegratedMonitor combines Git monitoring and time-based scheduling
-type IntegratedMonitor struct {
-	gitMonitor   *GitMonitor
-	scheduler    *Scheduler
-	config       *Config
-	ipcServer    *IPCServer
-	database     *Database
-	messageQueue *MessageQueue
+// WorkspaceMonitor pairs a GitMonitor with its workspace routing metadata
+type WorkspaceMonitor struct {
+	gitMonitor    *GitMonitor
+	workspaceName string
+	pmPlatform    string
+	pmProject     string
 }
 
-// NewIntegratedMonitor creates a new integrated monitoring system
+// IntegratedMonitor combines Git monitoring and time-based scheduling
+type IntegratedMonitor struct {
+	workspaceMonitors []*WorkspaceMonitor // one per repo (single-repo has exactly one)
+	scheduler         *Scheduler
+	config            *Config
+	ipcServer         *IPCServer
+	database          *Database
+	messageQueue      *MessageQueue
+}
+
+// NewIntegratedMonitor creates a new integrated monitoring system.
+// repoPath is used as the single workspace when workspaces.yaml is absent.
 func NewIntegratedMonitor(repoPath string) (*IntegratedMonitor, error) {
 	// Load configuration
 	config, err := LoadConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
-	}
-
-	// Create Git monitor
-	gitMonitor, err := NewGitMonitor(repoPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create git monitor: %w", err)
 	}
 
 	// Create IPC server
@@ -47,12 +50,48 @@ func NewIntegratedMonitor(repoPath string) (*IntegratedMonitor, error) {
 		return nil, fmt.Errorf("failed to create database: %w", err)
 	}
 
+	// Build workspace monitors: prefer workspaces.yaml when present
+	var workspaceMonitors []*WorkspaceMonitor
+	wsCfg, err := LoadWorkspacesConfig()
+	if err != nil {
+		log.Printf("Warning: failed to load workspaces.yaml: %v (falling back to single-repo mode)", err)
+	}
+
+	if wsCfg != nil && len(wsCfg.GetEnabledWorkspaces()) > 0 {
+		log.Printf("Multi-repo mode: loading %d workspace(s) from workspaces.yaml", len(wsCfg.GetEnabledWorkspaces()))
+		for _, ws := range wsCfg.GetEnabledWorkspaces() {
+			gm, err := NewGitMonitor(ws.Path)
+			if err != nil {
+				log.Printf("Warning: skipping workspace %q (%s): %v", ws.Name, ws.Path, err)
+				continue
+			}
+			workspaceMonitors = append(workspaceMonitors, &WorkspaceMonitor{
+				gitMonitor:    gm,
+				workspaceName: ws.Name,
+				pmPlatform:    ws.PMPlatform,
+				pmProject:     ws.PMProject,
+			})
+			log.Printf("  ✓ Workspace %q → %s (platform: %q)", ws.Name, ws.Path, ws.PMPlatform)
+		}
+		if len(workspaceMonitors) == 0 {
+			return nil, fmt.Errorf("workspaces.yaml found but no valid workspaces could be loaded")
+		}
+	} else {
+		// Single-repo backward-compat mode
+		log.Printf("Single-repo mode: monitoring %s", repoPath)
+		gm, err := NewGitMonitor(repoPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create git monitor: %w", err)
+		}
+		workspaceMonitors = []*WorkspaceMonitor{{gitMonitor: gm}}
+	}
+
 	// Create integrated monitor
 	monitor := &IntegratedMonitor{
-		gitMonitor: gitMonitor,
-		config:     config,
-		ipcServer:  ipcServer,
-		database:   database,
+		workspaceMonitors: workspaceMonitors,
+		config:            config,
+		ipcServer:         ipcServer,
+		database:          database,
 	}
 
 	// Register IPC handlers
@@ -78,11 +117,20 @@ func (im *IntegratedMonitor) Start() error {
 	}
 	log.Println("✓ IPC server started")
 
-	// Start Git monitor
-	if err := im.gitMonitor.Start(im.handleCommit); err != nil {
-		return fmt.Errorf("failed to start git monitor: %w", err)
+	// Start Git monitor(s) — one per workspace
+	for _, ws := range im.workspaceMonitors {
+		wsCopy := ws // capture for closure
+		if err := wsCopy.gitMonitor.Start(func(commit CommitInfo) {
+			im.handleCommitForWorkspace(commit, wsCopy)
+		}); err != nil {
+			return fmt.Errorf("failed to start git monitor for %q: %w", wsCopy.workspaceName, err)
+		}
+		label := wsCopy.workspaceName
+		if label == "" {
+			label = wsCopy.gitMonitor.repoPath
+		}
+		log.Printf("✓ Git monitor started for %s", label)
 	}
-	log.Println("✓ Git monitor started")
 
 	// Start scheduler
 	if err := im.scheduler.Start(); err != nil {
@@ -121,8 +169,10 @@ func (im *IntegratedMonitor) Stop() {
 		im.ipcServer.Stop()
 	}
 
-	if im.gitMonitor != nil {
-		im.gitMonitor.Stop()
+	for _, ws := range im.workspaceMonitors {
+		if ws.gitMonitor != nil {
+			ws.gitMonitor.Stop()
+		}
 	}
 
 	if im.scheduler != nil {
@@ -253,15 +303,18 @@ func getBoolFromMap(m map[string]interface{}, key string) bool {
 	return false
 }
 
-// handleCommit is called when a Git commit is detected
-func (im *IntegratedMonitor) handleCommit(commit CommitInfo) {
+// handleCommitForWorkspace is called when a Git commit is detected on a specific workspace
+func (im *IntegratedMonitor) handleCommitForWorkspace(commit CommitInfo, ws *WorkspaceMonitor) {
 	event := TriggerEvent{
-		Type:      TriggerTypeCommit,
-		Timestamp: commit.Timestamp,
-		Source:    "git",
-		Data:      commit,
+		Type:          TriggerTypeCommit,
+		Timestamp:     commit.Timestamp,
+		Source:        "git",
+		Data:          commit,
+		RepoPath:      ws.gitMonitor.repoPath,
+		WorkspaceName: ws.workspaceName,
+		PMPlatform:    ws.pmPlatform,
+		PMProject:     ws.pmProject,
 	}
-
 	im.handleTrigger(event)
 }
 
@@ -285,16 +338,22 @@ func (im *IntegratedMonitor) handleTrigger(event TriggerEvent) {
 			if len(commit.Files) > 0 {
 				fmt.Printf("Files:     %d changed\n", len(commit.Files))
 			}
+			if event.WorkspaceName != "" {
+				fmt.Printf("Workspace: %s (%s)\n", event.WorkspaceName, event.PMPlatform)
+			}
 
 			// Create IPC message for commit trigger
 			ipcMsg = CreateCommitTriggerMessage(CommitTriggerData{
-				RepoPath:      im.gitMonitor.repoPath,
+				RepoPath:      event.RepoPath,
 				CommitHash:    commit.Hash,
 				CommitMessage: commit.Message,
 				Author:        commit.Author,
 				Timestamp:     commit.Timestamp.Format(time.RFC3339),
 				FilesChanged:  commit.Files,
 				Branch:        "", // Branch info not available in CommitInfo
+				WorkspaceName: event.WorkspaceName,
+				PMPlatform:    event.PMPlatform,
+				PMProject:     event.PMProject,
 			})
 
 			// Prepare database record
@@ -302,7 +361,7 @@ func (im *IntegratedMonitor) handleTrigger(event TriggerEvent) {
 				TriggerType:   "commit",
 				Timestamp:     event.Timestamp,
 				Source:        "git",
-				RepoPath:      im.gitMonitor.repoPath,
+				RepoPath:      event.RepoPath,
 				CommitHash:    commit.Hash,
 				CommitMessage: commit.Message,
 				Author:        commit.Author,
@@ -395,7 +454,17 @@ func (im *IntegratedMonitor) GetStatus() map[string]interface{} {
 
 	// Git monitor status
 	status["git_monitoring"] = true
-	status["repo_path"] = im.gitMonitor.repoPath
+	status["workspace_count"] = len(im.workspaceMonitors)
+	if len(im.workspaceMonitors) > 0 {
+		status["repo_path"] = im.workspaceMonitors[0].gitMonitor.repoPath
+	}
+	if len(im.workspaceMonitors) > 1 {
+		paths := make([]string, len(im.workspaceMonitors))
+		for i, ws := range im.workspaceMonitors {
+			paths[i] = ws.gitMonitor.repoPath
+		}
+		status["all_repo_paths"] = paths
+	}
 
 	return status
 }
@@ -478,6 +547,7 @@ func TestIntegrated() {
 
 				fmt.Printf("\nGit Monitoring:\n")
 				fmt.Printf("  Active: %v\n", status["git_monitoring"])
+				fmt.Printf("  Workspaces: %v\n", status["workspace_count"])
 				fmt.Printf("  Repo: %v\n", status["repo_path"])
 				fmt.Println()
 			case "q", "Q":

@@ -44,6 +44,9 @@ class MessageType(str, Enum):
     WEBHOOK_EVENT = "webhook_event"
     EXTERNAL_UPDATE = "external_update"
 
+    # Workspace management
+    WORKSPACE_RELOAD = "workspace_reload"
+
 
 class IPCMessage:
     """Represents an IPC message"""
