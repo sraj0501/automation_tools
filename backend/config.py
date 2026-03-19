@@ -791,6 +791,83 @@ def get_azure_sync_goal_state_completed() -> str:
     return get("AZURE_SYNC_GOAL_STATE_COMPLETED") or get_azure_done_state()
 
 
+# ── GitLab sync ───────────────────────────────────────────────────────────────
+
+def is_gitlab_sync_enabled() -> bool:
+    return get_bool("GITLAB_SYNC_ENABLED", default=False)
+
+def is_gitlab_auto_comment() -> bool:
+    return get_bool("GITLAB_AUTO_COMMENT", default=True)
+
+def is_gitlab_auto_transition() -> bool:
+    return get_bool("GITLAB_AUTO_TRANSITION", default=False)
+
+def is_gitlab_create_on_no_match() -> bool:
+    return get_bool("GITLAB_CREATE_ON_NO_MATCH", default=False)
+
+def get_gitlab_match_threshold() -> float:
+    val = get("GITLAB_MATCH_THRESHOLD")
+    try:
+        return float(val) if val else 0.6
+    except ValueError:
+        return 0.6
+
+def get_gitlab_done_state() -> str:
+    return get("GITLAB_DONE_STATE") or "closed"
+
+def get_gitlab_sync_label() -> str:
+    return get("GITLAB_SYNC_LABEL") or "devtrack"
+
+def get_gitlab_default_project_id() -> Optional[int]:
+    val = get("GITLAB_PROJECT_ID")
+    try:
+        return int(val) if val else None
+    except ValueError:
+        return None
+
+
+# ── GitHub sync ───────────────────────────────────────────────────────────────
+
+def is_github_sync_enabled() -> bool:
+    """Whether bidirectional GitHub issue sync is enabled. GITHUB_SYNC_ENABLED (default: false)."""
+    return get_bool("GITHUB_SYNC_ENABLED", False)
+
+
+def is_github_auto_comment() -> bool:
+    """Auto-add comments on matched GitHub issues. GITHUB_AUTO_COMMENT (default: true)."""
+    return get_bool("GITHUB_AUTO_COMMENT", True)
+
+
+def is_github_auto_transition() -> bool:
+    """Auto-close/reopen GitHub issues on status change. GITHUB_AUTO_TRANSITION (default: false)."""
+    return get_bool("GITHUB_AUTO_TRANSITION", False)
+
+
+def is_github_create_on_no_match() -> bool:
+    """Create a new GitHub issue when no match found. GITHUB_CREATE_ON_NO_MATCH (default: false)."""
+    return get_bool("GITHUB_CREATE_ON_NO_MATCH", False)
+
+
+def get_github_match_threshold() -> float:
+    """Minimum confidence for auto-matching tasks to GitHub issues (0.0-1.0).
+    GITHUB_MATCH_THRESHOLD (default: 0.6)."""
+    val = get("GITHUB_MATCH_THRESHOLD")
+    try:
+        return float(val) if val else 0.6
+    except ValueError:
+        return 0.6
+
+
+def get_github_done_state() -> str:
+    """GitHub issue state used when marking tasks done. GITHUB_DONE_STATE (default: closed)."""
+    return get("GITHUB_DONE_STATE") or "closed"
+
+
+def get_github_sync_label() -> str:
+    """Label applied to GitHub issues managed by DevTrack. GITHUB_SYNC_LABEL (default: devtrack)."""
+    return get("GITHUB_SYNC_LABEL") or "devtrack"
+
+
 # ── Telegram bot ─────────────────────────────────────────────────────────────
 
 def is_telegram_enabled() -> bool:

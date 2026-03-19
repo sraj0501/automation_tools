@@ -67,6 +67,10 @@ def register_handlers(app: Application, bot: "DevTrackBot"):
     app.add_handler(CommandHandler("gitlabcreate", _make_handler(bot, _cmd_gitlab_create)))
     app.add_handler(CallbackQueryHandler(_on_view_gitlab_issue, pattern=r"^view_gitlab_issue:"))
     app.add_handler(CallbackQueryHandler(_on_gitlab_milestone_selected, pattern=r"^gitlab_milestone:"))
+    # GitHub commands
+    app.add_handler(CommandHandler("github", _make_handler(bot, _cmd_github)))
+    app.add_handler(CommandHandler("githubissue", _make_handler(bot, _cmd_github_issue)))
+    app.add_handler(CommandHandler("githubcreate", _make_handler(bot, _cmd_github_create)))
     # PM Agent commands
     app.add_handler(CommandHandler("plan", _make_handler(bot, _cmd_plan)))
     app.add_handler(CallbackQueryHandler(_on_plan_platform_selected, pattern=r"^plan_platform:"))
@@ -113,6 +117,9 @@ async def _cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/gitlab -- GitLab issues assigned to me (from cache)\n"
         "/gitlabissue <project\\_id> <iid> -- Fetch a single issue live\n"
         "/gitlabcreate <title> -- Create a new GitLab issue\n"
+        "/github -- GitHub issues assigned to me\n"
+        "/githubissue <number> -- Full details of a specific issue\n"
+        "/githubcreate <title> -- Create a new GitHub issue\n"
         "/plan <problem statement> -- Decompose into work items and create in PM platform\n"
         "/help -- Show this message",
         parse_mode="Markdown"
@@ -1039,6 +1046,175 @@ async def _on_view_gitlab_issue(update: Update, context: ContextTypes.DEFAULT_TY
 
     except Exception as e:
         await query.message.reply_text(f"Error: {e}")
+
+
+# ---------------------------------------------------------------------------
+# GitHub command handlers
+# ---------------------------------------------------------------------------
+
+async def _cmd_github(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "DevTrackBot"):
+    """Handle /github -- list GitHub issues assigned to me."""
+    await update.message.reply_text("Fetching your GitHub issues...")
+    try:
+        from backend.github.client import GitHubClient
+        client = GitHubClient()
+        if not client.is_configured():
+            await update.message.reply_text(
+                "GitHub is not configured. Set <code>GITHUB_TOKEN</code>, "
+                "<code>GITHUB_OWNER</code>, and <code>GITHUB_REPO</code> in your <code>.env</code>.",
+                parse_mode="HTML"
+            )
+            return
+
+        issues = await client.get_my_issues(state="open")
+        await client.close()
+
+        if not issues:
+            await update.message.reply_text("No open GitHub issues assigned to you.")
+            return
+
+        lines = [f"<b>GitHub — My Issues</b> ({len(issues)} open)\n"]
+        for issue in issues:
+            labels = _h(", ".join(issue.labels)) if issue.labels else ""
+            milestone = _h(issue.milestone or "")
+            lines.append(f"\n<code>#{issue.number}</code> <b>{_h(issue.title)}</b>")
+            lines.append(f"  State: {_h(issue.state)}")
+            if milestone:
+                lines.append(f"  Milestone: {milestone}")
+            if labels:
+                lines.append(f"  Labels: {labels}")
+            lines.append(f"  <a href='{issue.html_url}'>View on GitHub</a>")
+
+        text = "\n".join(lines)
+        # Split if too long
+        if len(text) > MAX_MSG_LEN - 50:
+            text = text[:MAX_MSG_LEN - 50] + "\n... (truncated)\n\n/githubissue &lt;number&gt; for details"
+
+        await update.message.reply_text(text, parse_mode="HTML", disable_web_page_preview=True)
+
+    except Exception as e:
+        await update.message.reply_text(f"Error: {e}")
+
+
+async def _cmd_github_issue(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "DevTrackBot"):
+    """Handle /githubissue <number> -- fetch single issue live."""
+    if not context.args:
+        await update.message.reply_text("Usage: /githubissue <issue-number>")
+        return
+
+    try:
+        number = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("Issue number must be an integer.")
+        return
+
+    await update.message.reply_text(f"Fetching GitHub issue #{number}...")
+
+    try:
+        from backend.github.client import GitHubClient
+        client = GitHubClient()
+        if not client.is_configured():
+            await update.message.reply_text(
+                "GitHub is not configured. Check your <code>.env</code>.", parse_mode="HTML"
+            )
+            return
+
+        issue = await client.get_issue(number)
+        await client.close()
+
+        if not issue:
+            await update.message.reply_text(f"Issue #{number} not found.")
+            return
+
+        lines = [
+            f"<code>#{issue.number}</code> <b>{_h(issue.title)}</b>",
+            "",
+            f"<b>State:</b> {_h(issue.state)}",
+        ]
+        if issue.assignees:
+            lines.append(f"<b>Assigned:</b> {_h(', '.join(issue.assignees))}")
+        if issue.milestone:
+            lines.append(f"<b>Milestone:</b> {_h(issue.milestone)}")
+        if issue.labels:
+            lines.append(f"<b>Labels:</b> {_h(', '.join(issue.labels))}")
+        if issue.created_at:
+            lines.append(f"<b>Created:</b> {_h(issue.created_at[:10])}")
+        if issue.html_url:
+            lines.append(f"<b>URL:</b> {issue.html_url}")
+        if issue.body:
+            clean = _strip_html_entities(issue.body)
+            if clean:
+                if len(clean) > 800:
+                    clean = clean[:800] + "..."
+                lines.append(f"\n<b>Description:</b>\n<i>{_h(clean)}</i>")
+
+        text = "\n".join(lines)
+        if len(text) > MAX_MSG_LEN - 20:
+            text = text[:MAX_MSG_LEN - 20] + "\n... (truncated)"
+        await update.message.reply_text(text, parse_mode="HTML", disable_web_page_preview=True)
+
+    except Exception as e:
+        await update.message.reply_text(f"Error: {e}")
+
+
+async def _cmd_github_create(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "DevTrackBot"):
+    """Handle /githubcreate [bug|feature] <title> -- create a GitHub issue."""
+    if not context.args:
+        await update.message.reply_text(
+            "Usage:\n"
+            "<code>/githubcreate Fix the login bug</code>\n"
+            "<code>/githubcreate bug Fix the login bug</code>\n"
+            "<code>/githubcreate feature Add dark mode</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    LABEL_ALIASES = {"bug": "bug", "feature": "enhancement", "task": "task", "enhancement": "enhancement"}
+    label = None
+    args = list(context.args)
+
+    if args[0].lower() in LABEL_ALIASES:
+        label = LABEL_ALIASES[args.pop(0).lower()]
+
+    if not args:
+        await update.message.reply_text("Please provide a title.")
+        return
+
+    title = " ".join(args)
+
+    await update.message.reply_text(
+        f"Creating GitHub issue: <i>{_h(title)}</i>...",
+        parse_mode="HTML"
+    )
+
+    try:
+        from backend.github.client import GitHubClient
+        client = GitHubClient()
+        if not client.is_configured():
+            await update.message.reply_text(
+                "GitHub is not configured. Check your <code>.env</code>.", parse_mode="HTML"
+            )
+            return
+
+        labels = [label] if label else []
+        issue = await client.create_issue(title=title, labels=labels)
+        await client.close()
+
+        if not issue:
+            await update.message.reply_text("Failed to create issue. Check the logs.")
+            return
+
+        label_str = f" [{label}]" if label else ""
+        await update.message.reply_text(
+            f"Created GitHub issue{label_str}\n"
+            f"<code>#{issue.number}</code> <b>{_h(issue.title)}</b>\n"
+            f"{issue.html_url}",
+            parse_mode="HTML",
+            disable_web_page_preview=True
+        )
+
+    except Exception as e:
+        await update.message.reply_text(f"Error: {e}")
 
 
 # ---------------------------------------------------------------------------
