@@ -1,325 +1,128 @@
-# DevTrack - Developer Automation Tools
+# DevTrack
 
-> An intelligent system that automates developer timesheet tracking, task management, and progress reporting through Git monitoring and AI-powered natural language processing.
-
-## Documentation Hub
-
-Start here to find what you need:
-
-| Purpose | Documentation |
-|---------|---|
-| **New to DevTrack?** | Read [Getting Started](docs/GETTING_STARTED.md) |
-| **Setup & Installation** | See [Installation Guide](docs/INSTALLATION.md) |
-| **Understanding the vision** | Check [Vision & Roadmap](docs/VISION.md) |
-| **How it works** | Read [Architecture Overview](docs/ARCHITECTURE.md) |
-| **Using DevTrack** | See [Quick Start Guide](docs/QUICK_START.md) |
-| **Git workflow tools** | Check [Git Features](docs/GIT_FEATURES.md) & [Commit Workflow](GIT_COMMIT_WORKFLOW.md) |
-| **LLM Configuration** | Read [LLM Guide](docs/LLM_GUIDE.md) |
-| **Phase Status** | See [Roadmap & Phases](docs/PHASES.md) |
-| **Development Guide** | Check [CLAUDE.md](CLAUDE.md) (for developers) |
-| **Offline resilience** | See [Offline Resilience](docs/OFFLINE_RESILIENCE.md) |
-| **All Documentation** | See [Complete Index](docs/INDEX.md) |
+> Developer automation that handles the overhead so you can focus on coding.
+> Monitors your Git activity, prompts for work updates, routes them through AI, and keeps your project management systems in sync — all running locally on your machine.
 
 ---
 
-## Quick Overview
+## What DevTrack Does
 
-DevTrack combines background process automation with AI intelligence to:
+- **Watches your Git commits** and fires AI-enhanced work update prompts at the right moments
+- **Understands natural language** — "Working on PR #42 auth bug (2 hours)" extracts the ticket, time, and status automatically
+- **Syncs to Azure DevOps and GitLab** — comments on matched work items, transitions states, creates missing items
+- **Learns your communication style** from Teams messages and writes updates in your voice
+- **Runs 100% locally** — Ollama for AI, SQLite for storage, no cloud required
+- **Works offline** — queues everything and syncs when connectivity returns
+- **Remote-controllable** via a Telegram bot on your phone
 
-- Monitor your Git activity and trigger smart prompts at key moments
-- Parse natural language updates into structured task data
-- Learn your communication style from Teams, Azure DevOps, and Outlook
-- Generate responses in YOUR voice using privacy-first local AI
-- Integrate with Azure DevOps, GitHub, Jira, and Microsoft Lists
-- Update tasks automatically in project tracking systems
-- Generate professional reports for managers and stakeholders
-- Track time and productivity without manual timesheet entry
+---
 
-## Configuration Required
+## Documentation
 
-DevTrack requires **explicit configuration** with no hardcoded defaults. All configuration comes from a single `.env` file with **12 required variables**:
+**Start here:** [docs/INDEX.md](docs/INDEX.md)
+
+| I want to… | Go to |
+|-----------|-------|
+| Understand what DevTrack is | [Getting Started](docs/GETTING_STARTED.md) |
+| Install DevTrack | [Installation Guide](docs/INSTALLATION.md) |
+| Run it for the first time | [Quick Start](docs/QUICK_START.md) |
+| See all CLI commands | [CLI Reference](docs/CLI_REFERENCE.md) |
+| Configure `.env` | [Configuration Reference](docs/CONFIGURATION.md) |
+| Set up AI commits / git-sage | [Git Features](docs/GIT_FEATURES.md) · [git-sage](docs/GIT_SAGE.md) |
+| Connect Azure DevOps | [Azure DevOps Guide](docs/AZURE_DEVOPS.md) |
+| Connect GitLab | [GitLab Guide](docs/GITLAB.md) |
+| Use the Telegram bot | [Telegram Bot Setup](docs/TELEGRAM_BOT.md) |
+| Use the PM Agent (`/plan`) | [PM Agent Guide](docs/PM_AGENT.md) |
+| Set up AI providers | [LLM Guide](docs/LLM_GUIDE.md) |
+| Enable "Talk Like You" | [Personalization](docs/PERSONALIZATION.md) |
+| Fix a problem | [Troubleshooting](docs/TROUBLESHOOTING.md) |
+| Understand the architecture | [Architecture](docs/ARCHITECTURE.md) |
+| Contribute or modify DevTrack | [CLAUDE.md](CLAUDE.md) |
+
+---
+
+## 5-Minute Setup
 
 ```bash
-# Copy and configure (MUST set all variables)
-cp .env_sample .env
-nano .env  # Edit with YOUR paths and settings
-```
-
-**Required variables** (no defaults - must be set):
-
-- Timeouts: `IPC_CONNECT_TIMEOUT_SECS`, `HTTP_TIMEOUT_SHORT`, `HTTP_TIMEOUT`, `HTTP_TIMEOUT_LONG`
-- Hosts: `OLLAMA_HOST`, `LMSTUDIO_HOST`
-- Model: `GIT_SAGE_DEFAULT_MODEL`
-- Delays: `IPC_RETRY_DELAY_MS`
-- Prompts: `PROMPT_TIMEOUT_SIMPLE_SECS`, `PROMPT_TIMEOUT_WORK_SECS`, `PROMPT_TIMEOUT_TASK_SECS`
-- LLM: `LLM_REQUEST_TIMEOUT_SECS`
-- Sentiment: `SENTIMENT_ANALYSIS_WINDOW_MINUTES`
-
-See [Configuration Reference](docs/CONFIGURATION.md) for complete list with examples.
-
-## 30-Second Start
-
-```bash
-# 1. Clone and configure (MUST do this)
+# 1. Clone and configure
 git clone https://github.com/yourusername/automation_tools.git
 cd automation_tools
 cp .env_sample .env
-nano .env  # IMPORTANT: Set all required variables!
+nano .env   # Set PROJECT_ROOT, DEVTRACK_WORKSPACE, DATA_DIR
 
-# 2. Install dependencies
+# 2. Install Python deps
 uv sync
+uv run python -m spacy download en_core_web_sm
 
 # 3. Build the Go daemon
-cd devtrack-bin && go build -o devtrack .
-mv devtrack ~/.local/bin/
+cd devtrack-bin && go build -o devtrack . && mv devtrack ~/.local/bin/
+cd ..
 
-# 4. Start monitoring
-devtrack start &
+# 4. Start
+devtrack start
 devtrack status
-
-# 5. Make a commit - see AI magic
-git commit -m "Working on auth feature (2h)"
 ```
 
-**Note**: Daemon will fail at startup if any required variables are missing (this is intentional for safety).
-
-For detailed setup, see [Installation Guide](docs/INSTALLATION.md) and [Configuration Reference](docs/CONFIGURATION.md).
+See [Installation Guide](docs/INSTALLATION.md) for the full walkthrough.
 
 ---
 
 ## Core Features
 
-### Git Workflow Enhancement (Phases 1-3)
-
-- **Enhanced Commit Messages**: AI-powered context-aware commit messages with branch/PR information
-- **Conflict Resolution**: Automatic merge conflict detection and smart resolution
-- **Work Update Parsing**: Natural language work updates with PR/issue auto-detection
-- **Daily Reports**: AI-enhanced daily and weekly report generation
-
-### AI-Powered Processing
-
-- **Local-First**: 100% offline-capable with Ollama (no external AI required)
-- **Hybrid LLM**: Optional integration with OpenAI, Anthropic, or custom LLMs
-- **NLP Parsing**: spaCy-based natural language processing for task extraction
-- **Learning**: Personalized AI that learns from your communication style
-
-### Integrations
-
-- **Project Management**: Azure DevOps, GitHub, Jira
-- **Communication**: Microsoft Teams, Outlook
-- **Task Tracking**: Automatic updates to linked tasks and stories
-
-### Offline-First Resilience
-
-- **Store-and-Forward**: Triggers queued in SQLite when Python bridge is offline, auto-delivered on reconnect
-- **Deferred Commits**: Queue commits for AI enhancement later when Ollama is down
-- **Health Monitoring**: Periodic checks on all services (IPC, Ollama, MongoDB, Azure DevOps, webhook)
-- **Auto-Restart**: Crashed Python bridge or webhook server automatically restarted (rate-limited)
-- **Health Dashboard**: `devtrack status` shows full service health, queue stats, deferred commits
-
----
-
-## Technology Stack
-
-### Backend (Go)
-
-- Go 1.20+ daemon for monitoring and triggers
-- fsnotify for real-time Git repository monitoring
-- Cron-based scheduling with configurable intervals
-- SQLite for local caching and trigger history
-- TCP-based IPC for Go ↔ Python communication
-
-### Intelligence (Python 3.12+)
-
-- **uv** for fast dependency management
-- **spaCy** (en_core_web_sm) for NLP and entity recognition
-- **OLLAMA** for local LLM processing (privacy-first)
-- **sentence-transformers** for semantic task matching
-- **python-dotenv** for environment configuration
-- Microsoft Graph SDK for Teams/Outlook integrations
-
-### Integrations
-
-- Azure DevOps REST API
-- Microsoft Graph API (Teams, Email, Lists)
-- GitHub API
-- Jira API
-
----
-
-## Project Status
-
-**Current Phase**: Phase 4+ (Advanced Features & Offline Resilience)
-**Overall Progress**: ~90% Complete
-
-### Completed Phases
-
-- **Phase 1**: Enhanced Commit Messages ✅
-- **Phase 2**: Conflict Resolution & PR-Aware Parsing ✅
-- **Phase 3**: Event-Driven Integration ✅
-
-### Current Phase (Phase 4+)
-
-- Enhanced Integrations and advanced features
-- Offline-first resilience (store-and-forward, health monitoring, deferred commits)
-- Dashboard and analytics
-- Mobile notifications
-- Plugin system
-
-For detailed phase information, see [Roadmap & Phases](docs/PHASES.md).
-
----
-
-## Installation Options
-
-### Option 1: Local Installation (Recommended for Development)
-
-Run DevTrack natively on your system without Docker for faster iteration and easier debugging.
-
-**Prerequisites**:
-
-- Go 1.20+ ([Download](https://go.dev/dl/))
-- Python 3.12+ with uv package manager ([Install uv](https://github.com/astral-sh/uv))
-- Git (for repository monitoring)
-- Ollama (optional, for AI features) ([Download](https://ollama.com/download))
-
-**Setup**:
-
+### AI-Enhanced Git Workflow
 ```bash
-git clone https://github.com/yourusername/automation_tools.git
-cd automation_tools
-cp .env_sample .env
-# Edit .env - set PROJECT_ROOT to your repo path
-uv sync
-cd devtrack-bin && go build -o devtrack .
-mv devtrack ~/.local/bin/
-devtrack start &
+devtrack git commit -m "fix auth redirect"
+# → AI refines the message with branch/PR context → Accept / Enhance / Regenerate
 ```
 
-See [Installation Guide](docs/INSTALLATION.md) for complete step-by-step instructions.
-
-### Option 2: Containerized Setup (Cross-Platform)
-
-This workflow runs the full stack on macOS, Windows, and Linux with the same commands.
-
+### git-sage — Local LLM Git Agent
 ```bash
-# Copy .env_sample to .env and configure
-cp .env_sample .env
+uv run python -m backend.git_sage do "squash my last 5 commits"
+uv run python -m backend.git_sage ask "how do I rebase onto main?"
+```
 
-# Start Ollama on host machine
-ollama serve
+### Azure DevOps & GitLab
+```bash
+devtrack azure-list          # work items assigned to you
+devtrack azure-sync          # pull everything from Azure
+devtrack gitlab-list         # GitLab issues assigned to you
+devtrack gitlab-view 12345 42
+```
 
-# Launch DevTrack container
-DOCKER_BUILDKIT=1 docker compose up devtrack
+### PM Agent (via Telegram)
+```
+/plan Build a payment processing system
+→ LLM decomposes → Epic + Stories + Tasks → Creates in Azure / GitLab / GitHub
+```
+
+### Personalized AI
+```bash
+devtrack enable-learning      # opt in to style learning from Teams
+devtrack show-profile         # view your inferred writing style
+devtrack test-response "Completed auth module"  # see it in action
 ```
 
 ---
 
-## Privacy & Security
+## Technology
 
-DevTrack is built with privacy as a core principle:
-
-- All data stored locally on your machine
-- No cloud AI services by default (uses local Ollama)
-- Explicit consent required for AI learning features
-- Complete transparency about data collection
-- Full data deletion option available anytime
-
----
-
-## Common Commands
-
-```bash
-# Daemon Control
-devtrack start              # Start monitoring
-devtrack stop               # Stop daemon
-devtrack restart            # Restart with new config
-devtrack status             # Show running status
-
-# Scheduler Control
-devtrack pause              # Pause scheduled triggers
-devtrack resume             # Resume scheduler
-devtrack force-trigger      # Trigger immediately
-devtrack skip-next          # Skip next scheduled trigger
-
-# Git (AI-Enhanced)
-devtrack git commit -m "msg"          # AI-enhanced commit
-devtrack git commit -m "msg" --no-enhance  # Skip AI enhancement
-devtrack git history                  # Show commit history
-
-# Offline Resilience
-devtrack queue               # Message queue stats
-devtrack commits pending     # List deferred commits
-devtrack commits review      # Review AI-enhanced commits
-
-# Information
-devtrack logs               # View recent logs
-devtrack db-stats           # Database statistics
-devtrack version            # Version information
-devtrack help               # Full command list
-```
+| Layer | Stack |
+|-------|-------|
+| Daemon | Go 1.20+, fsnotify, robfig/cron, modernc/sqlite |
+| AI bridge | Python 3.12+, uv, spaCy, aiohttp |
+| Local LLM | Ollama (default) — also OpenAI, Anthropic, Groq, LM Studio |
+| Storage | SQLite (triggers/history), ChromaDB (RAG), optional MongoDB |
+| Remote control | Telegram bot via python-telegram-bot |
+| PM integrations | Azure DevOps REST API, GitLab REST API, GitHub REST API |
 
 ---
 
-## Troubleshooting
+## Privacy
 
-### Python Version Issues
-
-```bash
-# DevTrack requires Python 3.12 or 3.13 (not 3.14+)
-python3 --version
-
-# If using Python 3.14, uv will automatically downgrade based on pyproject.toml
-```
-
-### spaCy NLP Model Not Found
-
-```bash
-uv run python -m spacy download en_core_web_sm
-```
-
-### Daemon Won't Start
-
-```bash
-# Check logs for errors
-tail -50 ~/.devtrack/daemon.log
-
-# Verify .env file exists
-cat .env | grep PROJECT_ROOT
-
-# Check if port is already in use
-lsof -i :35893
-```
-
-See [Troubleshooting Guide](docs/TROUBLESHOOTING.md) for more solutions.
-
----
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-For development setup and architecture details, see [CLAUDE.md](CLAUDE.md).
-
----
-
-## Support
-
-- **Documentation**: [Complete Documentation Index](docs/INDEX.md)
-- **Architecture**: [System Architecture](docs/ARCHITECTURE.md)
-- **Issues**: [GitHub Issues](https://github.com/sraj0501/automation_tools/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/sraj0501/automation_tools/discussions)
+All data stays on your machine. Ollama runs locally. External AI services (OpenAI, Anthropic, Groq) are optional — only the prompt text is sent, never full commit history or personal context. Learning from Teams requires explicit opt-in and can be deleted anytime.
 
 ---
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
----
-
-**Note**: This tool is designed for individual and team productivity enhancement. Ensure you have appropriate licenses and permissions for all integrated services.
+MIT License — see [LICENSE](LICENSE).

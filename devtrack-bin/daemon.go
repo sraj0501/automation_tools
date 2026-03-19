@@ -26,6 +26,7 @@ type Daemon struct {
 	webhookServer     *exec.Cmd
 	telegramBot       *exec.Cmd
 	assignmentPoller  *exec.Cmd
+	gitlabPoller      *exec.Cmd
 	startTime     time.Time
 	healthMonitor *HealthMonitor
 }
@@ -130,7 +131,12 @@ func (d *Daemon) Start() error {
 
 	// Start Azure assignment poller if enabled
 	if err := d.startAssignmentPoller(); err != nil {
-		log.Printf("Warning: Failed to start assignment poller: %v", err)
+		log.Printf("Warning: Failed to start Azure assignment poller: %v", err)
+	}
+
+	// Start GitLab assignment poller if enabled
+	if err := d.startGitLabPoller(); err != nil {
+		log.Printf("Warning: Failed to start GitLab assignment poller: %v", err)
 	}
 
 	d.isRunning = true
@@ -188,9 +194,14 @@ func (d *Daemon) Stop() error {
 		}
 	}
 
-	// Stop assignment poller
+	// Stop Azure assignment poller
 	if d.assignmentPoller != nil {
 		d.assignmentPoller.Process.Kill()
+	}
+
+	// Stop GitLab assignment poller
+	if d.gitlabPoller != nil {
+		d.gitlabPoller.Process.Kill()
 	}
 
 	// Stop webhook server
@@ -601,6 +612,52 @@ func (d *Daemon) startAssignmentPoller() error {
 	d.assignmentPoller = cmd
 	log.Printf("✓ Azure assignment poller started (PID: %d)", cmd.Process.Pid)
 	return nil
+}
+
+// startGitLabPoller starts the GitLab assignment poller if GITLAB_POLL_ENABLED=true
+func (d *Daemon) startGitLabPoller() error {
+	if !IsGitLabPollerEnabled() {
+		log.Println("GitLab assignment poller disabled (GITLAB_POLL_ENABLED is not true)")
+		return nil
+	}
+
+	// Kill any stale poller from a previous run
+	exec.Command("pkill", "-f", "gitlab/assignment_poller").Run() //nolint
+
+	projectRoot := os.Getenv("PROJECT_ROOT")
+	scriptPath := filepath.Join(projectRoot, "backend", "gitlab", "assignment_poller.py")
+
+	var cmd *exec.Cmd
+	if projectRoot != "" {
+		cmd = exec.Command("uv", "run", "--directory", projectRoot, "python", scriptPath)
+		cmd.Dir = projectRoot
+	} else {
+		cmd = exec.Command("python3", scriptPath)
+	}
+
+	logFile, err := os.OpenFile(d.logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open log file for GitLab poller: %w", err)
+	}
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start GitLab assignment poller: %w", err)
+	}
+
+	d.gitlabPoller = cmd
+	log.Printf("✓ GitLab assignment poller started (PID: %d)", cmd.Process.Pid)
+	return nil
+}
+
+// restartGitLabPoller restarts the GitLab assignment poller process
+func (d *Daemon) restartGitLabPoller() error {
+	if d.gitlabPoller != nil && d.gitlabPoller.Process != nil {
+		d.gitlabPoller.Process.Kill()
+		d.gitlabPoller.Process.Wait()
+	}
+	return d.startGitLabPoller()
 }
 
 // startTelegramBot starts the Telegram bot process if TELEGRAM_ENABLED=true

@@ -20,7 +20,7 @@ func NewCLI() (*CLI, error) {
 	// For status/help commands, we don't need a full daemon
 	if len(os.Args) > 1 {
 		cmd := os.Args[1]
-		if cmd == "help" || cmd == "version" || cmd == "commit-queue" || cmd == "commits" || cmd == "queue" || cmd == "telegram-status" || cmd == "azure-check" {
+		if cmd == "help" || cmd == "version" || cmd == "commit-queue" || cmd == "commits" || cmd == "queue" || cmd == "telegram-status" || cmd == "azure-check" || cmd == "gitlab-check" {
 			return &CLI{}, nil
 		}
 	}
@@ -151,6 +151,14 @@ func (cli *CLI) Execute() error {
 		return cli.handleAzureSync()
 	case "azure-view":
 		return cli.handleAzureView()
+	case "gitlab-check":
+		return cli.handleGitLabCheck()
+	case "gitlab-list":
+		return cli.handleGitLabList()
+	case "gitlab-sync":
+		return cli.handleGitLabSync()
+	case "gitlab-view":
+		return cli.handleGitLabView()
 	case "settings":
 		return cli.handleSettings()
 	case "help":
@@ -1195,6 +1203,119 @@ func (cli *CLI) handleAzureView() error {
 	return nil
 }
 
+// handleGitLabCheck verifies GitLab config and connectivity
+func (cli *CLI) handleGitLabCheck() error {
+	config, _ := LoadEnvConfig()
+	projectRoot := ""
+	if config != nil {
+		projectRoot = config.ProjectRoot
+	}
+	if projectRoot == "" {
+		projectRoot = os.Getenv("PROJECT_ROOT")
+	}
+
+	scriptPath := filepath.Join(projectRoot, "backend", "gitlab", "check.py")
+	args := []string{"run", "--directory", projectRoot, "python", scriptPath}
+	cmd := exec.Command("uv", args...)
+	if projectRoot != "" {
+		cmd.Dir = projectRoot
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// handleGitLabList lists GitLab issues assigned to the user
+func (cli *CLI) handleGitLabList() error {
+	config, _ := LoadEnvConfig()
+	projectRoot := ""
+	if config != nil {
+		projectRoot = config.ProjectRoot
+	}
+	if projectRoot == "" {
+		projectRoot = os.Getenv("PROJECT_ROOT")
+	}
+
+	scriptPath := filepath.Join(projectRoot, "backend", "gitlab", "list_items.py")
+	args := []string{"run", "--directory", projectRoot, "python", scriptPath}
+	args = append(args, os.Args[2:]...) // forward --closed, --state flags
+	cmd := exec.Command("uv", args...)
+	if projectRoot != "" {
+		cmd.Dir = projectRoot
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// handleGitLabSync runs a manual sync with GitLab.
+// Passes --full or --hours N through from CLI args.
+func (cli *CLI) handleGitLabSync() error {
+	config, _ := LoadEnvConfig()
+	projectRoot := ""
+	if config != nil {
+		projectRoot = config.ProjectRoot
+	}
+	if projectRoot == "" {
+		projectRoot = os.Getenv("PROJECT_ROOT")
+	}
+
+	scriptPath := filepath.Join(projectRoot, "backend", "gitlab", "run_sync.py")
+	uvArgs := []string{"run", "--directory", projectRoot, "python", scriptPath}
+
+	// Forward any flags after "gitlab-sync" (e.g. --full, --hours 24)
+	if len(os.Args) > 2 {
+		uvArgs = append(uvArgs, os.Args[2:]...)
+	}
+
+	cmd := exec.Command("uv", uvArgs...)
+	if projectRoot != "" {
+		cmd.Dir = projectRoot
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// handleGitLabView shows details for a specific GitLab issue
+func (cli *CLI) handleGitLabView() error {
+	if len(os.Args) < 4 {
+		fmt.Println("Usage: devtrack gitlab-view <project_id> <issue_iid>")
+		return fmt.Errorf("missing project_id and/or issue_iid")
+	}
+
+	config, _ := LoadEnvConfig()
+	projectRoot := ""
+	if config != nil {
+		projectRoot = config.ProjectRoot
+	}
+	if projectRoot == "" {
+		projectRoot = os.Getenv("PROJECT_ROOT")
+	}
+
+	scriptPath := filepath.Join(projectRoot, "backend", "gitlab", "view_item.py")
+	args := []string{"run", "--directory", projectRoot, "python", scriptPath, os.Args[2], os.Args[3]}
+	cmd := exec.Command("uv", args...)
+	if projectRoot != "" {
+		cmd.Dir = projectRoot
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // handleSettings shows all configuration paths and key env settings
 func (cli *CLI) handleSettings() error {
 	LoadEnvConfig()
@@ -1356,6 +1477,21 @@ func (cli *CLI) printUsage() {
 	fmt.Println("  devtrack azure-sync --full            Explicit full resync")
 	fmt.Println("  devtrack azure-sync --hours 24        Only items changed in last 24h (merges)")
 	fmt.Println()
+	fmt.Println("GITLAB:")
+	fmt.Println("  devtrack gitlab-check                    Check GitLab config and connectivity")
+	fmt.Println("  devtrack gitlab-list                     List open issues assigned to you")
+	fmt.Println("  devtrack gitlab-list --closed            Include closed issues")
+	fmt.Println("  devtrack gitlab-list --state <state>     Filter by state (e.g. opened, closed)")
+	fmt.Println("  devtrack gitlab-view <project_id> <iid>  Show full details for an issue")
+	fmt.Println("  devtrack gitlab-sync                     Full resync (fetches all open issues)")
+	fmt.Println("  devtrack gitlab-sync --full              Explicit full resync")
+	fmt.Println("  devtrack gitlab-sync --hours 24          Only issues updated in last 24h")
+	fmt.Println()
+	fmt.Println("PM AGENT (via Telegram bot):")
+	fmt.Println("  /plan <problem>    Decompose a problem into Epic → Story → Task hierarchy")
+	fmt.Println("                     Platform picker → LLM preview → confirm to create items")
+	fmt.Println("                     Supported platforms: azure, gitlab, github")
+	fmt.Println()
 	fmt.Println("OFFLINE RESILIENCE:")
 	fmt.Println("  devtrack queue             Show message queue stats")
 	fmt.Println("  devtrack commits pending   List deferred commits and status")
@@ -1383,6 +1519,9 @@ func (cli *CLI) printUsage() {
 	fmt.Println()
 	fmt.Println("TELEGRAM:")
 	fmt.Println("  devtrack telegram-status  Show Telegram bot status")
+	fmt.Println("  Bot commands: /status /azure /azureissue /azurecreate")
+	fmt.Println("                /gitlab /gitlabissue /gitlabcreate")
+	fmt.Println("                /plan <problem>  (PM Agent: decompose + create work items)")
 	fmt.Println()
 	fmt.Println("INFO COMMANDS:")
 	fmt.Println("  devtrack logs          Show recent log entries")

@@ -590,7 +590,7 @@ devtrack restart
 If installation fails:
 
 1. Check [Troubleshooting Guide](TROUBLESHOOTING.md)
-2. Review [Known Issues](../KNOWN_ISSUES.md)
+2. Review [Troubleshooting](TROUBLESHOOTING.md)
 3. Check [CLAUDE.md](../CLAUDE.md) for debugging patterns
 4. Open an [Issue on GitHub](https://github.com/sraj0501/automation_tools/issues)
 

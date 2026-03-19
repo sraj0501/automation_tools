@@ -855,6 +855,12 @@ func IsAzurePollerEnabled() bool {
 	return strings.EqualFold(val, "true") || val == "1"
 }
 
+// IsGitLabPollerEnabled returns whether the GitLab assignment poller is enabled
+func IsGitLabPollerEnabled() bool {
+	val := os.Getenv("GITLAB_POLL_ENABLED")
+	return strings.EqualFold(val, "true") || val == "1"
+}
+
 // GetHealthAutoRestartTelegram returns whether to auto-restart the Telegram bot
 func GetHealthAutoRestartTelegram() bool {
 	val := os.Getenv("HEALTH_AUTO_RESTART_TELEGRAM")

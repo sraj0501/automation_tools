@@ -233,9 +233,9 @@ Now that you understand DevTrack:
 ## Need Help?
 
 - **Setup issues?** → [Troubleshooting Guide](TROUBLESHOOTING.md)
-- **Command reference?** → [Commands Reference](COMMANDS.md)
+- **Command reference?** → [CLI Reference](CLI_REFERENCE.md)
 - **Configuration details?** → [Configuration Reference](CONFIGURATION.md)
-- **Still stuck?** → [Known Issues](../KNOWN_ISSUES.md)
+- **Still stuck?** → [Troubleshooting](TROUBLESHOOTING.md)
 
 ---
 

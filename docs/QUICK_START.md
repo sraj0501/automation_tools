@@ -265,13 +265,13 @@ TEAMS_CHANNEL_ID=your-channel-id
 ### Having Issues?
 
 - **[Troubleshooting Guide](TROUBLESHOOTING.md)** - Common problems
-- **[Known Issues](../KNOWN_ISSUES.md)** - Known bugs and workarounds
+- **[Troubleshooting](TROUBLESHOOTING.md)** - Known bugs and workarounds
 - **[Full Documentation](INDEX.md)** - Complete reference
 
 ### Want to Contribute?
 
 - **[Developer Guide](../CLAUDE.md)** - Architecture and development
-- **[Implementation Plan](IMPLEMENTATION_PLAN.md)** - Planned features
+- **[Roadmap](VISION.md) — planned features
 
 ---
 

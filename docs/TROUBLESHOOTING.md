@@ -1045,9 +1045,9 @@ EOF
 If you can't solve it:
 
 1. **Check existing issues**: https://github.com/sraj0501/automation_tools/issues
-2. **See Known Issues**: [KNOWN_ISSUES.md](../KNOWN_ISSUES.md)
+2. **See [Known Issues](#known-issues)
 3. **Review Architecture**: [CLAUDE.md](../CLAUDE.md) - Debugging patterns section
-4. **Check Phase 3 Verification**: [PHASE_3_VERIFICATION.md](../PHASE_3_VERIFICATION.md)
+4. **Check Phase 3 Verification**: [VERIFICATION.md](VERIFICATION.md)
 5. **Create a new issue** with:
    - Error message
    - Steps to reproduce
@@ -1104,3 +1104,50 @@ chmod +x diagnose.sh
 ---
 
 **Still stuck?** Check the [Documentation Index](INDEX.md) for more guides or reach out on GitHub.
+
+---
+
+## Known Issues
+
+### AI Enhancement Intermittent Failure
+
+**Status:** Root cause identified — intermittent, not consistently reproducible.
+
+**Symptom:** `devtrack git commit -m "msg"` completes but the commit message is the original (not AI-enhanced), with no visible error.
+
+**Root cause:** The Go shell wrapper detects AI enhancement by scanning Python's stdout for the word "enhanced". Python logging goes to stderr (which is not scanned), so if the AI call fails silently or returns but logs to stderr, the wrapper falls back silently.
+
+**Workaround:**
+```bash
+# Check if Ollama is running and responding
+curl http://localhost:11434/api/tags
+
+# Test enhancement directly
+uv run python backend/commit_message_enhancer.py "your message"
+
+# Check Python bridge logs for errors
+tail -50 Data/logs/daemon.log | grep -i "enhance\|error\|exception"
+```
+
+**Fix in progress:** Python output routing to be standardized so enhancement status is always detectable.
+
+---
+
+### IPC Connection Drops Under Load
+
+**Status:** Known, rare. Affects high-frequency commit scenarios.
+
+**Symptom:** `devtrack logs` shows repeated "IPC connection failed, retrying…" messages.
+
+**Workaround:** Increase `IPC_RETRY_DELAY_MS` in `.env` (e.g., from 2000 to 5000) and restart the daemon.
+
+---
+
+### spaCy Warning: "en_core_web_sm not found"
+
+**Status:** Not a bug — setup step was skipped.
+
+**Fix:**
+```bash
+uv run python -m spacy download en_core_web_sm
+```

@@ -1,1 +1,2 @@
-claude --resume c76dcb86-92ee-46f8-85af-8f1745e02b83
+Next session, just say "start on the GitLab + PM Agent plan" and I'll read docs/PLAN_GITLAB_PM_AGENT.md and launch both agents in parallel. Rest
+  well!

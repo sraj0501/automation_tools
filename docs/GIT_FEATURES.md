@@ -604,5 +604,5 @@ uv run python -c "from backend.work_update_enhancer import enhance_update; print
 
 - **Full Git Workflow**: See [Git Commit Workflow](../GIT_COMMIT_WORKFLOW.md)
 - **Detailed Implementation**: See [Phase 1-2 Integration](../GIT_SAGE_INTEGRATION_PHASE_1_2.md)
-- **Phase 3 Details**: See [Phase 3 Implementation](../PHASE_3_IMPLEMENTATION.md)
+- **Phase 3 Details**: See [Phase 3 Implementation](ARCHITECTURE.md)
 - **Troubleshooting**: See [Troubleshooting Guide](TROUBLESHOOTING.md)

@@ -79,18 +79,44 @@ Then send `/status` to your bot on Telegram -- you should get a response with da
 
 ## Available Commands
 
+### Core Commands
+
 | Command | Auth Required | Description |
 |---------|:---:|-------------|
 | `/start` | No | Show your chat ID (for initial setup) |
 | `/help` | No | List all available commands |
 | `/status` | Yes | Daemon status and service health |
-| `/logs` | Yes | Last 20 log lines (use `/logs 30` for 30, max 50) |
+| `/logs [N]` | Yes | Last N log lines (default 20, max 50) |
 | `/trigger` | Yes | Force an immediate work update trigger |
 | `/pause` | Yes | Pause the scheduler |
 | `/resume` | Yes | Resume the scheduler |
 | `/queue` | Yes | Message queue statistics (pending/processed counts) |
 | `/commits` | Yes | Deferred commit status by category |
 | `/health` | Yes | Per-service health: IPC, Ollama, Azure DevOps, MongoDB, etc. |
+
+### Azure DevOps Commands
+
+| Command | Auth Required | Description |
+|---------|:---:|-------------|
+| `/azure` | Yes | List work items from local sync cache |
+| `/azureissue <id>` | Yes | View full details for a work item |
+| `/azurecreate` | Yes | Create a new work item interactively (sprint picker shown) |
+
+### GitLab Commands
+
+| Command | Auth Required | Description |
+|---------|:---:|-------------|
+| `/gitlab` | Yes | List issues from local sync cache |
+| `/gitlabissue <project_id> <iid>` | Yes | View full details for an issue (live fetch) |
+| `/gitlabcreate` | Yes | Create a new issue interactively (milestone picker shown) |
+
+### PM Agent
+
+| Command | Auth Required | Description |
+|---------|:---:|-------------|
+| `/plan <problem>` | Yes | Decompose a problem into Epic → Story → Task and create items |
+
+**PM Agent flow:** `/plan` → platform picker → LLM decomposition → preview with item count → **Create All** or Cancel → live progress updates per item created.
 
 ## Live Notifications
 
