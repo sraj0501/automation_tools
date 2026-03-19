@@ -413,6 +413,136 @@
     footer .footer-links a:hover { color: var(--text); }
     footer .footer-copy { font-size: .78rem; color: var(--faint); }
 
+    /* ── Dev Banner ──────────────────────────────────────────────────── */
+    .dev-banner {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 1100;
+      background: linear-gradient(90deg, #92400e, #78350f);
+      border-bottom: 1px solid rgba(251,191,36,.25);
+      padding: 9px 20px;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      font-size: .78rem; color: #fde68a;
+      transition: transform .3s ease;
+    }
+    .dev-banner.hidden { transform: translateY(-100%); }
+    .dev-banner-dot {
+      width: 6px; height: 6px; border-radius: 50%; background: #fbbf24;
+      animation: pulse 2s infinite; flex-shrink: 0;
+    }
+    .dev-banner strong { color: #fef3c7; }
+    .dev-banner a { color: #fbbf24; text-underline-offset: 3px; }
+    .dev-banner a:hover { color: #fef3c7; }
+    .dev-banner-close {
+      position: absolute; right: 16px;
+      background: none; border: none; color: #fbbf24;
+      cursor: pointer; font-size: 1rem; line-height: 1;
+      padding: 2px 6px; border-radius: 4px;
+      transition: background .1s;
+    }
+    .dev-banner-close:hover { background: rgba(251,191,36,.15); }
+    body.banner-visible { padding-top: 37px; }
+    body.banner-visible nav { top: 37px; }
+
+    /* ── About ───────────────────────────────────────────────────────── */
+    .about-section { padding: 100px 0; }
+    .about-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; }
+    .about-avatar {
+      width: 72px; height: 72px; border-radius: 50%;
+      background: var(--grad); display: flex; align-items: center;
+      justify-content: center; font-size: 1.8rem; margin-bottom: 24px;
+      box-shadow: 0 0 0 4px rgba(59,130,246,.15);
+    }
+    .about-name { font-size: 1.4rem; font-weight: 800; letter-spacing: -.03em; margin-bottom: 4px; }
+    .about-role { font-size: .85rem; color: var(--muted); margin-bottom: 20px; }
+    .about-bio { font-size: .9rem; color: var(--muted); line-height: 1.75; margin-bottom: 24px; }
+    .about-links { display: flex; gap: 10px; flex-wrap: wrap; }
+    .about-link {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 8px 14px; border-radius: var(--radius);
+      border: 1px solid var(--border2); background: var(--bg1);
+      font-size: .82rem; color: var(--muted); text-decoration: none;
+      transition: all .15s;
+    }
+    .about-link:hover { border-color: rgba(59,130,246,.5); color: var(--text); background: var(--bg2); }
+    .about-link svg { width: 14px; height: 14px; }
+
+    .about-vision {
+      background: var(--bg1); border: 1px solid var(--border);
+      border-radius: var(--radius-xl); padding: 36px;
+      position: relative; overflow: hidden;
+    }
+    .about-vision::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 0% 0%, rgba(59,130,246,.07) 0%, transparent 60%);
+    }
+    .about-vision-label {
+      font-size: .7rem; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--blue); margin-bottom: 16px;
+    }
+    .about-vision blockquote {
+      font-size: 1.05rem; line-height: 1.7; color: var(--text);
+      font-style: italic; position: relative;
+    }
+    .about-vision blockquote::before {
+      content: '"'; position: absolute; top: -20px; left: -8px;
+      font-size: 4rem; color: var(--blue); opacity: .2;
+      font-family: Georgia, serif; line-height: 1;
+    }
+    .about-vision-author { margin-top: 16px; font-size: .8rem; color: var(--muted); }
+    .about-stats { display: flex; gap: 24px; margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--border); }
+    .about-stat-num { font-size: 1.4rem; font-weight: 800; letter-spacing: -.04em; }
+    .about-stat-label { font-size: .72rem; color: var(--muted); margin-top: 2px; }
+
+    /* ── Contact ─────────────────────────────────────────────────────── */
+    .contact-section { padding: 100px 0; }
+    .contact-inner { display: grid; grid-template-columns: 1fr 1.4fr; gap: 60px; align-items: start; }
+    .contact-channels { display: flex; flex-direction: column; gap: 12px; margin-top: 32px; }
+    .contact-channel {
+      display: flex; align-items: center; gap: 14px;
+      padding: 16px 20px; border-radius: var(--radius-lg);
+      border: 1px solid var(--border); background: var(--bg1);
+      text-decoration: none; color: var(--text);
+      transition: all .2s;
+    }
+    .contact-channel:hover { border-color: rgba(59,130,246,.4); background: var(--bg2); transform: translateX(4px); }
+    .contact-channel-icon {
+      width: 36px; height: 36px; border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; flex-shrink: 0;
+    }
+    .contact-channel-title { font-size: .88rem; font-weight: 600; }
+    .contact-channel-sub { font-size: .75rem; color: var(--muted); margin-top: 2px; }
+    .contact-channel-arrow { margin-left: auto; color: var(--faint); font-size: .9rem; transition: transform .15s; }
+    .contact-channel:hover .contact-channel-arrow { transform: translateX(3px); color: var(--muted); }
+
+    .contact-form {
+      background: var(--bg1); border: 1px solid var(--border);
+      border-radius: var(--radius-xl); padding: 36px;
+    }
+    .contact-form h3 { font-size: 1rem; font-weight: 700; margin-bottom: 24px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+    .form-group label { font-size: .78rem; font-weight: 600; color: var(--muted); }
+    .form-group input, .form-group textarea, .form-group select {
+      padding: 10px 14px; border-radius: var(--radius);
+      border: 1px solid var(--border2); background: var(--bg2);
+      color: var(--text); font-family: var(--sans); font-size: .85rem;
+      outline: none; transition: border-color .15s;
+      resize: none;
+    }
+    .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+      border-color: var(--blue);
+    }
+    .form-group input::placeholder, .form-group textarea::placeholder { color: var(--faint); }
+    .form-group select option { background: #1a1a1a; }
+    .form-submit {
+      width: 100%; padding: 12px; border-radius: var(--radius-lg);
+      background: var(--grad); color: white; border: none;
+      font-family: var(--sans); font-size: .9rem; font-weight: 600;
+      cursor: pointer; transition: opacity .15s, transform .1s;
+    }
+    .form-submit:hover { opacity: .9; transform: translateY(-1px); }
+    .form-note { font-size: .74rem; color: var(--faint); text-align: center; margin-top: 12px; }
+
     /* ── Scrollbar ───────────────────────────────────────────────────── */
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -437,6 +567,14 @@
 </head>
 <body>
 
+<!-- ── Dev Banner ─────────────────────────────────────────────────────────── -->
+<div class="dev-banner" id="devBanner">
+  <span class="dev-banner-dot"></span>
+  <strong>Active Development</strong> — DevTrack is being actively built. Features may change and some are still experimental.
+  <a href="https://github.com/sraj0501/automation_tools" target="_blank" rel="noopener">Follow progress on GitHub →</a>
+  <button class="dev-banner-close" onclick="dismissBanner()" aria-label="Dismiss">✕</button>
+</div>
+
 <!-- ── Nav ───────────────────────────────────────────────────────────────── -->
 <nav id="navbar">
   <a class="nav-brand" href="#">
@@ -448,6 +586,8 @@
     <a href="#how">How It Works</a>
     <a href="#integrations">Integrations</a>
     <a href="#demo">Demo</a>
+    <a href="#about">About</a>
+    <a href="#contact">Contact</a>
   </div>
   <div class="nav-right">
     <a class="btn-ghost" href="wiki.html">Documentation →</a>
@@ -472,7 +612,7 @@
   </h1>
 
   <p class="hero-sub">
-    DevTrack watches your Git commits, enriches them with AI, and automatically updates Azure DevOps, GitLab, and GitHub — so your project management stays in sync without lifting a finger.
+    From a single problem statement, DevTrack plans your entire sprint — breaking it into Epics, Stories, and Tasks, assigning them based on team workload, and pushing everything to Azure DevOps, GitLab, or GitHub. Then it keeps every ticket in sync as you commit. All of it controllable from your phone.
   </p>
 
   <div class="hero-cta">
@@ -513,12 +653,12 @@
     <div class="proof-label">PM integrations (Azure, GitLab, GitHub)</div>
   </div>
   <div class="proof-item reveal reveal-delay-2">
-    <div class="proof-num grad-text">0</div>
-    <div class="proof-label">Manual status updates needed</div>
+    <div class="proof-num grad-text">1</div>
+    <div class="proof-label">Sentence to a fully planned sprint</div>
   </div>
   <div class="proof-item reveal reveal-delay-3">
-    <div class="proof-num grad-text">∞</div>
-    <div class="proof-label">Works offline, syncs when back online</div>
+    <div class="proof-num grad-text">📱</div>
+    <div class="proof-label">Full control from your phone via Telegram</div>
   </div>
 </div>
 
@@ -547,11 +687,12 @@
         <span class="feat-tag" style="color:#8b5cf6;border-color:rgba(139,92,246,.3);">Ollama · local LLM</span>
       </div>
 
-      <div class="feat-card reveal">
-        <div class="feat-icon" style="background:rgba(20,184,166,.12);">🗂️</div>
-        <div class="feat-title">PM Agent</div>
-        <div class="feat-desc">Describe a feature in plain English. DevTrack decomposes it into Epics, Stories, and Tasks and creates them in Azure DevOps or GitLab — instantly.</div>
-        <span class="feat-tag" style="color:#14b8a6;border-color:rgba(20,184,166,.3);">LLM decomposition</span>
+      <div class="feat-card reveal" style="border-color:rgba(20,184,166,.28);background:linear-gradient(145deg,#0f1a19 0%,var(--bg1) 60%);">
+        <div style="position:absolute;top:14px;right:14px;font-size:.65rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#14b8a6;background:rgba(20,184,166,.1);border:1px solid rgba(20,184,166,.25);padding:2px 8px;border-radius:99px;">Featured</div>
+        <div class="feat-icon" style="background:rgba(20,184,166,.15);">🗂️</div>
+        <div class="feat-title">End-to-End PM Agent</div>
+        <div class="feat-desc">Describe a problem in plain English and DevTrack plans the entire workstream — decomposing it into Epics, Stories, and Tasks, then assigning each item to the right person based on current workload. Works across <strong style="color:var(--text)">Azure DevOps, GitLab, and GitHub</strong>. Trigger it from your desk or straight from your phone via Telegram.</div>
+        <span class="feat-tag" style="color:#14b8a6;border-color:rgba(20,184,166,.3);">plan · assign · create · sync · mobile</span>
       </div>
 
       <div class="feat-card reveal reveal-delay-1">
@@ -771,6 +912,137 @@
   </div>
 </section>
 
+<!-- ── About ──────────────────────────────────────────────────────────────── -->
+<section class="about-section" id="about">
+  <div class="container">
+    <div class="about-inner">
+
+      <div class="reveal">
+        <div class="about-avatar">👨‍💻</div>
+        <div class="about-name">Shashank Raj</div>
+        <div class="about-role">Software Engineer · Creator of DevTrack</div>
+        <p class="about-bio">
+          I built DevTrack because I was spending too much time on the overhead that surrounds coding — updating tickets, writing standup notes, keeping PM tools in sync. The actual coding was the easy part.
+          <br><br>
+          DevTrack is my attempt at a developer-first automation layer: one that runs locally, respects your privacy, and handles the bureaucracy so you can stay in flow.
+        </p>
+        <div class="about-links">
+          <a class="about-link" href="https://github.com/sraj0501" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+            GitHub
+          </a>
+          <a class="about-link" href="https://github.com/sraj0501/automation_tools" target="_blank" rel="noopener">
+            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 4a1 1 0 000 2h1v8H3a1 1 0 100 2h14a1 1 0 100-2h-1V6h1a1 1 0 100-2H3zm3 2h8v8H6V6z" clip-rule="evenodd"/></svg>
+            View Repository
+          </a>
+          <a class="about-link" href="#contact">
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/></svg>
+            Get in Touch
+          </a>
+        </div>
+      </div>
+
+      <div class="reveal reveal-delay-2">
+        <div class="about-vision">
+          <div class="about-vision-label">The vision</div>
+          <blockquote>
+            DevTrack should be like a senior engineer who never forgets to update the ticket — who knows what you're working on from your commits, writes the update in your voice, and keeps every stakeholder in the loop without you lifting a finger.
+          </blockquote>
+          <div class="about-vision-author">— The goal driving every feature decision</div>
+          <div class="about-stats">
+            <div>
+              <div class="about-stat-num grad-text">3+</div>
+              <div class="about-stat-label">PM integrations</div>
+            </div>
+            <div>
+              <div class="about-stat-num grad-text">100%</div>
+              <div class="about-stat-label">Local & private</div>
+            </div>
+            <div>
+              <div class="about-stat-num grad-text">MIT</div>
+              <div class="about-stat-label">Open source</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── Contact ────────────────────────────────────────────────────────────── -->
+<section class="contact-section" id="contact">
+  <div class="container">
+    <div class="contact-inner">
+
+      <div>
+        <div class="section-label reveal">Get in touch</div>
+        <h2 class="section-title reveal reveal-delay-1">Questions,<br>ideas, or<br><span class="grad-text">feedback?</span></h2>
+        <p class="section-sub reveal reveal-delay-2" style="margin-bottom:0">DevTrack is open source and community-driven. Reach out through any of these channels.</p>
+
+        <div class="contact-channels reveal reveal-delay-2">
+          <a class="contact-channel" href="https://github.com/sraj0501/automation_tools/issues" target="_blank" rel="noopener">
+            <div class="contact-channel-icon" style="background:rgba(255,255,255,.06);">🐛</div>
+            <div>
+              <div class="contact-channel-title">GitHub Issues</div>
+              <div class="contact-channel-sub">Bug reports, feature requests, questions</div>
+            </div>
+            <span class="contact-channel-arrow">→</span>
+          </a>
+          <a class="contact-channel" href="https://github.com/sraj0501/automation_tools/discussions" target="_blank" rel="noopener">
+            <div class="contact-channel-icon" style="background:rgba(59,130,246,.1);">💬</div>
+            <div>
+              <div class="contact-channel-title">GitHub Discussions</div>
+              <div class="contact-channel-sub">Ideas, show & tell, general chat</div>
+            </div>
+            <span class="contact-channel-arrow">→</span>
+          </a>
+          <a class="contact-channel" href="mailto:shashank_raj28@hotmail.com">
+            <div class="contact-channel-icon" style="background:rgba(139,92,246,.1);">✉️</div>
+            <div>
+              <div class="contact-channel-title">Email</div>
+              <div class="contact-channel-sub">shashank_raj28@hotmail.com</div>
+            </div>
+            <span class="contact-channel-arrow">→</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="contact-form reveal reveal-delay-2">
+        <h3>Send a message</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" placeholder="Your name" />
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" placeholder="you@example.com" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Topic</label>
+          <select>
+            <option value="">Select a topic…</option>
+            <option>Bug report</option>
+            <option>Feature request</option>
+            <option>Integration question</option>
+            <option>General feedback</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Message</label>
+          <textarea rows="5" placeholder="What's on your mind?"></textarea>
+        </div>
+        <button class="form-submit" onclick="handleFormSubmit(this)">Send Message</button>
+        <p class="form-note">No tracking, no spam. Messages go straight to the maintainer.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
 <!-- ── CTA ────────────────────────────────────────────────────────────────── -->
 <section class="callout-section">
   <div class="container">
@@ -974,6 +1246,36 @@ const revealObs = new IntersectionObserver(entries => {
   entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
 }, { threshold: .1 });
 document.querySelectorAll('.reveal').forEach(el => revealObs.observe(el));
+
+// ── Dev Banner ────────────────────────────────────────────────────────────────
+function dismissBanner() {
+  document.getElementById('devBanner').classList.add('hidden');
+  document.body.classList.remove('banner-visible');
+  sessionStorage.setItem('banner-dismissed', '1');
+}
+if (!sessionStorage.getItem('banner-dismissed')) {
+  document.body.classList.add('banner-visible');
+} else {
+  document.getElementById('devBanner').classList.add('hidden');
+}
+
+// ── Contact form (static — opens mailto fallback) ─────────────────────────────
+function handleFormSubmit(btn) {
+  const form = btn.closest('.contact-form');
+  const name    = form.querySelector('input[type=text]').value.trim();
+  const email   = form.querySelector('input[type=email]').value.trim();
+  const topic   = form.querySelector('select').value;
+  const message = form.querySelector('textarea').value.trim();
+  if (!name || !email || !message) {
+    btn.textContent = 'Please fill all fields';
+    btn.style.background = '#7f1d1d';
+    setTimeout(() => { btn.textContent = 'Send Message'; btn.style.background = ''; }, 2000);
+    return;
+  }
+  const subject = encodeURIComponent(`[DevTrack] ${topic || 'Message'} from ${name}`);
+  const body    = encodeURIComponent(`Name: ${name}\nEmail: ${email}\nTopic: ${topic}\n\n${message}`);
+  window.location.href = `mailto:hello@devtrack.dev?subject=${subject}&body=${body}`;
+}
 
 // ── Nav scroll tint ────────────────────────────────────────────────────────────
 window.addEventListener('scroll', () => {
