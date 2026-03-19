@@ -1,58 +1,108 @@
-import ollama
 import json
 import pandas as pd
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import re
 
+try:
+    from backend.personalization import inject_style as _inject_style
+except ImportError:
+    def _inject_style(prompt: str, context_type: str = "general") -> str:
+        return prompt
+
+
+def _get_task_defaults():
+    """Get task defaults from config (no hardcoded personal data)."""
+    try:
+        import sys
+        from pathlib import Path
+        _root = Path(__file__).resolve().parent.parent.parent
+        if str(_root) not in sys.path:
+            sys.path.insert(0, str(_root))
+        from backend.config import (
+            azure_default_assignee,
+            azure_parent_work_item_id,
+            azure_starting_work_item_id,
+        )
+        return {
+            "assignee": azure_default_assignee(),
+            "parent_id": azure_parent_work_item_id(),
+            "starting_id": azure_starting_work_item_id(),
+        }
+    except ImportError:
+        return {"assignee": "", "parent_id": "", "starting_id": 0}
+
+
 class TaskGenerator:
-    def __init__(self, model_name: str = "llama3.1"):
-        """
-        Initialize the TaskGenerator with an Ollama model
-        
+    def __init__(self, provider=None):
+        """Initialize the TaskGenerator.
+
         Args:
-            model_name: The name of the Ollama model to use (default: llama3.1)
+            provider: Optional LLM provider instance (injected for testing).
+                      Defaults to the global provider chain from get_provider().
         """
-        self.model_name = model_name
-        self.client = ollama.Client()
-        
-    def generate_tasks(self, 
-                      requirements: str, 
-                      constraints: str, 
-                      existing_tasks: List[Dict] = None,
-                      assignee: str = "Shashank Raj shashank.raj@latentbridge.com",
-                      parent_work_item_id: str = "9759",
-                      starting_work_item_id: int = 9760) -> List[Dict]:
+        self._provider = provider  # None = lazy init on first use
+
+    def _get_provider(self):
+        if self._provider is None:
+            import sys
+            from pathlib import Path
+            _root = Path(__file__).resolve().parent.parent.parent
+            if str(_root) not in sys.path:
+                sys.path.insert(0, str(_root))
+            from backend.llm import get_provider
+            self._provider = get_provider()
+        return self._provider
+
+    def generate_tasks(
+        self,
+        requirements: str,
+        constraints: str,
+        existing_tasks: List[Dict] = None,
+        assignee: Optional[str] = None,
+        parent_work_item_id: Optional[str] = None,
+        starting_work_item_id: Optional[int] = None,
+    ) -> List[Dict]:
         """
         Generate project tasks based on requirements and constraints
-        
+
         Args:
             requirements: The project requirements and component breakdown
             constraints: Project constraints and specifications
             existing_tasks: List of existing tasks (optional)
-            assignee: Who to assign the tasks to
-            parent_work_item_id: Parent work item ID for all tasks
-            starting_work_item_id: Starting ID for new work items
-            
+            assignee: Who to assign the tasks to (from config if None)
+            parent_work_item_id: Parent work item ID (from config if None)
+            starting_work_item_id: Starting ID for new work items (from config if None)
+
         Returns:
             List of dictionaries containing task information
         """
-        
+        defaults = _get_task_defaults()
+        assignee = assignee or defaults["assignee"]
+        parent_work_item_id = parent_work_item_id or defaults["parent_id"]
+        starting_work_item_id = starting_work_item_id if starting_work_item_id is not None else defaults["starting_id"]
+
         # Prepare the prompt for the LLM
         prompt = self._create_prompt(requirements, constraints, existing_tasks)
-        
-        # Generate response using Ollama
-        response = self.client.chat(model=self.model_name, messages=[
-            {
-                'role': 'user',
-                'content': prompt
-            }
-        ])
-        
+
+        # Generate response using the configured LLM provider
+        from backend.llm.base import LLMOptions
+        from backend.config import http_timeout_long
+        response_text = self._get_provider().generate(
+            prompt=prompt,
+            options=LLMOptions(temperature=0.3, max_tokens=1000),
+            timeout=http_timeout_long(),
+        )
+
+        if not response_text:
+            return []
+
         # Parse the response to extract tasks
-        tasks = self._parse_response(response['message']['content'], 
-                                   assignee, 
-                                   parent_work_item_id, 
-                                   starting_work_item_id)
+        tasks = self._parse_response(
+            response_text,
+            assignee,
+            parent_work_item_id,
+            starting_work_item_id,
+        )
         
         return tasks
     
@@ -97,7 +147,7 @@ Focus on:
 
 Generate tasks that are specific, measurable, and implementable.
 """
-        
+        prompt = _inject_style(prompt, context_type="task")
         return prompt
     
     def _parse_response(self, response_text: str, assignee: str, parent_work_item_id: str, starting_id: int) -> List[Dict]:
@@ -165,6 +215,47 @@ Generate tasks that are specific, measurable, and implementable.
         df = pd.DataFrame(tasks)
         df.to_csv(filename, index=False)
         print(f"Tasks exported to {filename}")
+
+    def import_from_csv(
+        self,
+        filename: str,
+        title_col: str = "Title",
+        description_col: Optional[str] = "Description",
+        state_col: Optional[str] = "State",
+        assignee_col: Optional[str] = "Assigned To",
+    ) -> List[Dict]:
+        """
+        Import tasks from a CSV file.
+
+        Args:
+            filename: Path to CSV file
+            title_col: Column name for task title
+            description_col: Column name for description (optional)
+            state_col: Column name for state (optional)
+            assignee_col: Column name for assignee (optional)
+
+        Returns:
+            List of task dictionaries compatible with generate_tasks output format
+        """
+        df = pd.read_csv(filename)
+        if title_col not in df.columns:
+            raise ValueError(f"CSV must have '{title_col}' column. Found: {list(df.columns)}")
+        tasks = []
+        defaults = _get_task_defaults()
+        for idx, row in df.iterrows():
+            task = {
+                "Work Item Type": "Task",
+                "Title": str(row[title_col]),
+                "Assigned To": str(row.get(assignee_col, defaults.get("assignee", ""))) if assignee_col and assignee_col in df.columns else defaults.get("assignee", ""),
+                "State": str(row.get(state_col, "New")) if state_col and state_col in df.columns else "New",
+                "Tags": "Imported",
+                "Work Item ID": str(1000 + idx),
+                "Description": str(row.get(description_col, "")) if description_col and description_col in df.columns else "",
+                "Category": "import",
+            }
+            tasks.append(task)
+        print(f"Imported {len(tasks)} tasks from {filename}")
+        return tasks
     
     def export_to_markdown(self, tasks: List[Dict], filename: str = "generated_tasks.md"):
         """Export tasks to markdown table format"""
@@ -191,8 +282,8 @@ Generate tasks that are specific, measurable, and implementable.
 
 # Example usage
 def main():
-    # Initialize the task generator
-    generator = TaskGenerator(model_name="llama3.1")  # Change model as needed
+    # Initialize the task generator (uses OLLAMA_MODEL from .env)
+    generator = TaskGenerator()
     
     # Define your requirements
     requirements = """
@@ -235,15 +326,12 @@ def main():
         {"title": "Automate end-to-end flow from user input to chatbot response"}
     ]
     
-    # Generate tasks
+    # Generate tasks (assignee, parent_id, starting_id from .env if set)
     print("Generating tasks using Ollama...")
     tasks = generator.generate_tasks(
         requirements=requirements,
         constraints=constraints,
         existing_tasks=existing_tasks,
-        assignee="Shashank Raj shashank.raj@latentbridge.com",
-        parent_work_item_id="9759",
-        starting_work_item_id=9760
     )
     
     # Display results

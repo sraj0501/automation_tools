@@ -1,55 +1,52 @@
 #!/usr/bin/env python3
 """
-Teams Chat Responsiveness Analysis using OLLAMA
-Analyzes responsiveness patterns and message clarity
+Teams Chat Analysis using OLLAMA
+- Responsiveness: response rate, timing, questions/requests
+- Sentiment: positive/negative/neutral scoring per message and per sender
 """
 
 import duckdb
 import json
-import requests
 import os
 import sys
 import re
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 import glob
 
+# Add project root for config import
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+
 class ChatResponsivenessAnalyzer:
-    def __init__(self, db_path: str, ollama_url: str = "http://localhost:11434", model: str = "llama3:latest"):
-        """Initialize the responsiveness analyzer"""
+    def __init__(
+        self,
+        db_path: str,
+        provider=None,
+        # Legacy params kept for backwards compatibility but ignored:
+        ollama_url: Optional[str] = None,
+        model: Optional[str] = None,
+    ):
+        """Initialize the responsiveness analyzer."""
         if not os.path.exists(db_path):
             raise FileNotFoundError(f"Database file not found: {db_path}")
-        
+
         self.db_path = db_path
-        self.ollama_url = ollama_url
-        self.model = model
+        self._provider = provider  # None = lazy init on first use
         self.conn = duckdb.connect(db_path, read_only=True)
-        
-        # Test OLLAMA connection
-        self._test_ollama_connection()
-        
+
         # Load metadata
         self._load_metadata()
-    
-    def _test_ollama_connection(self):
-        """Test if OLLAMA is running and accessible"""
-        try:
-            response = requests.get(f"{self.ollama_url}/api/tags", timeout=5)
-            if response.status_code == 200:
-                models = response.json().get('models', [])
-                available_models = [model['name'] for model in models]
-                print(f"✅ OLLAMA connection successful. Available models: {available_models}")
-                
-                if not any(self.model in model for model in available_models):
-                    print(f"⚠️  Model '{self.model}' not found. Available: {available_models}")
-                    print(f"💡 Run: ollama pull {self.model}")
-                    sys.exit(1)
-            else:
-                raise Exception(f"HTTP {response.status_code}")
-        except Exception as e:
-            print(f"❌ OLLAMA connection failed: {e}")
-            print("💡 Make sure OLLAMA is running: ollama serve")
-            sys.exit(1)
+
+    def _get_provider(self):
+        if self._provider is None:
+            try:
+                from backend.llm import get_provider
+                self._provider = get_provider()
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"LLM provider unavailable: {e}")
+        return self._provider
     
     def _load_metadata(self):
         """Load chat metadata"""
@@ -72,62 +69,89 @@ class ChatResponsivenessAnalyzer:
     
     def _clean_html_tags(self, text: str) -> str:
         """Remove HTML tags and decode common HTML entities"""
-        if not text:
-            return ""
-        
-        # Remove HTML tags
-        text = re.sub(r'<[^>]+>', '', text)
-        
-        # Decode common HTML entities
-        html_entities = {
-            '&nbsp;': ' ',
-            '&amp;': '&',
-            '&lt;': '<',
-            '&gt;': '>',
-            '&quot;': '"',
-            '&#39;': "'",
-            '&apos;': "'"
-        }
-        
-        for entity, replacement in html_entities.items():
-            text = text.replace(entity, replacement)
-        
-        # Clean up extra whitespace
-        text = ' '.join(text.split())
-        return text
-    
-    def _call_ollama(self, prompt: str) -> str:
-        """Call OLLAMA API with a prompt"""
         try:
-            payload = {
-                "model": self.model,
-                "prompt": prompt,
-                "stream": False,
-                "options": {
-                    "temperature": 0.2,
-                    "num_predict": 300
-                }
-            }
-            
-            response = requests.post(
-                f"{self.ollama_url}/api/generate",
-                json=payload,
-                timeout=60
+            from backend.utils.text_utils import clean_html_tags
+            return clean_html_tags(text)
+        except ImportError:
+            if not text:
+                return ""
+            text = re.sub(r'<[^>]+>', '', text)
+            for entity, replacement in {'&nbsp;': ' ', '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&apos;': "'"}.items():
+                text = text.replace(entity, replacement)
+            return ' '.join(text.split())
+
+    def _call_ollama(self, prompt: str) -> str:
+        """Call the configured LLM provider with a prompt."""
+        try:
+            from backend.llm.base import LLMOptions
+            provider = self._get_provider()
+            if provider is None:
+                return "Error: LLM provider unavailable"
+            from backend.config import http_timeout_long
+            result = provider.generate(
+                prompt=prompt,
+                options=LLMOptions(temperature=0.2, max_tokens=300),
+                timeout=http_timeout_long(),
             )
-            
-            if response.status_code == 200:
-                return response.json()['response'].strip()
-            else:
-                print(f"OLLAMA API error: {response.status_code}")
-                return "Error: API call failed"
-                
-        except requests.exceptions.Timeout:
-            print("OLLAMA request timed out - continuing without this analysis")
-            return "Error: Request timed out"
+            return result if result else "Error: No response"
         except Exception as e:
-            print(f"Error calling OLLAMA: {e}")
+            print(f"Error calling LLM: {e}")
             return "Error: Connection failed"
     
+    def _analyze_message_sentiment(self, content: str) -> str:
+        """
+        Analyze message sentiment: positive, negative, or neutral.
+        Uses Ollama when available; falls back to keyword-based heuristics.
+        """
+        if not content or not content.strip():
+            return "neutral"
+        clean = self._clean_html_tags(content).strip()[:500]
+        try:
+            prompt = f"""Classify the sentiment of this message as exactly one word: positive, negative, or neutral.
+Message: "{clean}"
+Reply with only: positive, negative, or neutral"""
+            result = self._call_ollama(prompt).strip().lower()
+            for sent in ("positive", "negative", "neutral"):
+                if sent in result:
+                    return sent
+        except Exception:
+            pass
+        # Fallback: simple keyword heuristics
+        lower = clean.lower()
+        pos = ["thanks", "thank you", "great", "good", "awesome", "excellent", "perfect", "appreciate", "happy", "👍", "✅"]
+        neg = ["sorry", "unfortunately", "failed", "error", "issue", "problem", "concern", "disappointed", "frustrated", "😞", "❌"]
+        if any(p in lower for p in pos):
+            return "positive"
+        if any(n in lower for n in neg):
+            return "negative"
+        return "neutral"
+
+    def get_conversation_sentiment_summary(self, messages: List[Dict]) -> Dict[str, Any]:
+        """
+        Get sentiment summary for a list of messages.
+        Returns counts and percentages of positive/negative/neutral per sender.
+        """
+        by_sender: Dict[str, List[str]] = {}
+        for msg in messages:
+            sender = msg.get("sender", "unknown")
+            content = msg.get("content", "")
+            sent = self._analyze_message_sentiment(content)
+            if sender not in by_sender:
+                by_sender[sender] = []
+            by_sender[sender].append(sent)
+        result = {}
+        for sender, sents in by_sender.items():
+            total = len(sents)
+            result[sender] = {
+                "positive": sents.count("positive"),
+                "negative": sents.count("negative"),
+                "neutral": sents.count("neutral"),
+                "positive_pct": round(100 * sents.count("positive") / total, 1) if total else 0,
+                "negative_pct": round(100 * sents.count("negative") / total, 1) if total else 0,
+                "neutral_pct": round(100 * sents.count("neutral") / total, 1) if total else 0,
+            }
+        return result
+
     def _is_question_or_request(self, message_content: str) -> bool:
         """Check if a message contains a question or request that requires a response"""
         if not message_content:
@@ -215,11 +239,13 @@ class ChatResponsivenessAnalyzer:
                     questions_or_requests_count += 1
                 
                 # Check if our sender responded within reasonable time
+                from backend.config import sentiment_analysis_window_minutes
+                window_minutes = sentiment_analysis_window_minutes()
                 for j in range(i + 1, min(i + 5, len(sorted_all))):  # Check next 5 messages
                     next_msg = sorted_all[j]
                     if next_msg['sender'] == sender_name:
                         time_diff = (next_msg['timestamp'] - current_msg['timestamp']).total_seconds() / 60
-                        if time_diff <= 120:  # Within 2 hours
+                        if time_diff <= window_minutes:
                             responses_given += 1
                             response_times.append(time_diff)
                             found_response = True
@@ -246,7 +272,8 @@ class ChatResponsivenessAnalyzer:
             elif current_msg['sender'] == sender_name and i > 0:
                 prev_msg = sorted_all[i - 1]
                 time_diff = (current_msg['timestamp'] - prev_msg['timestamp']).total_seconds() / 60
-                if time_diff > 120 and prev_msg['sender'] != sender_name:  # Gap > 2 hours, different sender
+                from backend.config import sentiment_analysis_window_minutes
+                if time_diff > sentiment_analysis_window_minutes() and prev_msg['sender'] != sender_name:
                     conversations_initiated += 1
         
         # Calculate response rate
@@ -350,10 +377,16 @@ class ChatResponsivenessAnalyzer:
             print(f"Warning: Overall analysis failed: {e}")
             return "Overall conversation analysis unavailable due to technical limitations."
     
-    def analyze_conversation(self, target_sender: str = "Shashank Raj") -> Dict:
+    def analyze_conversation(self, target_sender: Optional[str] = None) -> Dict:
         """Analyze the entire conversation for responsiveness"""
+        if target_sender is None:
+            try:
+                from backend.config import sentiment_target_sender
+                target_sender = sentiment_target_sender()
+            except ImportError:
+                target_sender = ""
         print(f"🔍 Analyzing conversation responsiveness...")
-        print(f"📊 Target sender: {target_sender}")
+        print(f"📊 Target sender: {target_sender or '(all senders)'}")
         
         # Get all messages with more details
         result = self.conn.execute("""
@@ -416,6 +449,10 @@ class ChatResponsivenessAnalyzer:
         # Get overall conversation analysis
         print("🤖 Getting overall conversation analysis...")
         overall_analysis = self._get_overall_conversation_analysis(all_messages)
+
+        # Get sentiment summary (positive/negative/neutral per sender)
+        print("📊 Analyzing message sentiment...")
+        sentiment_summary = self.get_conversation_sentiment_summary(all_messages)
         
         return {
             'metadata': self.metadata,
@@ -425,6 +462,7 @@ class ChatResponsivenessAnalyzer:
             'total_participants': len(messages_by_sender),
             'sender_analysis': analysis_results,
             'overall_conversation_analysis': overall_analysis,
+            'sentiment_summary': sentiment_summary,
             'summary': self._generate_summary(analysis_results, target_sender)
         }
     
@@ -572,10 +610,16 @@ def main():
             print("❌ Invalid input.")
             return
     
-    # Get target sender
-    target_sender = input("\n🎯 Enter target sender name (default: Shashank Raj): ").strip()
+    # Get target sender (from config or user input)
+    try:
+        from backend.config import sentiment_target_sender
+        default_sender = sentiment_target_sender()
+    except ImportError:
+        default_sender = ""
+    prompt_default = f" (default: {default_sender})" if default_sender else ""
+    target_sender = input(f"\n🎯 Enter target sender name{prompt_default}: ").strip()
     if not target_sender:
-        target_sender = "Shashank Raj"
+        target_sender = default_sender
     
     # Get OLLAMA model
     model = input("🤖 Enter OLLAMA model (default: llama3:latest): ").strip()
@@ -602,8 +646,11 @@ def main():
             for sender, analysis in results.get('sender_analysis', {}).items():
                 marker = " (TARGET)" if analysis['is_target_sender'] else ""
                 metrics = analysis['responsiveness_metrics']
+                sent = results.get('sentiment_summary', {}).get(sender, {})
                 
                 print(f"\n{sender}{marker}:")
+                if sent:
+                    print(f"  Sentiment: positive {sent.get('positive_pct', 0)}% | negative {sent.get('negative_pct', 0)}% | neutral {sent.get('neutral_pct', 0)}%")
                 print(f"  Messages Sent: {metrics['total_messages']}")
                 print(f"  Messages from Others: {metrics['others_message_count']}")
                 print(f"  Questions/Requests received: {metrics['questions_or_requests_count']}")

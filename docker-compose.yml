@@ -1,0 +1,119 @@
+services:
+  # ── MongoDB ──────────────────────────────────────────────────────────────────
+  mongo:
+    image: mongo:7
+    container_name: devtrack-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-devtrack}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-devtrack}
+      MONGO_INITDB_DATABASE: ${MONGODB_DB_NAME:-devtrack}
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - devtrack-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ─────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: devtrack-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD:-devtrack}
+      --maxmemory ${REDIS_MAX_MEMORY:-256mb}
+      --maxmemory-policy allkeys-lru
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - devtrack-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-devtrack}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── PostgreSQL ────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: devtrack-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-devtrack}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devtrack}
+      POSTGRES_DB: ${POSTGRES_DB:-devtrack}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - devtrack-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-devtrack} -d ${POSTGRES_DB:-devtrack}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── DevTrack application ──────────────────────────────────────────────────────
+  devtrack:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: devtrack-app
+    restart: unless-stopped
+    environment:
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://host.docker.internal:11434}
+      - DEVTRACK_DATA_DIR=/home/devtrack/.local/share/devtrack
+      - DEVTRACK_CONFIG_DIR=/home/devtrack/.config/devtrack
+      - WORKSPACE_DIR=/workspace
+    volumes:
+      # Persistent data storage
+      - devtrack-data:/home/devtrack/.local/share/devtrack
+      - devtrack-config:/home/devtrack/.config/devtrack
+      # Workspace mount (read/write access to user's files)
+      - type: bind
+        source: ${DEVTRACK_WORKSPACE:-.}
+        target: /workspace
+      # Mount home directory to access all git repositories
+      - type: bind
+        source: ${HOME}
+        target: /home/host
+    networks:
+      - devtrack-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    stdin_open: true
+    tty: true
+    command: ["--help"]
+
+volumes:
+  devtrack-data:
+    driver: local
+  devtrack-config:
+    driver: local
+  mongo-data:
+    driver: local
+  redis-data:
+    driver: local
+  postgres-data:
+    driver: local
+
+networks:
+  devtrack-network:
+    driver: bridge

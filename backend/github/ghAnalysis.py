@@ -7,6 +7,12 @@ import pytz
 from dotenv import load_dotenv
 from github import Github, Auth, GithubException
 
+# Add project root for config
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_project_root = os.path.dirname(os.path.dirname(_script_dir))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+
 
 class GitHubBranchAnalyzer:
     def __init__(self, token=None):
@@ -15,31 +21,42 @@ class GitHubBranchAnalyzer:
 
         This method ensures secure access to GitHub and sets up comprehensive logging.
         """
-        # Load environment variables
-        load_dotenv()
+        # Load environment from project root
+        try:
+            from backend.config import _load_env, github_token, timezone, log_file_path
+            _load_env()
+            self.token = token or github_token()
+            tz_name = timezone()
+            log_path = str(log_file_path())
+        except ImportError:
+            load_dotenv(os.path.join(_project_root, ".env"))
+            self.token = token or os.getenv("GITHUB_TOKEN")
+            tz_name = os.getenv("TIMEZONE", "Asia/Kolkata")
+            log_path = os.getenv("GITHUB_LOG_PATH") or os.path.join(_project_root, "Data", "logs", "github_branch_analysis.log")
 
-        # Retrieve GitHub token
-        self.token = token or os.getenv("GITHUB_TOKEN")
         if not self.token:
-            raise ValueError("GitHub Personal Access Token is required")
+            raise ValueError("GitHub Personal Access Token is required (GITHUB_TOKEN in .env)")
 
         # Configure authentication
         self.auth = Auth.Token(self.token)
         self.github = Github(auth=self.auth)
 
         # Configure logging
+        log_dir = os.path.dirname(log_path)
+        if log_dir and not os.path.exists(log_dir):
+            os.makedirs(log_dir, exist_ok=True)
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(levelname)s: %(message)s',
             handlers=[
-                logging.FileHandler('github_branch_analysis.log'),
+                logging.FileHandler(log_path),
                 logging.StreamHandler(sys.stdout)
             ]
         )
         self.logger = logging.getLogger(__name__)
 
         # Configure timezone
-        self.ist_tz = pytz.timezone('Asia/Kolkata')
+        self.ist_tz = pytz.timezone(tz_name)
 
 
     def getRepos(self):

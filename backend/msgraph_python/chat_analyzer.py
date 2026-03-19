@@ -7,10 +7,11 @@ Reads and analyzes exported Teams chat data from DuckDB files
 import duckdb
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 import glob
-from typing import List, Dict, Any
-import pandas as pd
+
+# Add project root for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 class ChatAnalyzer:
     def __init__(self, db_path: str):
@@ -235,30 +236,17 @@ class ChatAnalyzer:
     
     def _clean_html_tags(self, text: str) -> str:
         """Remove HTML tags and decode common HTML entities"""
-        import re
-        
-        if not text:
-            return ""
-        
-        # Remove HTML tags
-        text = re.sub(r'<[^>]+>', '', text)
-        
-        # Decode common HTML entities
-        html_entities = {
-            '&nbsp;': ' ',
-            '&amp;': '&',
-            '&lt;': '<',
-            '&gt;': '>',
-            '&quot;': '"',
-            '&#39;': "'",
-            '&apos;': "'"
-        }
-        
-        for entity, replacement in html_entities.items():
-            text = text.replace(entity, replacement)
-        
-        # Clean up extra whitespace
-        text = ' '.join(text.split())
+        try:
+            from backend.utils.text_utils import clean_html_tags
+            return clean_html_tags(text)
+        except ImportError:
+            import re
+            if not text:
+                return ""
+            text = re.sub(r'<[^>]+>', '', text)
+            for entity, replacement in {'&nbsp;': ' ', '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&apos;': "'"}.items():
+                text = text.replace(entity, replacement)
+            return ' '.join(text.split())
         
         return text
     

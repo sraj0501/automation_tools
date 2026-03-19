@@ -1,0 +1,15 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "go-test-devtrack-bin",
+			"type": "shell",
+			"options": {
+				"cwd": "${workspaceFolder}/devtrack-bin"
+			},
+			"command": "go test ./...",
+			"args": [],
+			"isBackground": false
+		}
+	]
+}

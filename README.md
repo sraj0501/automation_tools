@@ -1,301 +1,128 @@
-# AI-Powered Task Management System
+# DevTrack
 
-> An intelligent assistant that converts natural language daily updates into structured task management and automated progress reports.
-
-## 🎯 Project Overview
-
-This system acts as your personal AI-powered project management assistant that:
-- Takes natural language input about your daily work
-- Updates Microsoft Lists with task progress
-- Generates professional email reports for your manager
-- Creates intelligent subtasks for complex activities
-- Learns your patterns and improves over time
-
-## 🚀 Core Workflow
-
-```
-You → AI Agent → Parse Activities → Update MS Lists → Generate Email → Send to Manager
-             ↓
-        Create Subtasks (when needed)
-```
-
-### Example Interaction
-```
-You: "Today I completed the database migration, started working on the API endpoints, 
-      and had a meeting with the design team about the new UI mockups"
-
-AI: "I've updated your tasks:
-     ✅ Database Migration → Completed
-     🔄 API Development → In Progress  
-     📝 UI Design Review → New task created
-     
-     Should I create subtasks for API Development?"
-```
-
-## 🏗️ System Architecture
-
-### Input Processing Pipeline
-```
-Raw Input → NLP Processing → Task Extraction → Fuzzy Matching → 
-Status Updates → Subtask Generation → Email Composition → Send
-```
-
-### Data Flow
-- **Input Sources**: Daily voice/text updates, MS Lists current state, calendar events
-- **AI Processing**: Natural language understanding, task matching, progress analysis
-- **Output Destinations**: Updated MS Lists, manager email reports, personal analytics
-
-## 🧠 AI Components
-
-### 1. Task Parser Module
-- **Entity Recognition**: Extract task names, dates, people, priorities
-- **Action Classification**: Detect completed/started/blocked/delayed status
-- **Time Estimation**: Track time spent on activities
-- **Context Understanding**: Link activities to existing projects
-
-### 2. Task Matcher Module
-- **Semantic Search**: Find similar existing tasks using AI similarity
-- **Fuzzy Matching**: Handle variations in task naming
-- **Confidence Scoring**: Measure certainty of task matches
-- **Disambiguation**: Ask clarifying questions when unsure
-
-### 3. Subtask Generator Module
-- **Complexity Analysis**: Determine if tasks need breakdown
-- **Domain Knowledge**: Apply best practices for different task types
-- **Dependency Detection**: Identify task relationships
-- **Template-Based**: Use proven subtask patterns
-
-### 4. Progress Analyzer Module
-- **Trend Analysis**: Track productivity patterns over time
-- **Bottleneck Detection**: Identify recurring delays
-- **Goal Tracking**: Monitor progress toward deadlines
-- **Recommendation Engine**: Suggest workflow improvements
-
-## 📚 Technology Stack
-
-### AI/ML Libraries
-- **OLLAMA** - Local LLM for text understanding and generation
-- **spaCy** - Named Entity Recognition (NER) for task extraction
-- **sentence-transformers** - Semantic similarity matching for tasks
-- **fuzzywuzzy** - Fuzzy string matching for task names
-- **transformers** (Hugging Face) - Advanced NLP tasks
-
-### Microsoft Integration
-- **msgraph-sdk-python** - Microsoft Lists and Email APIs
-- **msal** - Microsoft Authentication Library
-- **Office 365 APIs** - SharePoint Lists integration
-
-### Natural Language Processing
-- **nltk** or **spaCy** - Text preprocessing and tokenization
-- **dateparser** - Parse natural language dates ("tomorrow", "next week")
-- **regex** - Pattern matching for text parsing
-
-### Data Processing
-- **pandas** - Data manipulation for task analysis
-- **json** - Structured data handling
-- **sqlite3** - Local learning database
-
-### Optional Enhancements
-- **speech_recognition** - Voice input capability
-- **pyttsx3** - Text-to-speech for AI responses
-- **schedule** - Automated daily/weekly triggers
-
-## 🔧 Required Permissions
-
-### Microsoft Graph API Scopes
-```python
-graphUserScopes = [
-    "User.Read",           # Read user profile
-    "Mail.Send",           # Send emails  
-    "Sites.Read.All",      # Read SharePoint Lists
-    "Sites.ReadWrite.All"  # Update SharePoint Lists
-]
-```
-
-## 🎯 Feature Roadmap
-
-### Phase 1: Basic AI Parser
-- [ ] Simple task extraction from natural language
-- [ ] Manual Microsoft Lists integration
-- [ ] Basic email template generation
-- [ ] Core NLP processing pipeline
-
-### Phase 2: Smart Matching
-- [ ] Fuzzy matching for existing tasks
-- [ ] Confidence scoring and disambiguation
-- [ ] Improved natural language understanding
-- [ ] Learning from user corrections
-
-### Phase 3: Subtask Intelligence
-- [ ] Automated subtask generation
-- [ ] Task complexity analysis
-- [ ] Template-based recommendations
-- [ ] Dependency tracking
-
-### Phase 4: Advanced Analytics
-- [ ] Productivity pattern analysis
-- [ ] Predictive suggestions
-- [ ] Manager communication optimization
-- [ ] Cross-platform integration
-
-## 📋 Example Use Cases
-
-### Daily Status Update
-```
-Input: "Finished client presentation, made progress on budget analysis, 
-        started new feature documentation"
-
-AI Processing:
-1. Maps "client presentation" → Existing task: "Q4 Client Pitch"
-2. Updates status to "Completed"
-3. Creates progress update for "Budget Analysis" 
-4. Creates new task "Feature Documentation"
-5. Generates email summary for manager
-```
-
-### Intelligent Subtask Creation
-```
-User: "Working on API development"
-AI: "I notice 'API Development' is a complex task. Should I break it down?
-
-Suggested subtasks:
-- Design API endpoints
-- Implement authentication  
-- Create data models
-- Write unit tests
-- Update documentation"
-```
-
-### Automated Email Report
-```
-Subject: Daily Progress Update - [Date]
-
-Hi [Manager],
-
-Here's my progress summary for today:
-
-✅ Completed:
-- Database Migration (Project Alpha)
-- Client Presentation Prep
-
-🔄 In Progress:  
-- API Development (60% complete)
-- Budget Analysis (Review phase)
-
-📝 Started Today:
-- Feature Documentation
-- UI Design Review
-
-Tomorrow's Focus:
-- Complete API authentication module
-- Finish budget analysis review
-
-Best regards,
-[Your Name]
-```
-
-## 🔄 Implementation Considerations
-
-### Data Privacy
-- All AI processing can be done locally using OLLAMA
-- Sensitive data stays within your organization
-- Optional cloud AI for enhanced capabilities
-
-### Learning & Adaptation
-- System learns your communication patterns
-- Adapts to manager's preferred report style
-- Improves task matching accuracy over time
-
-### Integration Points
-- **Calendar**: Factor in meetings and availability
-- **Email**: Learn from manager responses
-- **Teams/Slack**: Cross-reference project discussions
-- **Time Tracking**: Integrate with existing tools
-
-## 🚀 Getting Started
-
-### Prerequisites
-1. Microsoft 365 account with Lists access
-2. Python 3.8+ environment
-3. OLLAMA installed locally
-4. Required Python packages (see requirements.txt)
-
-### Installation Steps
-```bash
-# Clone repository
-git clone [repository-url]
-cd ai-task-manager
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Set up Microsoft Graph credentials
-cp config.example.cfg config.cfg
-# Edit config.cfg with your Azure app details
-
-# Install and start OLLAMA
-# Download from https://ollama.ai
-ollama pull llama3.1
-
-# Run setup
-python setup.py
-```
-
-### Basic Usage
-```bash
-# Start the AI assistant
-python ai_assistant.py
-
-# Daily update mode
-python ai_assistant.py --mode daily
-
-# Voice input mode  
-python ai_assistant.py --voice
-```
-
-## 📊 Advanced Features
-
-### Context Awareness
-- **Project Phases**: Understands different project stages
-- **Team Dependencies**: Knows when waiting for others
-- **Deadline Proximity**: Adjusts urgency based on due dates
-
-### Proactive Intelligence
-- **Tomorrow's Plan**: Suggests next day priorities
-- **Blocker Resolution**: Identifies stuck tasks needing attention
-- **Resource Allocation**: Analyzes time distribution patterns
-
-### Communication Optimization
-- **Manager Preferences**: Adapts email tone and detail level
-- **Team Updates**: Cross-references with team communications
-- **Progress Visualization**: Creates charts and progress indicators
-
-## 🤝 Contributing
-
-This is a personal productivity system designed for individual use. However, contributions and suggestions are welcome:
-
-1. Fork the repository
-2. Create a feature branch
-3. Submit a pull request with detailed description
-
-## 📄 License
-
-[Choose appropriate license - MIT recommended for personal tools]
-
-## 🔗 Related Projects
-
-- [Microsoft Graph Python SDK](https://github.com/microsoftgraph/msgraph-sdk-python)
-- [OLLAMA](https://ollama.ai/)
-- [spaCy](https://spacy.io/)
-- [Sentence Transformers](https://www.sbert.net/)
-
-## 📞 Support
-
-For questions or issues:
-- Create an issue in this repository
-- Check the documentation wiki
-- Review example configurations
+> Developer automation that handles the overhead so you can focus on coding.
+> Monitors your Git activity, prompts for work updates, routes them through AI, and keeps your project management systems in sync — all running locally on your machine.
 
 ---
 
-**Note**: This system is designed for individual productivity enhancement and requires appropriate Microsoft 365 licensing and permissions.
+## What DevTrack Does
+
+- **Watches your Git commits** and fires AI-enhanced work update prompts at the right moments
+- **Understands natural language** — "Working on PR #42 auth bug (2 hours)" extracts the ticket, time, and status automatically
+- **Syncs to Azure DevOps and GitLab** — comments on matched work items, transitions states, creates missing items
+- **Learns your communication style** from Teams messages and writes updates in your voice
+- **Runs 100% locally** — Ollama for AI, SQLite for storage, no cloud required
+- **Works offline** — queues everything and syncs when connectivity returns
+- **Remote-controllable** via a Telegram bot on your phone
+
+---
+
+## Documentation
+
+**Start here:** [docs/INDEX.md](docs/INDEX.md)
+
+| I want to… | Go to |
+|-----------|-------|
+| Understand what DevTrack is | [Getting Started](docs/GETTING_STARTED.md) |
+| Install DevTrack | [Installation Guide](docs/INSTALLATION.md) |
+| Run it for the first time | [Quick Start](docs/QUICK_START.md) |
+| See all CLI commands | [CLI Reference](docs/CLI_REFERENCE.md) |
+| Configure `.env` | [Configuration Reference](docs/CONFIGURATION.md) |
+| Set up AI commits / git-sage | [Git Features](docs/GIT_FEATURES.md) · [git-sage](docs/GIT_SAGE.md) |
+| Connect Azure DevOps | [Azure DevOps Guide](docs/AZURE_DEVOPS.md) |
+| Connect GitLab | [GitLab Guide](docs/GITLAB.md) |
+| Use the Telegram bot | [Telegram Bot Setup](docs/TELEGRAM_BOT.md) |
+| Use the PM Agent (`/plan`) | [PM Agent Guide](docs/PM_AGENT.md) |
+| Set up AI providers | [LLM Guide](docs/LLM_GUIDE.md) |
+| Enable "Talk Like You" | [Personalization](docs/PERSONALIZATION.md) |
+| Fix a problem | [Troubleshooting](docs/TROUBLESHOOTING.md) |
+| Understand the architecture | [Architecture](docs/ARCHITECTURE.md) |
+| Contribute or modify DevTrack | [CLAUDE.md](CLAUDE.md) |
+
+---
+
+## 5-Minute Setup
+
+```bash
+# 1. Clone and configure
+git clone https://github.com/yourusername/automation_tools.git
+cd automation_tools
+cp .env_sample .env
+nano .env   # Set PROJECT_ROOT, DEVTRACK_WORKSPACE, DATA_DIR
+
+# 2. Install Python deps
+uv sync
+uv run python -m spacy download en_core_web_sm
+
+# 3. Build the Go daemon
+cd devtrack-bin && go build -o devtrack . && mv devtrack ~/.local/bin/
+cd ..
+
+# 4. Start
+devtrack start
+devtrack status
+```
+
+See [Installation Guide](docs/INSTALLATION.md) for the full walkthrough.
+
+---
+
+## Core Features
+
+### AI-Enhanced Git Workflow
+```bash
+devtrack git commit -m "fix auth redirect"
+# → AI refines the message with branch/PR context → Accept / Enhance / Regenerate
+```
+
+### git-sage — Local LLM Git Agent
+```bash
+uv run python -m backend.git_sage do "squash my last 5 commits"
+uv run python -m backend.git_sage ask "how do I rebase onto main?"
+```
+
+### Azure DevOps & GitLab
+```bash
+devtrack azure-list          # work items assigned to you
+devtrack azure-sync          # pull everything from Azure
+devtrack gitlab-list         # GitLab issues assigned to you
+devtrack gitlab-view 12345 42
+```
+
+### PM Agent (via Telegram)
+```
+/plan Build a payment processing system
+→ LLM decomposes → Epic + Stories + Tasks → Creates in Azure / GitLab / GitHub
+```
+
+### Personalized AI
+```bash
+devtrack enable-learning      # opt in to style learning from Teams
+devtrack show-profile         # view your inferred writing style
+devtrack test-response "Completed auth module"  # see it in action
+```
+
+---
+
+## Technology
+
+| Layer | Stack |
+|-------|-------|
+| Daemon | Go 1.20+, fsnotify, robfig/cron, modernc/sqlite |
+| AI bridge | Python 3.12+, uv, spaCy, aiohttp |
+| Local LLM | Ollama (default) — also OpenAI, Anthropic, Groq, LM Studio |
+| Storage | SQLite (triggers/history), ChromaDB (RAG), optional MongoDB |
+| Remote control | Telegram bot via python-telegram-bot |
+| PM integrations | Azure DevOps REST API, GitLab REST API, GitHub REST API |
+
+---
+
+## Privacy
+
+All data stays on your machine. Ollama runs locally. External AI services (OpenAI, Anthropic, Groq) are optional — only the prompt text is sent, never full commit history or personal context. Learning from Teams requires explicit opt-in and can be deleted anytime.
+
+---
+
+## License
+
+MIT License — see [LICENSE](LICENSE).

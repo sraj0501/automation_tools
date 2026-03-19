@@ -1,0 +1,110 @@
+# DevTrack Documentation
+
+> All documentation lives in `docs/`. Start here and follow the links.
+
+---
+
+## New User? Start Here
+
+| Step | Guide |
+|------|-------|
+| 1. What is DevTrack? | [GETTING_STARTED.md](GETTING_STARTED.md) |
+| 2. Install everything | [INSTALLATION.md](INSTALLATION.md) |
+| 3. Run it for the first time | [QUICK_START.md](QUICK_START.md) |
+| 4. All CLI commands | [CLI_REFERENCE.md](CLI_REFERENCE.md) |
+| 5. All `.env` variables | [CONFIGURATION.md](CONFIGURATION.md) |
+
+---
+
+## Feature Guides
+
+### Git & Commits
+| Guide | What it covers |
+|-------|---------------|
+| [GIT_FEATURES.md](GIT_FEATURES.md) | Enhanced commits, conflict resolution, work update parsing |
+| [GIT_COMMIT_WORKFLOW.md](GIT_COMMIT_WORKFLOW.md) | Detailed interactive AI commit workflow (Accept/Enhance/Regenerate) |
+| [GIT_SAGE.md](GIT_SAGE.md) | Local LLM git agent — ask/do/interactive modes, undo, approval modes |
+
+### Project Management Integrations
+| Guide | What it covers |
+|-------|---------------|
+| [AZURE_DEVOPS.md](AZURE_DEVOPS.md) | Azure DevOps sync, webhooks, assignment poller, work item creation |
+| [GITLAB.md](GITLAB.md) | GitLab sync, issue browsing, assignment poller, Telegram commands |
+| [PM_AGENT.md](PM_AGENT.md) | AI decomposition of problems into Epic → Story → Task hierarchies |
+
+### Remote Control
+| Guide | What it covers |
+|-------|---------------|
+| [TELEGRAM_BOT.md](TELEGRAM_BOT.md) | Full bot setup, all commands (Azure, GitLab, PM Agent, scheduler) |
+
+### AI & Personalization
+| Guide | What it covers |
+|-------|---------------|
+| [LLM_GUIDE.md](LLM_GUIDE.md) | LLM provider setup (Ollama, OpenAI, Anthropic, Groq, LM Studio) |
+| [PERSONALIZATION.md](PERSONALIZATION.md) | "Talk Like You" — learn your style from Teams, inject into all prompts |
+| [LLM_STRATEGY.md](LLM_STRATEGY.md) | Multi-provider fallback architecture |
+
+---
+
+## Reference
+
+| Guide | What it covers |
+|-------|---------------|
+| [CONFIGURATION.md](CONFIGURATION.md) | Every `.env` variable with type, default, and description |
+| [CLI_REFERENCE.md](CLI_REFERENCE.md) | Every `devtrack` command with flags and examples |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Go daemon + Python bridge + IPC + SQLite architecture |
+| [OFFLINE_RESILIENCE.md](OFFLINE_RESILIENCE.md) | Store-and-forward, health monitor, deferred commits |
+| [ADVANCED_FEATURES.md](ADVANCED_FEATURES.md) | Reports, TUI, analytics, and other advanced features |
+| [TUI_FLOWS.md](TUI_FLOWS.md) | Terminal user interface design and interaction flows |
+| [VERIFICATION.md](VERIFICATION.md) | Manual step-by-step verification that everything is working |
+| [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Solutions to common problems, error messages, and edge cases |
+| [VISION.md](VISION.md) | Project vision, roadmap, and planned features |
+| [REFACTORING.md](REFACTORING.md) | Config philosophy — why there are no hardcoded defaults |
+
+---
+
+## For Developers
+
+- **[CLAUDE.md](../CLAUDE.md)** — Architecture, build commands, key patterns, debugging guide. Start here if you want to contribute or modify DevTrack.
+
+---
+
+## docs/ File Index
+
+```
+docs/
+├── INDEX.md                  ← you are here
+│
+├── Getting Started
+│   ├── GETTING_STARTED.md    what is DevTrack, concepts, first-run checklist
+│   ├── INSTALLATION.md       step-by-step install for macOS, Linux, Windows
+│   ├── QUICK_START.md        get running in 15 minutes
+│   ├── CLI_REFERENCE.md      all devtrack commands
+│   └── CONFIGURATION.md      all .env variables
+│
+├── Git Features
+│   ├── GIT_FEATURES.md       enhanced commits, conflict resolution, work parsing
+│   ├── GIT_COMMIT_WORKFLOW.md interactive AI commit refinement workflow
+│   └── GIT_SAGE.md           git-sage LLM agent
+│
+├── Integrations
+│   ├── AZURE_DEVOPS.md       Azure DevOps sync, webhooks, API reference
+│   ├── GITLAB.md             GitLab sync, issue management, poller
+│   ├── PM_AGENT.md           AI work item decomposition
+│   └── TELEGRAM_BOT.md       Telegram remote control
+│
+├── AI & Personalization
+│   ├── LLM_GUIDE.md          provider setup and model config
+│   ├── PERSONALIZATION.md    "Talk Like You" learning system
+│   └── LLM_STRATEGY.md       multi-provider fallback architecture
+│
+└── Advanced & Reference
+    ├── ARCHITECTURE.md       system design
+    ├── OFFLINE_RESILIENCE.md store-and-forward, health monitoring
+    ├── ADVANCED_FEATURES.md  reports, analytics, TUI
+    ├── TUI_FLOWS.md          terminal UI design
+    ├── REFACTORING.md        config philosophy
+    ├── VISION.md             roadmap
+    ├── VERIFICATION.md       manual verification steps
+    └── TROUBLESHOOTING.md    debugging and common errors
+```

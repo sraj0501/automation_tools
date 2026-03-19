@@ -11,5 +11,22 @@ wheels/
 *.idea
 *.env
 
+
 # Golang Files
 *.exe
+go-cli
+devtrack-bin/devtrack
+*devtrack
+devtrack
+*.log
+
+
+# Runtime data
+Data/
+
+# Test temp dirs
+.test_commit_enhancer_tmp
+
+# Claude Code — exclude machine-specific settings, keep shared memory
+.claude/settings.local.json
+.claude/worktrees/
