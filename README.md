@@ -64,18 +64,21 @@ To uninstall: `./uninstall.sh`
 ## Core Features
 
 ### AI-Enhanced Git Workflow
+
 ```bash
 devtrack git commit -m "fix auth redirect"
 # → AI refines the message with branch/PR context → Accept / Enhance / Regenerate
 ```
 
 ### git-sage — Local LLM Git Agent
+
 ```bash
 uv run python -m backend.git_sage do "squash my last 5 commits"
 uv run python -m backend.git_sage ask "how do I rebase onto main?"
 ```
 
 ### Project Management — Azure DevOps, GitLab, GitHub
+
 ```bash
 devtrack azure-list          # work items assigned to you
 devtrack azure-sync          # pull everything from Azure
@@ -85,6 +88,7 @@ devtrack gitlab-view 12345 42
 ```
 
 ### Multi-Repo Monitoring
+
 ```yaml
 # workspaces.yaml — each repo routes to its own PM platform
 workspaces:
@@ -95,18 +99,21 @@ workspaces:
     path: ~/oss/my-lib
     pm_platform: github
 ```
+
 ```bash
 devtrack workspace list       # all monitored repos + status
 devtrack workspace add <path> --name my-repo --platform gitlab
 ```
 
 ### PM Agent (via Telegram)
+
 ```
 /plan Build a payment processing system
 → LLM decomposes → Epic + Stories + Tasks → Creates in Azure / GitLab / GitHub
 ```
 
 ### Personalized AI
+
 ```bash
 devtrack enable-learning      # opt in to style learning from Teams
 devtrack show-profile         # view your inferred writing style
