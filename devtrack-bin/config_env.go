@@ -102,7 +102,6 @@ var requiredEnvVars = []string{
 	"CONFIG_DIR_NAME",
 	"CLI_APP_NAME",
 	"CLI_DAEMON_NAME",
-	"DEVTRACK_WORKSPACE",
 	"DATABASE_DIR",
 	"LOG_DIR",
 	"PID_DIR",

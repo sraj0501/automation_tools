@@ -1,0 +1,59 @@
+# workspaces.yaml — Multi-repo monitoring configuration for DevTrack
+#
+# Place this file at $PROJECT_ROOT/workspaces.yaml (same directory as .env).
+# When present, DevTrack monitors all enabled workspaces below instead of the
+# single DEVTRACK_WORKSPACE path. DEVTRACK_WORKSPACE is ignored.
+#
+# pm_platform options: azure | gitlab | github | jira | none | "" (priority chain)
+# pm_project:          optional platform-specific project ID / key / namespace
+#                      azure  → ignored (uses AZURE_DEVOPS_PROJECT from .env)
+#                      gitlab → numeric project ID (e.g. "12345")
+#                      github → "owner/repo" slug override (e.g. "acme/api")
+#                      jira   → project key (e.g. "PROJ")
+#
+
+version: "1"
+workspaces:
+  # Work projects tracked in Azure DevOps
+  - name: "work-api"
+    path: "/Users/you/work/api"
+    pm_platform: "azure"
+    pm_project: ""
+    enabled: true
+    ignore_branches: ["dependabot/*", "renovate/*"]
+    tags: ["work", "backend"]
+
+  - name: "work-frontend"
+    path: "/Users/you/work/frontend"
+    pm_platform: "azure"
+    pm_project: ""
+    enabled: true
+    ignore_branches: []
+    tags: ["work", "frontend"]
+
+  # Personal projects tracked in GitHub
+  - name: "personal-tools"
+    path: "~/git_apps/personal/automation_tools"
+    pm_platform: "github"
+    pm_project: "myuser/automation_tools"
+    enabled: true
+    ignore_branches: []
+    tags: ["personal"]
+
+  # GitLab project (supply the numeric project ID)
+  - name: "oss-lib"
+    path: "~/code/oss/mylib"
+    pm_platform: "gitlab"
+    pm_project: "98765"
+    enabled: false
+    ignore_branches: ["main", "release/*"]
+    tags: ["oss"]
+
+  # Repo you want monitored but NOT synced to any PM tool
+  - name: "experiments"
+    path: "~/code/experiments"
+    pm_platform: "none"
+    pm_project: ""
+    enabled: true
+    ignore_branches: []
+    tags: ["personal"]

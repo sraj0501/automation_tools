@@ -1525,6 +1525,18 @@ class DevTrackBridge:
                 self._sync_to_github(description, ticket_id, status, commit_info)
             )
 
+    def handle_workspace_reload(self, msg: IPCMessage):
+        """Handle workspace_reload message from Go daemon.
+
+        The Go daemon reloads workspaces.yaml itself; the Python side only
+        needs to acknowledge the request and log that a reload was requested.
+        Future work: re-initialise per-workspace PM clients here.
+        """
+        logger.info("Workspace reload requested by Go daemon")
+        ack = create_ack_message(msg.id)
+        self.ipc_client.send_message(ack)
+        logger.debug("Sent ACK for workspace_reload")
+
     def handle_status_query(self, msg: IPCMessage):
         """Handle status query from Go daemon"""
         logger.info("📊 Status query received")
@@ -1608,6 +1620,7 @@ class DevTrackBridge:
         self.ipc_client.register_handler(MessageType.REPORT_TRIGGER, self.handle_report_trigger)
         self.ipc_client.register_handler(MessageType.STATUS_QUERY, self.handle_status_query)
         self.ipc_client.register_handler(MessageType.SHUTDOWN, self.handle_shutdown)
+        self.ipc_client.register_handler(MessageType.WORKSPACE_RELOAD, self.handle_workspace_reload)
         
         # Connect to IPC server
         logger.info("Connecting to Go daemon IPC server...")

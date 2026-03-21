@@ -20,7 +20,7 @@ func NewCLI() (*CLI, error) {
 	// For status/help commands, we don't need a full daemon
 	if len(os.Args) > 1 {
 		cmd := os.Args[1]
-		if cmd == "help" || cmd == "version" || cmd == "commit-queue" || cmd == "commits" || cmd == "queue" || cmd == "telegram-status" || cmd == "azure-check" || cmd == "gitlab-check" {
+		if cmd == "help" || cmd == "version" || cmd == "commit-queue" || cmd == "commits" || cmd == "queue" || cmd == "telegram-status" || cmd == "azure-check" || cmd == "gitlab-check" || cmd == "workspace" {
 			return &CLI{}, nil
 		}
 	}
@@ -43,6 +43,11 @@ func NewCLI() (*CLI, error) {
 }
 
 func resolveRepoPath() (string, error) {
+	wsCfg, err := LoadWorkspacesConfig()
+	if err == nil && wsCfg != nil && len(wsCfg.GetEnabledWorkspaces()) > 0 {
+		return "", nil
+	}
+
 	workspacePath := strings.TrimSpace(os.Getenv("DEVTRACK_WORKSPACE"))
 	if workspacePath != "" {
 		workspacePath = filepath.Clean(workspacePath)
@@ -161,6 +166,8 @@ func (cli *CLI) Execute() error {
 		return cli.handleGitLabView()
 	case "settings":
 		return cli.handleSettings()
+	case "workspace":
+		return cli.handleWorkspace()
 	case "help":
 		cli.printUsage()
 		return nil
@@ -1316,6 +1323,62 @@ func (cli *CLI) handleGitLabView() error {
 	return nil
 }
 
+// handleWorkspace dispatches workspace subcommands
+func (cli *CLI) handleWorkspace() error {
+	subCmd := ""
+	if len(os.Args) > 2 {
+		subCmd = os.Args[2]
+	}
+
+	wc := NewWorkspaceCommands()
+	switch subCmd {
+	case "list", "":
+		return wc.List()
+	case "add":
+		if len(os.Args) < 5 {
+			fmt.Println("Usage: devtrack workspace add <name> <path> [pm_platform]")
+			return fmt.Errorf("missing arguments")
+		}
+		name := os.Args[3]
+		path := os.Args[4]
+		pmPlatform := ""
+		if len(os.Args) > 5 {
+			pmPlatform = os.Args[5]
+		}
+		return wc.Add(name, path, pmPlatform)
+	case "remove":
+		if len(os.Args) < 4 {
+			fmt.Println("Usage: devtrack workspace remove <name>")
+			return fmt.Errorf("missing name argument")
+		}
+		return wc.Remove(os.Args[3])
+	case "enable":
+		if len(os.Args) < 4 {
+			fmt.Println("Usage: devtrack workspace enable <name>")
+			return fmt.Errorf("missing name argument")
+		}
+		return wc.Enable(os.Args[3])
+	case "disable":
+		if len(os.Args) < 4 {
+			fmt.Println("Usage: devtrack workspace disable <name>")
+			return fmt.Errorf("missing name argument")
+		}
+		return wc.Disable(os.Args[3])
+	case "reload":
+		return wc.Reload()
+	default:
+		fmt.Printf("Unknown workspace subcommand: %s\n", subCmd)
+		fmt.Println("Usage:")
+		fmt.Println("  devtrack workspace list                         List configured workspaces")
+		fmt.Println("  devtrack workspace add <name> <path> [platform] Add a workspace")
+		fmt.Println("  devtrack workspace remove <name>                Remove a workspace")
+		fmt.Println("  devtrack workspace enable <name>                Enable a workspace")
+		fmt.Println("  devtrack workspace disable <name>               Disable a workspace")
+		fmt.Println("  devtrack workspace reload                        Reload workspaces in running daemon")
+		return fmt.Errorf("unknown workspace subcommand: %s", subCmd)
+	}
+}
+
 // handleSettings shows all configuration paths and key env settings
 func (cli *CLI) handleSettings() error {
 	LoadEnvConfig()
@@ -1522,6 +1585,14 @@ func (cli *CLI) printUsage() {
 	fmt.Println("  Bot commands: /status /azure /azureissue /azurecreate")
 	fmt.Println("                /gitlab /gitlabissue /gitlabcreate")
 	fmt.Println("                /plan <problem>  (PM Agent: decompose + create work items)")
+	fmt.Println()
+	fmt.Println("WORKSPACE (MULTI-REPO):")
+	fmt.Println("  devtrack workspace list                          List configured workspaces")
+	fmt.Println("  devtrack workspace add <name> <path> [platform]  Add a workspace to workspaces.yaml")
+	fmt.Println("  devtrack workspace remove <name>                 Remove a workspace")
+	fmt.Println("  devtrack workspace enable <name>                 Enable a workspace")
+	fmt.Println("  devtrack workspace disable <name>                Disable a workspace")
+	fmt.Println("  devtrack workspace reload                         Signal daemon to reload workspaces.yaml")
 	fmt.Println()
 	fmt.Println("INFO COMMANDS:")
 	fmt.Println("  devtrack logs          Show recent log entries")

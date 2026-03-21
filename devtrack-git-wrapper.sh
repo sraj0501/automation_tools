@@ -113,7 +113,7 @@ if [ "$GIT_COMMAND" = "commit" ]; then
         export GIT_DIR="$REPO_ROOT/.git"
 
         echo -e "${BLUE}🔍 Analyzing with AI...${NC}"
-        ENHANCEMENT_OUTPUT=$(uv run --directory "$PROJECT_ROOT" python "$PROJECT_ROOT/backend/commit_message_enhancer.py" "$TEMP_MSG" auto 2>&1)
+        ENHANCEMENT_OUTPUT=$("$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/backend/commit_message_enhancer.py" "$TEMP_MSG" auto 2>&1)
 
         if echo "$ENHANCEMENT_OUTPUT" | grep -q "enhanced"; then
             ENHANCED_MESSAGE=$(grep -v "^#" "$TEMP_MSG" | sed '/^$/d')
@@ -182,7 +182,7 @@ if [ "$GIT_COMMAND" = "commit" ]; then
 
         # Generate/enhance message
         echo -e "${BLUE}🔍 Analyzing with AI...${NC}"
-        ENHANCEMENT_OUTPUT=$(uv run --directory "$PROJECT_ROOT" python "$PROJECT_ROOT/backend/commit_message_enhancer.py" "$TEMP_MSG" auto 2>&1)
+        ENHANCEMENT_OUTPUT=$("$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/backend/commit_message_enhancer.py" "$TEMP_MSG" auto 2>&1)
 
         if echo "$ENHANCEMENT_OUTPUT" | grep -q "enhanced"; then
             # Read enhanced message (remove comment lines)
@@ -227,7 +227,25 @@ if [ "$GIT_COMMAND" = "commit" ]; then
 
         case "$CHOICE" in
             [Aa])
-                # Accept the message
+                # Run ticket picker to link commit to a PM ticket
+                TICKET_FILE=$(mktemp)
+                "$PROJECT_ROOT/.venv/bin/python" \
+                    "$PROJECT_ROOT/backend/ticket_picker.py" \
+                    --repo-path "$REPO_ROOT" \
+                    --workspaces-file "$PROJECT_ROOT/workspaces.yaml" \
+                    --commit-message "$ENHANCED_MESSAGE" \
+                    --output "$TICKET_FILE" || true
+                TICKET_ID=$(cat "$TICKET_FILE" 2>/dev/null | tr -d '[:space:]')
+                rm -f "$TICKET_FILE"
+
+                # Append ticket reference to commit message
+                if [ -n "$TICKET_ID" ]; then
+                    CURRENT_MSG=$(grep -v "^#" "$TEMP_MSG" | sed '/^$/d')
+                    printf '%s\n\nRefs: %s\n' "$CURRENT_MSG" "$TICKET_ID" > "$TEMP_MSG"
+                    echo ""
+                    echo -e "${GREEN}✓ Linked to ${TICKET_ID}${NC}"
+                fi
+
                 COMMIT_CONFIRMED=true
                 ;;
             [Ee])

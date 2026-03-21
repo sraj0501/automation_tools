@@ -79,6 +79,25 @@ func expandWorkspacePath(path string) string {
 	return path
 }
 
+// Save writes the WorkspacesConfig back to the workspaces.yaml file.
+func (wc *WorkspacesConfig) Save() error {
+	path := GetWorkspacesFilePath()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return fmt.Errorf("failed to create directory for workspaces file: %w", err)
+	}
+
+	data, err := yaml.Marshal(wc)
+	if err != nil {
+		return fmt.Errorf("failed to marshal workspaces config: %w", err)
+	}
+
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return fmt.Errorf("failed to write workspaces file: %w", err)
+	}
+
+	return nil
+}
+
 // GetEnabledWorkspaces returns all enabled workspace configs
 func (wc *WorkspacesConfig) GetEnabledWorkspaces() []WorkspaceConfig {
 	var enabled []WorkspaceConfig

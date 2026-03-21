@@ -37,7 +37,8 @@ func main() {
 			cmd == "learning-remove-cron" || cmd == "learning-cron-status" ||
 			cmd == "learning-reset" ||
 			cmd == "commit-queue" || cmd == "commits" || cmd == "queue" ||
-			cmd == "telegram-status" || cmd == "azure-check" || cmd == "azure-list" || cmd == "azure-sync" || cmd == "azure-view" || cmd == "settings" {
+			cmd == "telegram-status" || cmd == "azure-check" || cmd == "azure-list" || cmd == "azure-sync" || cmd == "azure-view" || cmd == "settings" ||
+		cmd == "workspace" {
 			cli, err := NewCLI()
 			if err != nil {
 				fmt.Printf("Error initializing CLI: %v\n", err)

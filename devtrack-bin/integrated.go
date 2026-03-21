@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -21,12 +22,14 @@ type WorkspaceMonitor struct {
 
 // IntegratedMonitor combines Git monitoring and time-based scheduling
 type IntegratedMonitor struct {
-	workspaceMonitors []*WorkspaceMonitor // one per repo (single-repo has exactly one)
-	scheduler         *Scheduler
-	config            *Config
-	ipcServer         *IPCServer
-	database          *Database
-	messageQueue      *MessageQueue
+	workspaceMonitors    []*WorkspaceMonitor // one per repo (single-repo has exactly one)
+	scheduler            *Scheduler
+	config               *Config
+	ipcServer            *IPCServer
+	database             *Database
+	messageQueue         *MessageQueue
+	lastActiveWorkspace  *WorkspaceMonitor
+	lastActiveWorkspaceMu sync.Mutex
 }
 
 // NewIntegratedMonitor creates a new integrated monitoring system.
@@ -282,6 +285,58 @@ func (im *IntegratedMonitor) registerIPCHandlers() {
 
 		return nil
 	})
+
+	// Handle workspace reload requests
+	im.ipcServer.RegisterHandler(MsgTypeWorkspaceReload, func(msg IPCMessage) error {
+		log.Println("Workspace reload requested")
+
+		newCfg, err := LoadWorkspacesConfig()
+		if err != nil {
+			log.Printf("Failed to reload workspaces.yaml: %v", err)
+			return nil
+		}
+
+		if newCfg == nil {
+			log.Println("workspaces.yaml removed — single-repo mode will be active on restart")
+			return nil
+		}
+
+		for _, ws := range im.workspaceMonitors {
+			if ws.gitMonitor != nil {
+				ws.gitMonitor.Stop()
+			}
+		}
+
+		var newMonitors []*WorkspaceMonitor
+		for _, ws := range newCfg.GetEnabledWorkspaces() {
+			gm, err := NewGitMonitor(ws.Path)
+			if err != nil {
+				log.Printf("Warning: skipping workspace %q (%s) on reload: %v", ws.Name, ws.Path, err)
+				continue
+			}
+			wsMon := &WorkspaceMonitor{
+				gitMonitor:    gm,
+				workspaceName: ws.Name,
+				pmPlatform:    ws.PMPlatform,
+				pmProject:     ws.PMProject,
+			}
+			newMonitors = append(newMonitors, wsMon)
+		}
+
+		im.workspaceMonitors = newMonitors
+
+		for _, wsMon := range im.workspaceMonitors {
+			wsCopy := wsMon
+			if err := wsCopy.gitMonitor.Start(func(commit CommitInfo) {
+				im.handleCommitForWorkspace(commit, wsCopy)
+			}); err != nil {
+				log.Printf("Warning: failed to start git monitor for %q on reload: %v", wsCopy.workspaceName, err)
+			}
+		}
+
+		log.Printf("Workspace reload complete: %d workspace(s) active", len(im.workspaceMonitors))
+		return nil
+	})
 }
 
 // Helper functions to extract values from map[string]interface{}
@@ -305,6 +360,10 @@ func getBoolFromMap(m map[string]interface{}, key string) bool {
 
 // handleCommitForWorkspace is called when a Git commit is detected on a specific workspace
 func (im *IntegratedMonitor) handleCommitForWorkspace(commit CommitInfo, ws *WorkspaceMonitor) {
+	im.lastActiveWorkspaceMu.Lock()
+	im.lastActiveWorkspace = ws
+	im.lastActiveWorkspaceMu.Unlock()
+
 	event := TriggerEvent{
 		Type:          TriggerTypeCommit,
 		Timestamp:     commit.Timestamp,
@@ -385,11 +444,22 @@ func (im *IntegratedMonitor) handleTrigger(event TriggerEvent) {
 				triggerCount = count
 			}
 
-			ipcMsg = CreateTimerTriggerMessage(TimerTriggerData{
+			timerData := TimerTriggerData{
 				Timestamp:    event.Timestamp.Format(time.RFC3339),
 				IntervalMins: intervalMins,
 				TriggerCount: triggerCount,
-			})
+			}
+
+			im.lastActiveWorkspaceMu.Lock()
+			lastWS := im.lastActiveWorkspace
+			im.lastActiveWorkspaceMu.Unlock()
+			if lastWS != nil {
+				timerData.WorkspaceName = lastWS.workspaceName
+				timerData.PMPlatform = lastWS.pmPlatform
+				timerData.PMProject = lastWS.pmProject
+			}
+
+			ipcMsg = CreateTimerTriggerMessage(timerData)
 
 			// Prepare database record
 			triggerRecord = TriggerRecord{
