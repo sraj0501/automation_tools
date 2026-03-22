@@ -763,7 +763,7 @@ function renderHome() {
         { id:'GETTING_STARTED', icon:'🚀', title:'Getting Started',   desc:'New to DevTrack? Start here — concepts, setup, and first run.' },
         { id:'QUICK_START',     icon:'⚡', title:'Quick Start',       desc:'Get running in 5 minutes with the minimal setup guide.' },
         { id:'CLI_REFERENCE',   icon:'⌨️', title:'CLI Reference',     desc:'All devtrack commands with flags and examples.' },
-        { id:'GIT_FEATURES',    icon:'🔀', title:'Git Features',      desc:'Shell integration, AI commits, and conflict resolution. Type <code>git commit</code> — DevTrack intercepts it, prompts for time spent, then opens an interactive split-pane ticket picker so you can link the commit to an issue instantly.' },
+        { id:'GIT_FEATURES',    icon:'🔀', title:'Git Features',      desc:'Shell integration, AI commits, and conflict resolution. Type <code>git commit</code> — DevTrack intercepts it, prompts for time spent, then opens an interactive split-pane ticket picker so you can link the commit to an issue instantly. <code>git add</code> with no args stages everything. After commit, one keypress pushes to origin. Press <kbd>E</kbd> in the refinement loop for a richer AI message.' },
         { id:'GIT_SAGE',        icon:'🤖', title:'git-sage Agent',    desc:'Autonomous local LLM agent for complex git operations.' },
         { id:'AZURE_DEVOPS',    icon:'🔷', title:'Azure DevOps',      desc:'Sync work items, auto-comment, and transition states.' },
         { id:'GITLAB',          icon:'🦊', title:'GitLab',            desc:'Full CLI and Telegram access; inbound webhooks; issue enrichment on create.' },
@@ -803,10 +803,12 @@ devtrack enable-git   # opt this repo in</code></pre>
 
     <div class="feature-list">
       ${[
-        { n:'Zero-Friction Git',   d:'Type <code>git commit</code> as normal — DevTrack intercepts for monitored repos. One-time shell setup: <code>eval "$(devtrack shell-init)"</code>.' },
+        { n:'Zero-Friction Git',   d:'Type <code>git commit</code> as normal — DevTrack intercepts for monitored repos. One-time shell setup: <code>eval "$(devtrack shell-init)"</code>. With shell integration active, <code>git add</code> with no arguments automatically stages all changes (<code>git add .</code>); paths still work normally.' },
         { n:'Time Tracking',       d:'After "Log this work?", DevTrack asks: <em>"How long did this take? (e.g. 2h, 30m)"</em>. Time spent is attached to the selected issue comment — no separate time-entry tool needed.' },
         { n:'Interactive Ticket Picker', d:'A curses split-pane picker opens after the time prompt. Left pane: scrollable list of your open issues (GitHub / GitLab / Azure, per workspace). Right pane: full issue body, auto word-wrapped. Controls: <kbd>↑</kbd><kbd>↓</kbd> navigate · <kbd>Enter</kbd> select · <kbd>/</kbd> real-time filter · <kbd>n</kbd> new issue · <kbd>Esc</kbd>/<kbd>q</kbd> skip.' },
+        { n:'Auto-Push After Commit', d:'After every successful commit + log-work flow, DevTrack prompts: <em>Push to origin/&lt;branch&gt;? (y/n)</em>. One keypress pushes — no need to remember the branch name or run a separate command.' },
         { n:'Immediate PM Sync',   d:'Selecting a ticket posts a comment with the commit hash, message, and time spent — instantly, with your confirmation. No background daemon guessing required. Auto-comments, transitions states, and creates missing items in Azure/GitLab/GitHub. New issues include commit hash and message in the description and are auto-assigned to the authenticated user.' },
+        { n:'Richer AI Messages',  d:'In the commit refinement loop, pressing <kbd>E</kbd> to enhance gives the AI double the normal token allowance for that call, producing more detailed and thorough commit messages.' },
         { n:'Personalized AI',     d:'Learns your style from Teams messages and writes in your voice.' },
         { n:'Offline-First',       d:'Queues everything and syncs when connectivity returns.' },
         { n:'Remote Control',      d:'Full Telegram bot: status, logs, create items, trigger updates.' },

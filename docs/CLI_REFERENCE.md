@@ -40,6 +40,8 @@ devtrack git history                       # Show recent commit history
 devtrack git messages                      # Alias for git history
 ```
 
+**Refinement loop — Enhance token budget:** In the interactive refinement loop, choosing **E** (Enhance/improve message) doubles the AI model's token allowance to `COMMIT_LLM_MAX_TOKENS × 2` for that single call, producing richer and more detailed messages. The budget resets to the normal limit for any subsequent iteration unless you press **E** again.
+
 See [GIT_COMMIT_WORKFLOW.md](GIT_COMMIT_WORKFLOW.md) for the full interactive workflow.
 
 ### Work Logging Flow (after commit accepted)
@@ -90,6 +92,23 @@ When an issue is selected, DevTrack posts a comment containing:
 - Commit hash (short SHA)
 - Commit message
 - Time spent (if provided in Step 1)
+
+#### Step 3 — Auto-push prompt
+
+After the ticket picker closes (whether an issue was linked or skipped), DevTrack asks whether to push the commit:
+
+```
+🚀 Push to origin/<branch>? (y/n)
+y
+→ Pushing...
+✓ Pushed to origin/bot_automation
+```
+
+Pressing `n` prints a reminder and skips the push:
+
+```
+Skipped. Run 'git push origin <branch>' when ready.
+```
 
 #### Non-TTY / no-terminal fallback
 
@@ -148,9 +167,26 @@ command git commit -m "message"             # Always calls real git
 | Command | Intercepted? |
 |---------|-------------|
 | `git commit` | Yes — routed through DevTrack AI enhancement |
+| `git add` (no args) | Yes — automatically stages all changes (`git add .`) |
 | `git history` | Yes — shows DevTrack commit history |
 | `git messages` | Yes — alias for git history |
 | `git push`, `git pull`, `git status`, `git log`, … | No — always real git |
+
+### `git add` with No Arguments
+
+When shell integration is active, running `git add` with no path prints a notice and stages everything:
+
+```
+$ git add
+No path specified — staging all changes (git add .)
+```
+
+Providing one or more paths passes them straight to the real `git add` with no change in behaviour:
+
+```bash
+git add src/auth.js        # stages only that file
+git add src/ tests/        # multiple paths, unchanged
+```
 
 ---
 

@@ -53,8 +53,18 @@ if [ -z "$GIT_COMMAND" ]; then
 fi
 shift  # Remove the subcommand (commit, add, etc.)
 
+# Handle git add — default to '.' when no paths given
+if [ "$GIT_COMMAND" = "add" ]; then
+    if [ $# -eq 0 ]; then
+        echo -e "${BLUE}🔍 No path specified — staging all changes (git add .)${NC}"
+        git add .
+    else
+        git add "$@"
+    fi
+    exit $?
+
 # Handle git commit with AI enhancement
-if [ "$GIT_COMMAND" = "commit" ]; then
+elif [ "$GIT_COMMAND" = "commit" ]; then
     # Check if there are staged changes
     if git diff --cached --quiet 2>/dev/null; then
         echo "No changes staged for commit."
@@ -172,7 +182,8 @@ if [ "$GIT_COMMAND" = "commit" ]; then
     COMMIT_CONFIRMED=false
     ATTEMPT=0
     MAX_ATTEMPTS=5
-    
+    ENHANCE_MODE=0   # set to 1 when user presses E, doubles token budget for that call
+
     while [ "$COMMIT_CONFIRMED" = false ] && [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
         ATTEMPT=$((ATTEMPT + 1))
         echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -180,9 +191,10 @@ if [ "$GIT_COMMAND" = "commit" ]; then
         echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         echo ""
 
-        # Generate/enhance message
+        # Generate/enhance message (double token budget when user explicitly asked to enhance)
         echo -e "${BLUE}🔍 Analyzing with AI...${NC}"
-        ENHANCEMENT_OUTPUT=$("$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/backend/commit_message_enhancer.py" "$TEMP_MSG" auto 2>&1)
+        ENHANCEMENT_OUTPUT=$(COMMIT_ENHANCE_MODE=$ENHANCE_MODE "$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/backend/commit_message_enhancer.py" "$TEMP_MSG" auto 2>&1)
+        ENHANCE_MODE=0  # reset — only applies for the single call it was requested for
 
         if echo "$ENHANCEMENT_OUTPUT" | grep -q "enhanced"; then
             # Read enhanced message (remove comment lines)
@@ -249,9 +261,10 @@ if [ "$GIT_COMMAND" = "commit" ]; then
                 COMMIT_CONFIRMED=true
                 ;;
             [Ee])
-                # Enhance current message (use it as input for next iteration)
+                # Enhance current message (use it as input for next iteration, with double token budget)
                 if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
                     echo "$ENHANCED_MESSAGE" > "$TEMP_MSG"
+                    ENHANCE_MODE=1
                 else
                     echo -e "${YELLOW}✗ Maximum attempts reached. Cannot enhance further.${NC}"
                     echo ""
@@ -387,6 +400,23 @@ if [ "$GIT_COMMAND" = "commit" ]; then
                 fi
             else
                 echo -e "${BLUE}  Skipped. Daemon will auto-sync in background.${NC}"
+            fi
+
+            # Offer to push to current branch
+            echo ""
+            CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+            echo -e "${YELLOW}🚀 Push to origin/${CURRENT_BRANCH}? (y/n)${NC}"
+            read -r -n 1 PUSH_RESPONSE
+            echo ""
+            if [[ "$PUSH_RESPONSE" =~ ^[Yy]$ ]]; then
+                echo -e "${BLUE}→ Pushing...${NC}"
+                if GIT_NO_DEVTRACK=1 git push origin "$CURRENT_BRANCH" 2>&1; then
+                    echo -e "${GREEN}✓ Pushed to origin/${CURRENT_BRANCH}${NC}"
+                else
+                    echo -e "${RED}✗ Push failed. Run 'git push origin ${CURRENT_BRANCH}' to retry.${NC}"
+                fi
+            else
+                echo -e "${BLUE}  Skipped. Run 'git push origin ${CURRENT_BRANCH}' when ready.${NC}"
             fi
         fi
     else

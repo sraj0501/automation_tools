@@ -84,6 +84,22 @@ git status                               # not intercepted → real git
 devtrack git commit -m "fix auth redirect"
 ```
 
+### `git add` with No Arguments
+
+When shell integration is active, running `git add` with no path arguments automatically stages all changes (`git add .`):
+
+```bash
+git add
+# No path specified — staging all changes (git add .)
+```
+
+Paths work normally when provided:
+
+```bash
+git add src/auth.js       # stages only that file, as usual
+git add src/ tests/       # multiple paths, unchanged behaviour
+```
+
 ---
 
 ## Feature 1: Enhanced Commit Messages
@@ -148,6 +164,8 @@ Committed with enhanced message.
 Log this work? (y/n): y
 ```
 
+> **Tip — pressing `2` (Enhance):** When you choose Enhance to ask the AI to improve the message further, the model is given double the normal token budget (`COMMIT_LLM_MAX_TOKENS × 2`) for that single call, allowing a richer and more detailed result. The budget resets to the normal limit for any subsequent iteration unless you press Enhance again.
+
 ### Log This Work — Interactive PM Sync
 
 When you answer `y` to "Log this work?", DevTrack first asks how long the work took, then opens a full-screen split-pane ticket picker so you can link the commit to the right issue without leaving the terminal.
@@ -208,6 +226,23 @@ The right pane updates instantly as you move the highlight, showing the full iss
   → 1h logged · commit a3f9c12 linked
 ```
 
+#### Auto-Push Prompt
+
+After the log-work flow completes, DevTrack asks whether to push the commit immediately:
+
+```
+🚀 Push to origin/bot_automation? (y/n)
+y
+→ Pushing...
+✓ Pushed to origin/bot_automation
+```
+
+Pressing `n` prints a reminder instead of pushing:
+
+```
+Skipped. Run 'git push origin bot_automation' when ready.
+```
+
 #### Dry-Run Mode (Preview Only)
 
 ```bash
@@ -253,6 +288,9 @@ OLLAMA_MODEL=mistral
 # Commit enhancement settings
 COMMIT_MAX_ATTEMPTS=5            # Max refinement attempts
 COMMIT_CONTEXT_ENABLED=true      # Include git context
+COMMIT_LLM_MAX_TOKENS=512        # Normal token budget per LLM call
+                                 # Pressing E (Enhance) doubles this to 1024
+                                 # for that call only; resets to normal afterwards
 ```
 
 ### Examples

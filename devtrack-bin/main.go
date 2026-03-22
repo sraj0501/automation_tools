@@ -70,7 +70,7 @@ func printBasicUsage() {
 	fmt.Println("DAEMON:    start | stop | restart | status")
 	fmt.Println("SCHEDULER: pause | resume | force-trigger | skip-next | send-summary")
 	fmt.Println("INFO:      logs | db-stats | stats | version | help")
-	fmt.Println("GIT:       git commit -m 'message'   (AI-enhanced commit)")
+	fmt.Println("GIT:       git add | git commit -m 'message'   (AI-enhanced; shell-init required for bare 'git' commands)")
 	fmt.Println("COMMITS:   commits pending | commits review")
 	fmt.Println("REPORTS:   preview-report | send-report | save-report")
 	fmt.Println()
