@@ -379,7 +379,8 @@ if [ "$GIT_COMMAND" = "commit" ]; then
                     --message "$FINAL_MESSAGE" \
                     --branch  "$BRANCH" \
                     --repo    "$REPO_ROOT" \
-                    ${TIME_SPENT:+--time "$TIME_SPENT"} 2>/dev/null)
+                    ${TIME_SPENT:+--time "$TIME_SPENT"} \
+                    ${TICKET_ID:+--ticket "$TICKET_ID"} 2>/dev/null)
 
                 if [ -n "$LOG_OUTPUT" ]; then
                     echo "$LOG_OUTPUT"

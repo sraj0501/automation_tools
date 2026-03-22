@@ -164,7 +164,18 @@ async def _sync_github(
     query   = description or commit_info.get("commit_message", "")
 
     try:
-        # 1. Try matching an open issue
+        # 1. Explicit ticket selected by user (picker or #ref) — use directly
+        if ticket_id and ticket_id.startswith("#"):
+            try:
+                num = int(ticket_id[1:])
+                ok  = await client.add_comment(num, comment)
+                if ok:
+                    print(f"  ✓ Commented on GitHub issue #{num}")
+                    return True
+            except Exception:
+                pass
+
+        # 2. Try matching an open issue via TaskMatcher
         try:
             from backend.task_matcher import TaskMatcher
             issues = await client.get_my_issues(state="open")
@@ -177,17 +188,6 @@ async def _sync_github(
                         return True
         except Exception:
             pass
-
-        # 2. Explicit ticket reference like #42
-        if ticket_id and ticket_id.startswith("#"):
-            try:
-                num = int(ticket_id[1:])
-                ok  = await client.add_comment(num, comment)
-                if ok:
-                    print(f"  ✓ Commented on GitHub issue #{num}")
-                    return True
-            except Exception:
-                pass
 
         # 3. create_on_no_match
         create = os.environ.get("GITHUB_CREATE_ON_NO_MATCH", "false").lower() == "true"
@@ -241,6 +241,18 @@ async def _sync_gitlab(
     proj_env = os.environ.get("GITLAB_PROJECT_ID", "")
 
     try:
+        # 1. Explicit ticket selected by user (picker) — numeric IID like #42
+        if ticket_id and ticket_id.startswith("#"):
+            try:
+                iid = int(ticket_id[1:])
+                ok  = await client.add_comment(int(proj_env), iid, comment)
+                if ok:
+                    print(f"  ✓ Commented on GitLab issue #{iid}")
+                    return True
+            except Exception:
+                pass
+
+        # 2. TaskMatcher fallback
         try:
             from backend.task_matcher import TaskMatcher
             issues = await client.get_my_issues(state="opened")
@@ -286,6 +298,18 @@ async def _sync_azure(
     query   = description or commit_info.get("commit_message", "")
 
     try:
+        # 1. Explicit ticket selected by user (picker) — numeric ID like #42
+        if ticket_id and ticket_id.startswith("#"):
+            try:
+                item_id = int(ticket_id[1:])
+                ok = await client.add_comment(item_id, comment)
+                if ok:
+                    print(f"  ✓ Commented on Azure work item #{item_id}")
+                    return True
+            except Exception:
+                pass
+
+        # 2. TaskMatcher fallback
         try:
             from backend.task_matcher import TaskMatcher
             items = await client.get_my_work_items()
@@ -309,7 +333,7 @@ async def _sync_azure(
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 
-async def run(commit: str, message: str, branch: str, repo: str, time_spent: str) -> int:
+async def run(commit: str, message: str, branch: str, repo: str, time_spent: str, ticket: str = "") -> int:
     pm_platform, pm_project, workspace_settings = _find_workspace(repo)
 
     if pm_platform is None:
@@ -320,7 +344,11 @@ async def run(commit: str, message: str, branch: str, repo: str, time_spent: str
         print("  ℹ PM sync disabled for this workspace (pm_platform: none).")
         return 0
 
-    ticket_id, status, description = _parse_message(message, repo_path=repo)
+    # If the user explicitly picked a ticket (from the interactive picker), use it directly
+    if ticket:
+        ticket_id, status, description = ticket, "in_progress", message
+    else:
+        ticket_id, status, description = _parse_message(message, repo_path=repo)
 
     commit_info = {
         "commit_hash":    commit,
@@ -350,6 +378,7 @@ if __name__ == "__main__":
     parser.add_argument("--branch",  default="")
     parser.add_argument("--repo",    default=".")
     parser.add_argument("--time",    default="", dest="time_spent")
+    parser.add_argument("--ticket",  default="")
     args, _ = parser.parse_known_args()
 
     sys.exit(asyncio.run(run(
@@ -358,4 +387,5 @@ if __name__ == "__main__":
         branch=args.branch,
         repo=args.repo,
         time_spent=args.time_spent,
+        ticket=args.ticket,
     )))
