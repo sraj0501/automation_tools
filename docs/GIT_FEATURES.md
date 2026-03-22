@@ -34,6 +34,13 @@ Reload your shell:
 source ~/.zshrc    # or ~/.bashrc
 ```
 
+That single line installs **two** shell functions:
+
+- **`git()`** — intercepts `git commit`, `git history`, and `git messages` for DevTrack workspaces.
+- **`devtrack()`** — a thin wrapper around the binary that automatically re-evals `shell-init` after `devtrack start`, `devtrack restart`, or `devtrack enable-git`, keeping the `git()` function up to date without any manual steps.
+
+After the one-time `eval`, the setup is **self-maintaining**: running `devtrack restart` (e.g. after rebuilding the binary) silently refreshes the shell functions in the current session. No need to open a new terminal or re-run `eval "$(devtrack shell-init)"` again.
+
 ### Opt Repos In
 
 **Option A — Per-repo git config (fastest)**

@@ -140,6 +140,15 @@ eval "$(devtrack shell-init)"
 source ~/.zshrc
 ```
 
+`eval "$(devtrack shell-init)"` installs two shell functions:
+
+| Function | Purpose |
+|----------|---------|
+| `git()` | Intercepts `git commit`, `git history`, and `git messages` for DevTrack workspaces; passes everything else straight to the real git binary |
+| `devtrack()` | Wraps the devtrack binary; after `devtrack start`, `devtrack restart`, or `devtrack enable-git` it automatically re-evals `shell-init` so the `git()` function is always current |
+
+The setup is **self-maintaining**: after the one-time addition to your rc file, you never need to run `eval "$(devtrack shell-init)"` again manually. Rebuilding or updating the binary? Just run `devtrack restart` and the shell functions refresh silently in the current session.
+
 ### Per-Repo Opt-In
 
 ```bash

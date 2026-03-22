@@ -100,6 +100,8 @@ devtrack enable-git    # opt this repo in via git config (instant, no yaml edit)
 
 After that, `git commit`, `git history`, and `git messages` route through DevTrack transparently for monitored repos. `git add` with no arguments is also intercepted and defaults to `git add .` — supply paths explicitly to stage individual files as normal. Everything else (`git push`, `git pull`, `git status`, …) goes straight to real git — unaffected.
 
+The setup is **self-maintaining**: `eval "$(devtrack shell-init)"` installs both a `git()` shell function (for commit interception) and a `devtrack()` wrapper that auto-reloads the shell functions whenever you run `devtrack start`, `devtrack restart`, or `devtrack enable-git`. No need to re-run `eval` or open a new terminal after updates.
+
 Escape hatch for a single command: `GIT_NO_DEVTRACK=1 git commit -m "skip"`
 
 ### git-sage — Local LLM Git Agent
