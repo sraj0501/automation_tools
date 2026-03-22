@@ -1654,8 +1654,16 @@ git() {
 
     local _dt_enabled=""
 
-    # Fast path: per-repo opt-in via 'devtrack enable-git' (reads .git/config, no subprocess)
+    # Fast path: per-repo opt-in/out via git config (reads .git/config, no subprocess)
+    # 'devtrack enable-git'  sets devtrack.enabled=true  → always intercept
+    # 'devtrack disable-git' sets devtrack.enabled=false → never intercept (overrides workspaces.yaml)
     _dt_enabled=$(command git config --local devtrack.enabled 2>/dev/null || true)
+
+    # Explicit opt-out: skip even if this repo is in workspaces.yaml
+    if [ "$_dt_enabled" = "false" ]; then
+      command git "$@"
+      return $?
+    fi
 
     # Slow path: check workspaces.yaml when not explicitly set
     if [ -z "$_dt_enabled" ] && command -v devtrack >/dev/null 2>&1; then
@@ -1734,18 +1742,18 @@ func (cli *CLI) handleEnableGit() error {
 	return nil
 }
 
-// handleDisableGit removes git config devtrack.enabled from the current repo.
+// handleDisableGit sets git config devtrack.enabled=false in the current repo.
+// Setting false explicitly overrides workspaces.yaml detection in the shell function.
+// (Simply unsetting the key would leave workspaces.yaml matching active.)
 func (cli *CLI) handleDisableGit() error {
-	cmd := exec.Command("git", "config", "--local", "--unset", "devtrack.enabled")
+	cmd := exec.Command("git", "config", "--local", "devtrack.enabled", "false")
 	if err := cmd.Run(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 5 {
-			// exit code 5 = key not found; nothing to do
-		} else {
-			return fmt.Errorf("failed to unset git config: %v", err)
-		}
+		return fmt.Errorf("failed to set git config: %v\nAre you inside a git repository?", err)
 	}
 	fmt.Println("✓ DevTrack git integration disabled for this repo.")
-	fmt.Println("  'git commit' will use standard git.")
+	fmt.Println("  'git commit' will use standard git (even if this repo is in workspaces.yaml).")
+	fmt.Println()
+	fmt.Println("  To re-enable: devtrack enable-git")
 	return nil
 }
 
