@@ -10,6 +10,7 @@
 - **Watches your Git commits** and fires AI-enhanced work update prompts at the right moments
 - **Zero-friction git workflow** — type `git commit` as normal; DevTrack intercepts it for monitored repos. No extra commands to remember.
 - **Understands natural language** — "Working on PR #42 auth bug (2 hours)" extracts the ticket, time, and status automatically
+- **Interactive ticket linking** — after logging work, a split-pane picker lists your open issues (arrow keys or j/k to navigate, full issue body visible on the right, `/` to filter, Enter to link)
 - **Syncs to Azure DevOps, GitLab, and GitHub** — comments on matched work items, transitions states, creates missing items
 - **Monitors multiple repos** — each repo routes to its own PM platform via `workspaces.yaml`
 - **Learns your communication style** from Teams messages and writes updates in your voice
@@ -71,6 +72,11 @@ To uninstall: `./uninstall.sh`
 # After one-time shell setup: eval "$(devtrack shell-init)"
 git commit -m "fix auth redirect"
 # → DevTrack intercepts for monitored repos → AI refines → Accept / Enhance / Regenerate
+# → "Log this work? (y/n): y"
+# → "How long did this take? (e.g. 2h, 30m) [Enter to skip]:"
+# → Split-pane ticket picker opens: open issues on the left, full issue body on the
+#   right. ↑/↓ or j/k to navigate, / to filter, Enter to link, n to create new, Esc to skip.
+# → Commit synced as a comment on the selected issue.
 
 # Or use devtrack directly (always works, no setup needed):
 devtrack git commit -m "fix auth redirect"

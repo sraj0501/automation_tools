@@ -6,12 +6,13 @@ Complete guide to DevTrack's git-powered workflows: enhanced commits, conflict r
 
 ## Overview
 
-DevTrack adds four powerful layers to your Git workflow:
+DevTrack adds five powerful layers to your Git workflow:
 
 0. **Shell Integration** - Type `git commit` as normal; DevTrack intercepts it transparently
 1. **Enhanced Commits** - AI-powered commit messages with context awareness
 2. **Conflict Resolution** - Automatic detection and smart resolution of merge conflicts
 3. **Work Update Parsing** - Natural language work updates with PR/issue auto-detection
+4. **Interactive PM Sync** - After every commit, an interactive ticket picker lets you link the commit to the right issue and log time spent — no context-switching to a browser
 
 ---
 
@@ -145,6 +146,66 @@ Your choice [1-5]: 1
 
 Committed with enhanced message.
 Log this work? (y/n): y
+```
+
+### Log This Work — Interactive PM Sync
+
+When you answer `y` to "Log this work?", DevTrack first asks how long the work took, then opens a full-screen split-pane ticket picker so you can link the commit to the right issue without leaving the terminal.
+
+#### Time Prompt
+
+```
+How long did this take? (e.g. 2h, 30m) [Enter to skip]: 1h
+→ Syncing to project management...
+```
+
+#### Interactive Ticket Picker
+
+The picker fetches your open issues once and displays them in a split-pane curses UI — no network round-trips while you browse:
+
+```
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║  Select a ticket to link  (filter: /)   select: Enter   new: n   skip: Esc/q   ║
+╠════════════════════════════╦═══════════════════════════════════════════════════ ╣
+║  #12  Refactor DB layer    ║  #42  Fix OAuth authentication bug                 ║
+║  #35  Add rate limiting    ║  ─────────────────────────────────────────────     ║
+║  #38  Update CI pipeline   ║  Reported by: alice · opened 3 days ago            ║
+║  #41  Improve error msgs   ║                                                     ║
+║ ▶ #42  Fix OAuth auth bug  ║  Users are occasionally seeing a 401 on the         ║
+║  #47  Docs: API reference  ║  /refresh endpoint after a token rotation.          ║
+║  #53  Bump dependencies    ║  Root cause appears to be a race condition in        ║
+║                            ║  the JWT validation middleware when two requests     ║
+║                            ║  arrive within the same millisecond window.         ║
+║                            ║                                                     ║
+║                            ║  Steps to reproduce:                                ║
+║                            ║    1. Issue two simultaneous refresh calls          ║
+║                            ║    2. Observe 401 on the second response            ║
+║                            ║                                                     ║
+║                            ║  Labels: bug · auth · priority:high                 ║
+╠════════════════════════════╩════════════════════════════════════════════════════╣
+║  ↑/↓ or j/k  navigate    PgUp/PgDn  page    Home/End  jump    /  filter        ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+```
+
+**Controls**:
+
+| Key | Action |
+|-----|--------|
+| `↑` / `↓` or `j` / `k` | Move highlight up / down |
+| `PgUp` / `PgDn` | Scroll one page |
+| `Home` / `End` | Jump to first / last ticket |
+| `/` | Enter filter mode — type to narrow the list in real time (client-side, no network) |
+| `Enter` | Select highlighted ticket and link the commit |
+| `n` | Create a new issue from the commit message |
+| `Esc` or `q` | Skip without linking |
+
+The right pane updates instantly as you move the highlight, showing the full issue body with automatic word-wrap. If the terminal is not a TTY (e.g. piped output or a dumb terminal), the picker falls back to a simple numbered list.
+
+#### Result
+
+```
+✓ Commented on GitHub issue #42: Fix OAuth authentication bug
+  → 1h logged · commit a3f9c12 linked
 ```
 
 #### Dry-Run Mode (Preview Only)

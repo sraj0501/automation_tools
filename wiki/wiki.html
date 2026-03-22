@@ -308,6 +308,12 @@
     }
     .feature-item h4 { font-size: .88rem; font-weight: 600; margin-bottom: 2px; }
     .feature-item p { font-size: .82rem; color: var(--text-muted); }
+    .feature-item kbd {
+      display: inline-block; font-family: var(--mono); font-size: .72rem;
+      background: var(--bg-muted); border: 1px solid var(--border-strong);
+      border-radius: 3px; padding: 0 4px; line-height: 1.5;
+      color: var(--text); box-shadow: 0 1px 0 var(--border-strong);
+    }
 
     /* ── Markdown Rendered Content ─────────────────────────────────────── */
     .md-body { max-width: var(--content-max); }
@@ -757,7 +763,7 @@ function renderHome() {
         { id:'GETTING_STARTED', icon:'🚀', title:'Getting Started',   desc:'New to DevTrack? Start here — concepts, setup, and first run.' },
         { id:'QUICK_START',     icon:'⚡', title:'Quick Start',       desc:'Get running in 5 minutes with the minimal setup guide.' },
         { id:'CLI_REFERENCE',   icon:'⌨️', title:'CLI Reference',     desc:'All devtrack commands with flags and examples.' },
-        { id:'GIT_FEATURES',    icon:'🔀', title:'Git Features',      desc:'Shell integration, AI commits, and conflict resolution. Type <code>git commit</code> — DevTrack intercepts it for monitored repos.' },
+        { id:'GIT_FEATURES',    icon:'🔀', title:'Git Features',      desc:'Shell integration, AI commits, and conflict resolution. Type <code>git commit</code> — DevTrack intercepts it, prompts for time spent, then opens an interactive split-pane ticket picker so you can link the commit to an issue instantly.' },
         { id:'GIT_SAGE',        icon:'🤖', title:'git-sage Agent',    desc:'Autonomous local LLM agent for complex git operations.' },
         { id:'AZURE_DEVOPS',    icon:'🔷', title:'Azure DevOps',      desc:'Sync work items, auto-comment, and transition states.' },
         { id:'GITLAB',          icon:'🦊', title:'GitLab',            desc:'Full CLI and Telegram access; inbound webhooks; issue enrichment on create.' },
@@ -798,8 +804,9 @@ devtrack enable-git   # opt this repo in</code></pre>
     <div class="feature-list">
       ${[
         { n:'Zero-Friction Git',   d:'Type <code>git commit</code> as normal — DevTrack intercepts for monitored repos. One-time shell setup: <code>eval "$(devtrack shell-init)"</code>.' },
-        { n:'Natural Language',    d:'"Working on PR #42 auth bug (2h)" extracts ticket, time, and status.' },
-        { n:'PM Sync',             d:'Auto-comments, transitions states, creates missing items in Azure/GitLab/GitHub. New issues include commit hash and message in the description and are auto-assigned to the authenticated user.' },
+        { n:'Time Tracking',       d:'After "Log this work?", DevTrack asks: <em>"How long did this take? (e.g. 2h, 30m)"</em>. Time spent is attached to the selected issue comment — no separate time-entry tool needed.' },
+        { n:'Interactive Ticket Picker', d:'A curses split-pane picker opens after the time prompt. Left pane: scrollable list of your open issues (GitHub / GitLab / Azure, per workspace). Right pane: full issue body, auto word-wrapped. Controls: <kbd>↑</kbd><kbd>↓</kbd> navigate · <kbd>Enter</kbd> select · <kbd>/</kbd> real-time filter · <kbd>n</kbd> new issue · <kbd>Esc</kbd>/<kbd>q</kbd> skip.' },
+        { n:'Immediate PM Sync',   d:'Selecting a ticket posts a comment with the commit hash, message, and time spent — instantly, with your confirmation. No background daemon guessing required. Auto-comments, transitions states, and creates missing items in Azure/GitLab/GitHub. New issues include commit hash and message in the description and are auto-assigned to the authenticated user.' },
         { n:'Personalized AI',     d:'Learns your style from Teams messages and writes in your voice.' },
         { n:'Offline-First',       d:'Queues everything and syncs when connectivity returns.' },
         { n:'Remote Control',      d:'Full Telegram bot: status, logs, create items, trigger updates.' },

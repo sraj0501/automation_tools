@@ -42,6 +42,71 @@ devtrack git messages                      # Alias for git history
 
 See [GIT_COMMIT_WORKFLOW.md](GIT_COMMIT_WORKFLOW.md) for the full interactive workflow.
 
+### Work Logging Flow (after commit accepted)
+
+After a commit is created and you answer **y** to `Log this work? (y/n):`, DevTrack runs a two-step work logging sequence.
+
+#### Step 1 — Time spent prompt
+
+```
+How long did this take? (e.g. 2h, 30m) [Enter to skip]:
+```
+
+Type a duration (`2h`, `30m`, `1h30m`) or press **Enter** to skip. The value is attached to the comment posted on the linked issue.
+
+#### Step 2 — Interactive ticket picker
+
+A curses split-pane picker opens so you can link the commit to an existing issue without leaving the terminal.
+
+```
+┌─────────────────────────────┬──────────────────────────────────────────┐
+│  Open Issues          [3]   │  #42 Fix login redirect loop             │
+│ ─────────────────────────── │ ──────────────────────────────────────── │
+│ ▶ #42  Fix login redirect   │  Users are stuck in a redirect loop      │
+│   #38  Add dark mode toggle │  when the session cookie is missing.     │
+│   #31  Update README        │                                          │
+│                             │  Labels: bug, auth                       │
+│  / to filter  n new  q skip │  Opened 2026-03-20 by sraj               │
+└─────────────────────────────┴──────────────────────────────────────────┘
+```
+
+**Left pane** — scrollable list of your open issues from the workspace's configured PM platform (GitHub, GitLab, or Azure DevOps).
+
+**Right pane** — full body of the currently highlighted issue, updated as you move.
+
+**Keyboard controls:**
+
+| Key | Action |
+|-----|--------|
+| `↑` / `k` | Move selection up |
+| `↓` / `j` | Move selection down |
+| `Enter` | Select highlighted issue and post comment |
+| `/` | Open filter bar — type to narrow the list by title |
+| `n` | Create a new issue on the PM platform and link it |
+| `Esc` / `q` | Skip — do not link to any issue |
+
+When an issue is selected, DevTrack posts a comment containing:
+
+- Commit hash (short SHA)
+- Commit message
+- Time spent (if provided in Step 1)
+
+#### Non-TTY / no-terminal fallback
+
+When DevTrack is running without an interactive terminal (e.g. inside a CI pipeline, over SSH without a PTY, or when the curses library is unavailable), the picker falls back to a numbered list printed to stdout:
+
+```
+Open issues:
+  1. #42  Fix login redirect loop
+  2. #38  Add dark mode toggle
+  3. #31  Update README
+  0. Skip (do not link)
+
+Select issue number:
+```
+
+Type the number and press **Enter**, or **0** to skip.
+
 ---
 
 ## Shell Integration
