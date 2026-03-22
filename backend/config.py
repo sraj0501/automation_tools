@@ -222,11 +222,6 @@ def azure_project() -> str:
 
 
 # --- Task generation defaults (from env, no hardcoded personal data) ---
-def azure_default_assignee() -> str:
-    """Default assignee for generated tasks."""
-    return get("AZURE_DEFAULT_ASSIGNEE", "")
-
-
 def azure_parent_work_item_id() -> str:
     """Parent work item ID for task hierarchy."""
     return get("AZURE_PARENT_WORK_ITEM_ID", "")
@@ -826,6 +821,11 @@ def get_gitlab_default_project_id() -> Optional[int]:
         return None
 
 
+def is_gitlab_auto_update_description() -> bool:
+    """Append latest commit info to matched issue description. GITLAB_AUTO_UPDATE_DESCRIPTION (default: false)."""
+    return get_bool("GITLAB_AUTO_UPDATE_DESCRIPTION", False)
+
+
 # ── GitHub sync ───────────────────────────────────────────────────────────────
 
 def is_github_sync_enabled() -> bool:
@@ -866,6 +866,11 @@ def get_github_done_state() -> str:
 def get_github_sync_label() -> str:
     """Label applied to GitHub issues managed by DevTrack. GITHUB_SYNC_LABEL (default: devtrack)."""
     return get("GITHUB_SYNC_LABEL") or "devtrack"
+
+
+def is_github_auto_update_description() -> bool:
+    """Append latest commit info to matched issue description. GITHUB_AUTO_UPDATE_DESCRIPTION (default: false)."""
+    return get_bool("GITHUB_AUTO_UPDATE_DESCRIPTION", False)
 
 
 # ── Telegram bot ─────────────────────────────────────────────────────────────

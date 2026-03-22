@@ -34,6 +34,11 @@ type WorkspaceConfig struct {
 	Enabled        bool     `yaml:"enabled"`
 	IgnoreBranches []string `yaml:"ignore_branches"`
 	Tags           []string `yaml:"tags"`
+	// Per-workspace PM settings (override global .env defaults)
+	PMAssignee      string `yaml:"pm_assignee"`       // Azure: assigned_to; GitHub: assignees[0] override
+	PMIterationPath string `yaml:"pm_iteration_path"` // Azure: sprint/iteration path (e.g. MyProject\Sprint 5)
+	PMAreaPath      string `yaml:"pm_area_path"`      // Azure: area path (e.g. MyProject\Backend)
+	PMMilestone     int    `yaml:"pm_milestone"`      // GitHub: milestone number; GitLab: milestone_id
 }
 
 // WorkspacesConfig is the top-level structure of workspaces.yaml

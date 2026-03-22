@@ -14,10 +14,15 @@ import (
 
 // WorkspaceMonitor pairs a GitMonitor with its workspace routing metadata
 type WorkspaceMonitor struct {
-	gitMonitor    *GitMonitor
-	workspaceName string
-	pmPlatform    string
-	pmProject     string
+	gitMonitor      *GitMonitor
+	workspaceName   string
+	pmPlatform      string
+	pmProject       string
+	// Per-workspace PM settings
+	pmAssignee      string
+	pmIterationPath string
+	pmAreaPath      string
+	pmMilestone     int
 }
 
 // IntegratedMonitor combines Git monitoring and time-based scheduling
@@ -69,10 +74,14 @@ func NewIntegratedMonitor(repoPath string) (*IntegratedMonitor, error) {
 				continue
 			}
 			workspaceMonitors = append(workspaceMonitors, &WorkspaceMonitor{
-				gitMonitor:    gm,
-				workspaceName: ws.Name,
-				pmPlatform:    ws.PMPlatform,
-				pmProject:     ws.PMProject,
+				gitMonitor:      gm,
+				workspaceName:   ws.Name,
+				pmPlatform:      ws.PMPlatform,
+				pmProject:       ws.PMProject,
+				pmAssignee:      ws.PMAssignee,
+				pmIterationPath: ws.PMIterationPath,
+				pmAreaPath:      ws.PMAreaPath,
+				pmMilestone:     ws.PMMilestone,
 			})
 			log.Printf("  ✓ Workspace %q → %s (platform: %q)", ws.Name, ws.Path, ws.PMPlatform)
 		}
@@ -315,10 +324,14 @@ func (im *IntegratedMonitor) registerIPCHandlers() {
 				continue
 			}
 			wsMon := &WorkspaceMonitor{
-				gitMonitor:    gm,
-				workspaceName: ws.Name,
-				pmPlatform:    ws.PMPlatform,
-				pmProject:     ws.PMProject,
+				gitMonitor:      gm,
+				workspaceName:   ws.Name,
+				pmPlatform:      ws.PMPlatform,
+				pmProject:       ws.PMProject,
+				pmAssignee:      ws.PMAssignee,
+				pmIterationPath: ws.PMIterationPath,
+				pmAreaPath:      ws.PMAreaPath,
+				pmMilestone:     ws.PMMilestone,
 			}
 			newMonitors = append(newMonitors, wsMon)
 		}
@@ -365,14 +378,18 @@ func (im *IntegratedMonitor) handleCommitForWorkspace(commit CommitInfo, ws *Wor
 	im.lastActiveWorkspaceMu.Unlock()
 
 	event := TriggerEvent{
-		Type:          TriggerTypeCommit,
-		Timestamp:     commit.Timestamp,
-		Source:        "git",
-		Data:          commit,
-		RepoPath:      ws.gitMonitor.repoPath,
-		WorkspaceName: ws.workspaceName,
-		PMPlatform:    ws.pmPlatform,
-		PMProject:     ws.pmProject,
+		Type:            TriggerTypeCommit,
+		Timestamp:       commit.Timestamp,
+		Source:          "git",
+		Data:            commit,
+		RepoPath:        ws.gitMonitor.repoPath,
+		WorkspaceName:   ws.workspaceName,
+		PMPlatform:      ws.pmPlatform,
+		PMProject:       ws.pmProject,
+		PMAssignee:      ws.pmAssignee,
+		PMIterationPath: ws.pmIterationPath,
+		PMAreaPath:      ws.pmAreaPath,
+		PMMilestone:     ws.pmMilestone,
 	}
 	im.handleTrigger(event)
 }
@@ -403,16 +420,20 @@ func (im *IntegratedMonitor) handleTrigger(event TriggerEvent) {
 
 			// Create IPC message for commit trigger
 			ipcMsg = CreateCommitTriggerMessage(CommitTriggerData{
-				RepoPath:      event.RepoPath,
-				CommitHash:    commit.Hash,
-				CommitMessage: commit.Message,
-				Author:        commit.Author,
-				Timestamp:     commit.Timestamp.Format(time.RFC3339),
-				FilesChanged:  commit.Files,
-				Branch:        "", // Branch info not available in CommitInfo
-				WorkspaceName: event.WorkspaceName,
-				PMPlatform:    event.PMPlatform,
-				PMProject:     event.PMProject,
+				RepoPath:        event.RepoPath,
+				CommitHash:      commit.Hash,
+				CommitMessage:   commit.Message,
+				Author:          commit.Author,
+				Timestamp:       commit.Timestamp.Format(time.RFC3339),
+				FilesChanged:    commit.Files,
+				Branch:          "", // Branch info not available in CommitInfo
+				WorkspaceName:   event.WorkspaceName,
+				PMPlatform:      event.PMPlatform,
+				PMProject:       event.PMProject,
+				PMAssignee:      event.PMAssignee,
+				PMIterationPath: event.PMIterationPath,
+				PMAreaPath:      event.PMAreaPath,
+				PMMilestone:     event.PMMilestone,
 			})
 
 			// Prepare database record
@@ -454,9 +475,13 @@ func (im *IntegratedMonitor) handleTrigger(event TriggerEvent) {
 			lastWS := im.lastActiveWorkspace
 			im.lastActiveWorkspaceMu.Unlock()
 			if lastWS != nil {
-				timerData.WorkspaceName = lastWS.workspaceName
-				timerData.PMPlatform = lastWS.pmPlatform
-				timerData.PMProject = lastWS.pmProject
+				timerData.WorkspaceName   = lastWS.workspaceName
+				timerData.PMPlatform      = lastWS.pmPlatform
+				timerData.PMProject       = lastWS.pmProject
+				timerData.PMAssignee      = lastWS.pmAssignee
+				timerData.PMIterationPath = lastWS.pmIterationPath
+				timerData.PMAreaPath      = lastWS.pmAreaPath
+				timerData.PMMilestone     = lastWS.pmMilestone
 			}
 
 			ipcMsg = CreateTimerTriggerMessage(timerData)

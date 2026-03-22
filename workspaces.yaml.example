@@ -11,6 +11,13 @@
 #                      github → "owner/repo" slug override (e.g. "acme/api")
 #                      jira   → project key (e.g. "PROJ")
 #
+# Per-workspace PM settings (all optional — override platform defaults):
+#   pm_assignee:       Azure assigned_to display name or GitHub username.
+#                      Leave blank to auto-assign to the authenticated user.
+#   pm_iteration_path: Azure DevOps sprint path (e.g. "MyProject\\Sprint 5")
+#   pm_area_path:      Azure DevOps area path (e.g. "MyProject\\Backend")
+#   pm_milestone:      GitHub milestone number OR GitLab milestone ID to assign
+#                      when auto-creating new issues (0 = no milestone).
 
 version: "1"
 workspaces:
@@ -22,6 +29,9 @@ workspaces:
     enabled: true
     ignore_branches: ["dependabot/*", "renovate/*"]
     tags: ["work", "backend"]
+    pm_iteration_path: "MyProject\\Sprint 5"   # optional: sprint path
+    pm_area_path: "MyProject\\Backend"          # optional: area path
+    pm_assignee: ""                             # optional: leave blank to auto-assign
 
   - name: "work-frontend"
     path: "/Users/you/work/frontend"
@@ -30,6 +40,8 @@ workspaces:
     enabled: true
     ignore_branches: []
     tags: ["work", "frontend"]
+    pm_iteration_path: "MyProject\\Sprint 5"
+    pm_area_path: "MyProject\\Frontend"
 
   # Personal projects tracked in GitHub
   - name: "personal-tools"
@@ -39,6 +51,7 @@ workspaces:
     enabled: true
     ignore_branches: []
     tags: ["personal"]
+    pm_milestone: 3   # optional: GitHub milestone number to assign on new issues
 
   # GitLab project (supply the numeric project ID)
   - name: "oss-lib"
@@ -48,6 +61,7 @@ workspaces:
     enabled: false
     ignore_branches: ["main", "release/*"]
     tags: ["oss"]
+    pm_milestone: 12  # optional: GitLab milestone ID to assign on new issues
 
   # Repo you want monitored but NOT synced to any PM tool
   - name: "experiments"

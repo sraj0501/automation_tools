@@ -37,9 +37,55 @@ devtrack send-summary    # Generate and send the daily summary now
 devtrack git commit -m "message"           # AI-enhanced commit (up to 5 refinement attempts)
 devtrack git commit -m "message" --dry-run # Preview AI suggestion without committing
 devtrack git history                       # Show recent commit history
+devtrack git messages                      # Alias for git history
 ```
 
 See [GIT_COMMIT_WORKFLOW.md](GIT_COMMIT_WORKFLOW.md) for the full interactive workflow.
+
+---
+
+## Shell Integration
+
+Skip the `devtrack` prefix — type `git commit` directly for monitored repos.
+
+### Setup (one time)
+
+```bash
+# Add to ~/.zshrc or ~/.bashrc, then reload your shell
+eval "$(devtrack shell-init)"
+source ~/.zshrc
+```
+
+### Per-Repo Opt-In
+
+```bash
+devtrack enable-git    # Opt this repo in  — sets git config devtrack.enabled=true
+devtrack disable-git   # Opt this repo out — removes git config devtrack.enabled
+```
+
+### Workspace Detection
+
+```bash
+devtrack is-workspace  # Exit 0 if CWD is a DevTrack workspace (used internally)
+```
+
+This command is called automatically by the shell `git()` function to check `workspaces.yaml`. Repos already in `workspaces.yaml` are intercepted without `devtrack enable-git`.
+
+### Bypass
+
+```bash
+GIT_NO_DEVTRACK=1 git commit -m "message"   # Skip DevTrack for this one command
+command git commit -m "message"             # Always calls real git
+```
+
+### What gets intercepted
+
+| Command | Intercepted? |
+|---------|-------------|
+| `git commit` | Yes — routed through DevTrack AI enhancement |
+| `git history` | Yes — shows DevTrack commit history |
+| `git messages` | Yes — alias for git history |
+| `git push`, `git pull`, `git status`, `git log`, … | No — always real git |
 
 ---
 
@@ -87,6 +133,23 @@ devtrack gitlab-sync --hours 24            # Only issues updated in last 24 h
 ```
 
 See [GITLAB.md](GITLAB.md) for setup and configuration.
+
+---
+
+## GitHub
+
+```bash
+devtrack github-check                        # Test config and connectivity
+devtrack github-list                         # List open issues assigned to you
+devtrack github-list --closed               # Include closed issues
+devtrack github-list --state <state>        # Filter by state (open, closed, all)
+devtrack github-view <number>               # Show full details for an issue
+devtrack github-sync                         # Full resync (fetches all open issues)
+devtrack github-sync --full                 # Explicit full resync
+devtrack github-sync --hours 24            # Only issues updated in last 24 h
+```
+
+See [GITHUB.md](GITHUB.md) for setup and configuration.
 
 ---
 
@@ -177,6 +240,9 @@ devtrack telegram-status   # Show whether the Telegram bot process is alive
 | `/gitlab` | List GitLab issues from cache |
 | `/gitlabissue <project_id> <iid>` | View a specific GitLab issue |
 | `/gitlabcreate` | Create a new GitLab issue interactively |
+| `/github` | List open GitHub issues assigned to you |
+| `/githubissue <number>` | View a specific GitHub issue |
+| `/githubcreate [bug\|feature\|task] <title>` | Create a new GitHub issue |
 | `/plan <problem>` | Decompose a problem → Epic/Story/Task → create items |
 
 ---

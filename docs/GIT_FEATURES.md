@@ -6,11 +6,82 @@ Complete guide to DevTrack's git-powered workflows: enhanced commits, conflict r
 
 ## Overview
 
-DevTrack adds three powerful layers to your Git workflow:
+DevTrack adds four powerful layers to your Git workflow:
 
+0. **Shell Integration** - Type `git commit` as normal; DevTrack intercepts it transparently
 1. **Enhanced Commits** - AI-powered commit messages with context awareness
 2. **Conflict Resolution** - Automatic detection and smart resolution of merge conflicts
 3. **Work Update Parsing** - Natural language work updates with PR/issue auto-detection
+
+---
+
+## Shell Integration — Type `git commit` Natively
+
+The biggest friction with DevTrack's git features is remembering to type `devtrack git commit` instead of `git commit`. Shell integration eliminates that entirely.
+
+### One-Time Setup
+
+Add to `~/.zshrc` or `~/.bashrc`:
+
+```bash
+eval "$(devtrack shell-init)"
+```
+
+Reload your shell:
+
+```bash
+source ~/.zshrc    # or ~/.bashrc
+```
+
+### Opt Repos In
+
+**Option A — Per-repo git config (fastest)**
+
+```bash
+cd /path/to/your/repo
+devtrack enable-git
+```
+
+This sets `devtrack.enabled = true` in the repo's `.git/config`. From now on `git commit` in that repo goes through DevTrack.
+
+To undo: `devtrack disable-git`
+
+**Option B — workspaces.yaml (automatic)**
+
+Any repo already listed in `workspaces.yaml` is intercepted automatically — no `devtrack enable-git` needed.
+
+### How Detection Works
+
+The shell `git()` function runs two checks before deciding to intercept:
+
+1. **Fast path** — reads `.git/config` locally (no subprocess): was `devtrack enable-git` run here?
+2. **Slow path** — runs `devtrack is-workspace`, which checks `workspaces.yaml`
+
+If either check passes and the command is `commit`, `history`, or `messages`, the call routes to `devtrack git`. Everything else (`git push`, `git pull`, `git status`, `git log`, …) goes straight to the real git binary — completely unaffected.
+
+### Bypass DevTrack for One Command
+
+```bash
+GIT_NO_DEVTRACK=1 git commit -m "skip devtrack this time"
+```
+
+Or call the real git explicitly:
+
+```bash
+command git commit -m "message"
+```
+
+### After Setup
+
+```bash
+# These all work identically now:
+git commit -m "fix auth redirect"       # intercepted → AI enhanced
+git push                                 # not intercepted → real git
+git status                               # not intercepted → real git
+
+# Same result, always works without shell setup:
+devtrack git commit -m "fix auth redirect"
+```
 
 ---
 
@@ -43,7 +114,10 @@ Your commit message + git context
 # Stage your changes
 git add .
 
-# Use devtrack git commit
+# With shell integration active (recommended):
+git commit -m "fixed auth bug"
+
+# Or always works without shell setup:
 devtrack git commit -m "fixed auth bug"
 ```
 
@@ -511,7 +585,7 @@ git checkout -b feature/oauth-upgrade
 
 # 2. Make changes and commit regularly
 git add src/auth.js
-devtrack git commit -m "updated auth module"
+git commit -m "updated auth module"    # intercepted if shell integration active
 # → AI enhances with: "Updated OAuth authentication module with v2.0 support"
 # → Extracts: Task = PR #42
 # → Updates project management

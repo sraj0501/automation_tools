@@ -25,10 +25,15 @@ type TriggerEvent struct {
 	Source        string
 	Data          interface{}
 	// Workspace context (populated for commit triggers in multi-repo mode)
-	RepoPath      string
-	WorkspaceName string
-	PMPlatform    string
-	PMProject     string
+	RepoPath        string
+	WorkspaceName   string
+	PMPlatform      string
+	PMProject       string
+	// Per-workspace PM settings (override global .env defaults)
+	PMAssignee      string
+	PMIterationPath string
+	PMAreaPath      string
+	PMMilestone     int
 }
 
 // Scheduler manages time-based triggers and scheduling

@@ -68,6 +68,55 @@ When a commit or timer trigger fires, DevTrack matches the work description agai
 | `GITHUB_DONE_STATE` | `closed` | State to transition to when marking done |
 | `GITHUB_SYNC_LABEL` | `devtrack` | Label added to issues created by DevTrack |
 
+### Optional Enrichment Behaviors
+
+| Variable | Default | Description |
+|---|---|---|
+| `GITHUB_AUTO_UPDATE_DESCRIPTION` | `false` | Append the latest commit hash and message to the body of a matched issue |
+| `GITHUB_DEFAULT_MILESTONE` | _(unset)_ | Milestone title to assign when DevTrack creates a new issue |
+
+---
+
+## CLI Commands
+
+### Check Connectivity
+
+```bash
+devtrack github-check
+```
+
+Verifies your token, email identity, and repository access. Outputs masked token for safety.
+
+### List Issues
+
+```bash
+devtrack github-list                     # Open issues assigned to you
+devtrack github-list --closed           # Include closed issues
+devtrack github-list --state <state>    # Filter: open, closed, all
+```
+
+Issues are grouped by milestone for easy overview.
+
+### View Issue Details
+
+```bash
+devtrack github-view <number>
+# Example:
+devtrack github-view 42
+```
+
+Shows full issue details: title, state, milestone, labels, description, and URL.
+
+### Sync Issues
+
+```bash
+devtrack github-sync                    # Full sync (all open issues)
+devtrack github-sync --full            # Explicit full sync
+devtrack github-sync --hours 24       # Only issues updated in last 24 h
+```
+
+Sync stores issues locally at `Data/github/sync_state.json`. Subsequent `github-list` reads from this cache for speed — no API call needed.
+
 ---
 
 ## Telegram Commands
@@ -108,15 +157,49 @@ In multi-repo mode with `workspaces.yaml`, this sync is only called when the wor
 
 ---
 
-## Checking Connectivity
+## Inbound Webhooks
 
-There is no dedicated CLI command yet — verify connectivity via the Telegram bot:
+DevTrack can receive real-time events from GitHub via the built-in webhook server.
+
+### Endpoint
 
 ```
-/github
+POST /webhooks/github
 ```
 
-If GitHub is configured correctly, you will see your open issues. If credentials are missing or invalid, the bot will reply with a clear error message.
+Authenticated with HMAC-SHA256 signature: GitHub sends `X-Hub-Signature-256`, DevTrack validates against `WEBHOOK_GITHUB_SECRET`.
+
+### Supported Events
+
+| Event | Action | What DevTrack does |
+|-------|--------|--------------------|
+| `issues` | `assigned` | OS + terminal notification |
+| `issues` | `opened` | OS + terminal notification |
+| `issue_comment` | `created` | Notification if comment is on your issue |
+| `pull_request` | `review_requested` | Notification |
+
+### Setup
+
+1. In your GitHub repository: **Settings → Webhooks → Add webhook**
+2. Payload URL: `https://your-server/webhooks/github`
+3. Content type: `application/json`
+4. Secret: set to `WEBHOOK_GITHUB_SECRET` in `.env`
+5. Select individual events: Issues, Issue comments, Pull requests
+
+```env
+WEBHOOK_ENABLED=true
+WEBHOOK_GITHUB_SECRET=your_secret_here
+```
+
+---
+
+## Issue Enrichment on Create
+
+When DevTrack creates a new GitHub issue (via `GITHUB_CREATE_ON_NO_MATCH=true` or Telegram `/githubcreate`), it automatically:
+
+- Appends the triggering commit hash and message to the issue description
+- Assigns the issue to the authenticated user
+- Applies `GITHUB_DEFAULT_MILESTONE` if configured
 
 ---
 
@@ -130,7 +213,7 @@ If GitHub is configured correctly, you will see your open issues. If credentials
 
 ## Troubleshooting
 
-**`/github` replies "GitHub client not configured":**
+**`github-check` fails or `/github` replies "GitHub client not configured":**
 - Verify `GITHUB_TOKEN`, `GITHUB_OWNER`, and `GITHUB_REPO` are all set in `.env`
 - Restart DevTrack: `devtrack restart`
 

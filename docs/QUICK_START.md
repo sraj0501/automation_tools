@@ -174,6 +174,10 @@ devtrack skip-next             # Skip next scheduled trigger
 devtrack db-stats              # Show database statistics
 devtrack version               # Show version
 devtrack help                  # Show all commands
+
+# Shell integration (optional, reduces typing)
+eval "$(devtrack shell-init)"      # add to ~/.zshrc for persistence
+devtrack enable-git                # opt this repo in
 ```
 
 ---
@@ -357,8 +361,16 @@ Now that DevTrack is running, try these:
 ```bash
 cd /path/to/repo
 git add .
+
+# With shell integration (one-time setup):
+eval "$(devtrack shell-init)"        # add to ~/.zshrc instead
+devtrack enable-git                  # opt this repo in
+
+git commit -m "Added authentication module"
+# → Shows AI-enhanced message with options to Accept/Enhance/Regenerate
+
+# Or without shell integration (always works):
 devtrack git commit -m "Added authentication module"
-# Shows AI-enhanced message with options to Accept/Enhance/Regenerate
 ```
 
 ### 2. See Work Update Prompt

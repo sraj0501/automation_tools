@@ -14,6 +14,7 @@ Configuration (via .env):
 import logging
 import os
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -224,12 +225,21 @@ class GitHubClient:
                 self._cached_login = user.get("login")
         return self._cached_login
 
-    async def get_my_issues(self, state: str = "open") -> List[GitHubIssue]:
+    async def get_my_issues(
+        self,
+        state: str = "open",
+        updated_after: Optional[datetime] = None,
+    ) -> List[GitHubIssue]:
         """Fetch issues assigned to the authenticated user in the configured repo.
 
         Uses GET /repos/{owner}/{repo}/issues?assignee={login}&state={state}.
         Fetches the authenticated user's login first, then filters by assignee.
         Handles GitHub's Link-header pagination automatically.
+
+        Args:
+            state: Issue state filter ("open", "closed", or "all").
+            updated_after: If set, only issues updated at or after this datetime
+                (passed as ``since`` to the GitHub API, ISO 8601 format).
         """
         login = await self._ensure_login()
         if not login:
@@ -242,6 +252,8 @@ class GitHubClient:
             "state": state,
             "per_page": 100,
         }
+        if updated_after is not None:
+            params["since"] = updated_after.isoformat()
 
         results: List[GitHubIssue] = []
         while url:

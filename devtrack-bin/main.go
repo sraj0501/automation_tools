@@ -38,7 +38,8 @@ func main() {
 			cmd == "learning-reset" ||
 			cmd == "commit-queue" || cmd == "commits" || cmd == "queue" ||
 			cmd == "telegram-status" || cmd == "azure-check" || cmd == "azure-list" || cmd == "azure-sync" || cmd == "azure-view" || cmd == "settings" ||
-		cmd == "workspace" {
+			cmd == "workspace" ||
+			cmd == "shell-init" || cmd == "is-workspace" || cmd == "enable-git" || cmd == "disable-git" {
 			cli, err := NewCLI()
 			if err != nil {
 				fmt.Printf("Error initializing CLI: %v\n", err)

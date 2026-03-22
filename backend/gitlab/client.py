@@ -297,6 +297,7 @@ class GitLabClient:
         labels: Optional[List[str]] = None,
         milestone_id: Optional[int] = None,
         due_date: Optional[str] = None,
+        assignee_ids: Optional[List[int]] = None,
     ) -> Optional[GitLabIssue]:
         """POST /projects/:id/issues"""
         pid = project_id or self._project_id
@@ -313,6 +314,8 @@ class GitLabClient:
             body["milestone_id"] = milestone_id
         if due_date:
             body["due_date"] = due_date
+        if assignee_ids:
+            body["assignee_ids"] = assignee_ids
 
         data = await self._post(self._api(f"projects/{pid}/issues"), json_body=body)
         if data:

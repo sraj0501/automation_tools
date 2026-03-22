@@ -433,6 +433,12 @@ class DevTrackBridge:
                     "commit_message": data.get("commit_message", ""),
                     "author": data.get("author", ""),
                 }
+                workspace_settings = {
+                    "assignee": data.get("pm_assignee", ""),
+                    "iteration_path": data.get("pm_iteration_path", ""),
+                    "area_path": data.get("pm_area_path", ""),
+                    "milestone": data.get("pm_milestone", 0),
+                }
                 azure_work_item_id, synced_platform = self._route_pm_sync(
                     pm_platform=data.get("pm_platform", ""),
                     pm_project=data.get("pm_project", ""),
@@ -440,6 +446,7 @@ class DevTrackBridge:
                     ticket_id=parsed.ticket_id or "",
                     status=parsed.status or "in_progress",
                     commit_info=commit_info_dict,
+                    workspace_settings=workspace_settings,
                 )
 
                 # Send task update with parsed data
@@ -474,6 +481,12 @@ class DevTrackBridge:
                 "commit_message": data.get("commit_message", ""),
                 "author": data.get("author", ""),
             }
+            workspace_settings = {
+                "assignee": data.get("pm_assignee", ""),
+                "iteration_path": data.get("pm_iteration_path", ""),
+                "area_path": data.get("pm_area_path", ""),
+                "milestone": data.get("pm_milestone", 0),
+            }
             azure_work_item_id, synced_platform = self._route_pm_sync(
                 pm_platform=data.get("pm_platform", ""),
                 pm_project=data.get("pm_project", ""),
@@ -481,6 +494,7 @@ class DevTrackBridge:
                 ticket_id="",
                 status="in_progress",
                 commit_info=commit_info_dict,
+                workspace_settings=workspace_settings,
             )
 
             task_update = create_task_update_message(
@@ -713,12 +727,19 @@ class DevTrackBridge:
         # Step 6.5: Route to the correct PM platform
         azure_work_item_id = None
         synced_platform = None
+        workspace_settings = {
+            "assignee": data.get("pm_assignee", ""),
+            "iteration_path": data.get("pm_iteration_path", ""),
+            "area_path": data.get("pm_area_path", ""),
+            "milestone": data.get("pm_milestone", 0),
+        }
         azure_work_item_id, synced_platform = self._route_pm_sync(
             pm_platform=data.get("pm_platform", ""),
             pm_project=data.get("pm_project", ""),
             description=final_description,
             ticket_id=ticket_id,
             status=status,
+            workspace_settings=workspace_settings,
         )
 
         task_update = create_task_update_message(
@@ -1072,8 +1093,22 @@ class DevTrackBridge:
             logger.debug(f"Error checking for conflicts: {e}")
             # Silently continue - conflicts are not critical to work updates
 
-    async def _sync_to_azure(self, description, ticket_id=None, status=None, commit_info=None):
+    @staticmethod
+    def _build_issue_description(description: str, commit_info) -> str:
+        """Append commit details to a new issue description."""
+        if not commit_info:
+            return description
+        commit_hash = commit_info.get("commit_hash", "")[:12]
+        commit_message = commit_info.get("commit_message", "")
+        if not (commit_hash or commit_message):
+            return description
+        return f"{description}\n\n---\n**Commit**: `{commit_hash}`\n**Message**: {commit_message}"
+
+    async def _sync_to_azure(self, description, ticket_id=None, status=None, commit_info=None, workspace_settings=None):
         """Sync a work update or commit to Azure DevOps.
+
+        workspace_settings: dict with per-workspace PM overrides (assignee,
+            iteration_path, area_path). None = use empty values.
 
         Returns:
             Tuple of (azure_work_item_id: int | None, synced_platform: str | None)
@@ -1089,9 +1124,16 @@ class DevTrackBridge:
                 # Optionally create a new work item if configured
                 if config.is_azure_create_on_no_match() and description:
                     logger.info("Creating new Azure DevOps work item (no match, create_on_no_match enabled)")
+                    ws = workspace_settings or {}
+                    assignee = ws.get("assignee") or None
+                    iteration_path = ws.get("iteration_path") or None
+                    area_path = ws.get("area_path") or None
                     wi = await self.azure_client.create_work_item(
                         title=description[:200],
-                        description=description,
+                        description=self._build_issue_description(description, commit_info),
+                        assigned_to=assignee,
+                        iteration_path=iteration_path,
+                        area_path=area_path,
                     )
                     if wi:
                         logger.info(f"✓ Created Azure DevOps work item #{wi.id}")
@@ -1119,9 +1161,16 @@ class DevTrackBridge:
                 )
                 if config.is_azure_create_on_no_match() and description:
                     logger.info("Creating new Azure DevOps work item (below threshold, create_on_no_match enabled)")
+                    ws = workspace_settings or {}
+                    assignee = ws.get("assignee") or None
+                    iteration_path = ws.get("iteration_path") or None
+                    area_path = ws.get("area_path") or None
                     wi = await self.azure_client.create_work_item(
                         title=description[:200],
-                        description=description,
+                        description=self._build_issue_description(description, commit_info),
+                        assigned_to=assignee,
+                        iteration_path=iteration_path,
+                        area_path=area_path,
                     )
                     if wi:
                         logger.info(f"✓ Created Azure DevOps work item #{wi.id}")
@@ -1179,12 +1228,15 @@ class DevTrackBridge:
             logger.error(f"Error syncing to Azure DevOps: {e}")
             return None, None
 
-    def _route_pm_sync(self, pm_platform, pm_project, description, ticket_id=None, status=None, commit_info=None):
+    def _route_pm_sync(self, pm_platform, pm_project, description, ticket_id=None, status=None, commit_info=None, workspace_settings=None):
         """Route a PM sync call to the correct platform based on workspace config.
 
         When pm_platform is non-empty (set via workspaces.yaml), dispatches
         directly to that platform. Falls back to the legacy priority chain
         (Azure → GitLab → GitHub) when pm_platform is empty.
+
+        workspace_settings: dict with per-workspace PM overrides (assignee,
+            iteration_path, area_path, milestone). None = no override.
 
         Returns:
             Tuple of (work_item_id: int | None, synced_platform: str | None)
@@ -1197,15 +1249,15 @@ class DevTrackBridge:
 
         if platform == "azure":
             logger.info(f"Workspace routing → Azure (pm_project={pm_project!r})")
-            return self._run_azure_sync(description, ticket_id, status, commit_info)
+            return self._run_azure_sync(description, ticket_id, status, commit_info, workspace_settings)
 
         if platform == "gitlab":
             logger.info(f"Workspace routing → GitLab (pm_project={pm_project!r})")
-            return self._run_gitlab_sync(description, ticket_id, status, commit_info)
+            return self._run_gitlab_sync(description, ticket_id, status, commit_info, workspace_settings)
 
         if platform == "github":
             logger.info(f"Workspace routing → GitHub")
-            return self._run_github_sync(description, ticket_id, status, commit_info)
+            return self._run_github_sync(description, ticket_id, status, commit_info, workspace_settings)
 
         if platform == "jira":
             logger.info("Workspace routing → Jira (not yet implemented)")
@@ -1219,17 +1271,17 @@ class DevTrackBridge:
         work_item_id, synced_platform = None, None
 
         if not work_item_id and self.azure_client and config and config.is_azure_sync_enabled():
-            work_item_id, synced_platform = self._run_azure_sync(description, ticket_id, status, commit_info)
+            work_item_id, synced_platform = self._run_azure_sync(description, ticket_id, status, commit_info, workspace_settings)
 
         if not work_item_id and self.gitlab_client and config and config.is_gitlab_sync_enabled():
-            work_item_id, synced_platform = self._run_gitlab_sync(description, ticket_id, status, commit_info)
+            work_item_id, synced_platform = self._run_gitlab_sync(description, ticket_id, status, commit_info, workspace_settings)
 
         if not work_item_id and self.github_client and config and config.is_github_sync_enabled():
-            work_item_id, synced_platform = self._run_github_sync(description, ticket_id, status, commit_info)
+            work_item_id, synced_platform = self._run_github_sync(description, ticket_id, status, commit_info, workspace_settings)
 
         return work_item_id, synced_platform
 
-    def _run_azure_sync(self, description, ticket_id=None, status=None, commit_info=None):
+    def _run_azure_sync(self, description, ticket_id=None, status=None, commit_info=None, workspace_settings=None):
         """Run the async _sync_to_azure from synchronous handler code.
 
         Returns:
@@ -1247,16 +1299,19 @@ class DevTrackBridge:
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                 future = pool.submit(
                     asyncio.run,
-                    self._sync_to_azure(description, ticket_id, status, commit_info),
+                    self._sync_to_azure(description, ticket_id, status, commit_info, workspace_settings),
                 )
                 return future.result()
         else:
             return asyncio.run(
-                self._sync_to_azure(description, ticket_id, status, commit_info)
+                self._sync_to_azure(description, ticket_id, status, commit_info, workspace_settings)
             )
 
-    async def _sync_to_gitlab(self, description, ticket_id=None, status=None, commit_info=None):
+    async def _sync_to_gitlab(self, description, ticket_id=None, status=None, commit_info=None, workspace_settings=None):
         """Sync a work update or commit to GitLab.
+
+        workspace_settings: dict with per-workspace PM overrides (milestone).
+            None = no override.
 
         Returns:
             Tuple of (issue_iid: int | None, synced_platform: str | None)
@@ -1273,11 +1328,16 @@ class DevTrackBridge:
                 logger.debug("No GitLab issues found for matching")
                 if config.is_gitlab_create_on_no_match() and description and project_id:
                     logger.info("Creating new GitLab issue (no match, create_on_no_match enabled)")
+                    user_id = await self.gitlab_client._ensure_user_id()
+                    ws = workspace_settings or {}
+                    milestone_id = ws.get("milestone") or None
                     issue = await self.gitlab_client.create_issue(
                         project_id=project_id,
                         title=description[:200],
-                        description=description,
+                        description=self._build_issue_description(description, commit_info),
                         labels=[config.get_gitlab_sync_label()],
+                        assignee_ids=[user_id] if user_id else None,
+                        milestone_id=milestone_id if milestone_id else None,
                     )
                     if issue:
                         logger.info(f"✓ Created GitLab issue #{issue.iid} in project {project_id}")
@@ -1306,11 +1366,16 @@ class DevTrackBridge:
                 )
                 if config.is_gitlab_create_on_no_match() and description and project_id:
                     logger.info("Creating new GitLab issue (below threshold, create_on_no_match enabled)")
+                    user_id = await self.gitlab_client._ensure_user_id()
+                    ws = workspace_settings or {}
+                    milestone_id = ws.get("milestone") or None
                     issue = await self.gitlab_client.create_issue(
                         project_id=project_id,
                         title=description[:200],
-                        description=description,
+                        description=self._build_issue_description(description, commit_info),
                         labels=[config.get_gitlab_sync_label()],
+                        assignee_ids=[user_id] if user_id else None,
+                        milestone_id=milestone_id if milestone_id else None,
                     )
                     if issue:
                         logger.info(f"✓ Created GitLab issue #{issue.iid} in project {project_id}")
@@ -1326,6 +1391,25 @@ class DevTrackBridge:
                 f"(confidence: {match_result.confidence:.0%}, "
                 f"type: {match_result.match_type})"
             )
+
+            # Auto-update issue description if configured
+            if config.is_gitlab_auto_update_description() and commit_info and issue_project_id:
+                commit_hash = commit_info.get("commit_hash", "")[:12]
+                commit_msg = commit_info.get("commit_message", "")
+                author = commit_info.get("author", "")
+                existing_issue = await self.gitlab_client.get_issue(issue_project_id, issue_iid)
+                if existing_issue:
+                    existing_desc = existing_issue.description or ""
+                    update_section = (
+                        f"\n\n---\n**Latest commit**: `{commit_hash}` by {author}\n"
+                        f"**Message**: {commit_msg}"
+                    )
+                    if commit_hash not in existing_desc:
+                        new_desc = existing_desc + update_section
+                        await self.gitlab_client.update_issue(
+                            issue_project_id, issue_iid, {"description": new_desc}
+                        )
+                        logger.info(f"✓ Updated GitLab issue #{issue_iid} description")
 
             # Add comment if auto_comment is enabled
             if config.is_gitlab_auto_comment() and issue_project_id:
@@ -1370,7 +1454,7 @@ class DevTrackBridge:
             logger.error(f"Error syncing to GitLab: {e}")
             return None, None
 
-    def _run_gitlab_sync(self, description, ticket_id=None, status=None, commit_info=None):
+    def _run_gitlab_sync(self, description, ticket_id=None, status=None, commit_info=None, workspace_settings=None):
         """Run the async _sync_to_gitlab from synchronous handler code.
 
         Returns:
@@ -1386,16 +1470,19 @@ class DevTrackBridge:
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                 future = pool.submit(
                     asyncio.run,
-                    self._sync_to_gitlab(description, ticket_id, status, commit_info),
+                    self._sync_to_gitlab(description, ticket_id, status, commit_info, workspace_settings),
                 )
                 return future.result()
         else:
             return asyncio.run(
-                self._sync_to_gitlab(description, ticket_id, status, commit_info)
+                self._sync_to_gitlab(description, ticket_id, status, commit_info, workspace_settings)
             )
 
-    async def _sync_to_github(self, description, ticket_id=None, status=None, commit_info=None):
+    async def _sync_to_github(self, description, ticket_id=None, status=None, commit_info=None, workspace_settings=None):
         """Sync a work update or commit to GitHub.
+
+        workspace_settings: dict with per-workspace PM overrides (milestone).
+            None = no override.
 
         Returns:
             Tuple of (issue_number: int | None, synced_platform: str | None)
@@ -1410,10 +1497,14 @@ class DevTrackBridge:
                 logger.debug("No GitHub issues found for matching")
                 if config.is_github_create_on_no_match() and description:
                     logger.info("Creating new GitHub issue (no match, create_on_no_match enabled)")
+                    login = await self.github_client._ensure_login()
+                    ws = workspace_settings or {}
                     issue = await self.github_client.create_issue(
                         title=description[:200],
-                        body=description,
+                        body=self._build_issue_description(description, commit_info),
                         labels=[config.get_github_sync_label()],
+                        assignees=[login] if login else None,
+                        milestone=ws.get("milestone") or None,
                     )
                     if issue:
                         logger.info(f"✓ Created GitHub issue #{issue.number}")
@@ -1440,10 +1531,14 @@ class DevTrackBridge:
                 )
                 if config.is_github_create_on_no_match() and description:
                     logger.info("Creating new GitHub issue (below threshold, create_on_no_match enabled)")
+                    login = await self.github_client._ensure_login()
+                    ws = workspace_settings or {}
                     issue = await self.github_client.create_issue(
                         title=description[:200],
-                        body=description,
+                        body=self._build_issue_description(description, commit_info),
                         labels=[config.get_github_sync_label()],
+                        assignees=[login] if login else None,
+                        milestone=ws.get("milestone") or None,
                     )
                     if issue:
                         logger.info(f"✓ Created GitHub issue #{issue.number}")
@@ -1458,6 +1553,23 @@ class DevTrackBridge:
                 f"(confidence: {match_result.confidence:.0%}, "
                 f"type: {match_result.match_type})"
             )
+
+            # Auto-update issue description if configured
+            if config.is_github_auto_update_description() and commit_info:
+                commit_hash = commit_info.get("commit_hash", "")[:12]
+                commit_msg = commit_info.get("commit_message", "")
+                author = commit_info.get("author", "")
+                existing_issue = await self.github_client.get_issue(issue_number)
+                if existing_issue:
+                    existing_body = existing_issue.body or ""
+                    update_section = (
+                        f"\n\n---\n**Latest commit**: `{commit_hash}` by {author}\n"
+                        f"**Message**: {commit_msg}"
+                    )
+                    if commit_hash not in existing_body:
+                        new_body = existing_body + update_section
+                        await self.github_client.update_issue(issue_number, body=new_body)
+                        logger.info(f"✓ Updated GitHub issue #{issue_number} description")
 
             # Add comment if auto_comment is enabled
             if config.is_github_auto_comment():
@@ -1501,7 +1613,7 @@ class DevTrackBridge:
             logger.error(f"Error syncing to GitHub: {e}")
             return None, None
 
-    def _run_github_sync(self, description, ticket_id=None, status=None, commit_info=None):
+    def _run_github_sync(self, description, ticket_id=None, status=None, commit_info=None, workspace_settings=None):
         """Run the async _sync_to_github from synchronous handler code.
 
         Returns:
@@ -1517,12 +1629,12 @@ class DevTrackBridge:
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                 future = pool.submit(
                     asyncio.run,
-                    self._sync_to_github(description, ticket_id, status, commit_info),
+                    self._sync_to_github(description, ticket_id, status, commit_info, workspace_settings),
                 )
                 return future.result()
         else:
             return asyncio.run(
-                self._sync_to_github(description, ticket_id, status, commit_info)
+                self._sync_to_github(description, ticket_id, status, commit_info, workspace_settings)
             )
 
     def handle_workspace_reload(self, msg: IPCMessage):

@@ -20,7 +20,7 @@ func NewCLI() (*CLI, error) {
 	// For status/help commands, we don't need a full daemon
 	if len(os.Args) > 1 {
 		cmd := os.Args[1]
-		if cmd == "help" || cmd == "version" || cmd == "commit-queue" || cmd == "commits" || cmd == "queue" || cmd == "telegram-status" || cmd == "azure-check" || cmd == "gitlab-check" || cmd == "workspace" {
+		if cmd == "help" || cmd == "version" || cmd == "commit-queue" || cmd == "commits" || cmd == "queue" || cmd == "telegram-status" || cmd == "azure-check" || cmd == "gitlab-check" || cmd == "github-check" || cmd == "workspace" || cmd == "shell-init" || cmd == "is-workspace" || cmd == "enable-git" || cmd == "disable-git" {
 			return &CLI{}, nil
 		}
 	}
@@ -164,10 +164,26 @@ func (cli *CLI) Execute() error {
 		return cli.handleGitLabSync()
 	case "gitlab-view":
 		return cli.handleGitLabView()
+	case "github-check":
+		return cli.handleGitHubCheck()
+	case "github-list":
+		return cli.handleGitHubList()
+	case "github-sync":
+		return cli.handleGitHubSync()
+	case "github-view":
+		return cli.handleGitHubView()
 	case "settings":
 		return cli.handleSettings()
 	case "workspace":
 		return cli.handleWorkspace()
+	case "shell-init":
+		return cli.handleShellInit()
+	case "is-workspace":
+		return cli.handleIsWorkspace()
+	case "enable-git":
+		return cli.handleEnableGit()
+	case "disable-git":
+		return cli.handleDisableGit()
 	case "help":
 		cli.printUsage()
 		return nil
@@ -1323,6 +1339,119 @@ func (cli *CLI) handleGitLabView() error {
 	return nil
 }
 
+// handleGitHubCheck verifies GitHub config and connectivity
+func (cli *CLI) handleGitHubCheck() error {
+	config, _ := LoadEnvConfig()
+	projectRoot := ""
+	if config != nil {
+		projectRoot = config.ProjectRoot
+	}
+	if projectRoot == "" {
+		projectRoot = os.Getenv("PROJECT_ROOT")
+	}
+
+	scriptPath := filepath.Join(projectRoot, "backend", "github", "check.py")
+	args := []string{"run", "--directory", projectRoot, "python", scriptPath}
+	cmd := exec.Command("uv", args...)
+	if projectRoot != "" {
+		cmd.Dir = projectRoot
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// handleGitHubList lists GitHub issues assigned to the user
+func (cli *CLI) handleGitHubList() error {
+	config, _ := LoadEnvConfig()
+	projectRoot := ""
+	if config != nil {
+		projectRoot = config.ProjectRoot
+	}
+	if projectRoot == "" {
+		projectRoot = os.Getenv("PROJECT_ROOT")
+	}
+
+	scriptPath := filepath.Join(projectRoot, "backend", "github", "list_items.py")
+	args := []string{"run", "--directory", projectRoot, "python", scriptPath}
+	args = append(args, os.Args[2:]...) // forward --closed, --state flags
+	cmd := exec.Command("uv", args...)
+	if projectRoot != "" {
+		cmd.Dir = projectRoot
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// handleGitHubSync runs a manual sync with GitHub.
+// Passes --full or --hours N through from CLI args.
+func (cli *CLI) handleGitHubSync() error {
+	config, _ := LoadEnvConfig()
+	projectRoot := ""
+	if config != nil {
+		projectRoot = config.ProjectRoot
+	}
+	if projectRoot == "" {
+		projectRoot = os.Getenv("PROJECT_ROOT")
+	}
+
+	scriptPath := filepath.Join(projectRoot, "backend", "github", "run_sync.py")
+	uvArgs := []string{"run", "--directory", projectRoot, "python", scriptPath}
+
+	// Forward any flags after "github-sync" (e.g. --full, --hours 24)
+	if len(os.Args) > 2 {
+		uvArgs = append(uvArgs, os.Args[2:]...)
+	}
+
+	cmd := exec.Command("uv", uvArgs...)
+	if projectRoot != "" {
+		cmd.Dir = projectRoot
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// handleGitHubView shows details for a specific GitHub issue
+func (cli *CLI) handleGitHubView() error {
+	if len(os.Args) < 3 {
+		fmt.Println("Usage: devtrack github-view <issue_number>")
+		return fmt.Errorf("missing issue_number")
+	}
+
+	config, _ := LoadEnvConfig()
+	projectRoot := ""
+	if config != nil {
+		projectRoot = config.ProjectRoot
+	}
+	if projectRoot == "" {
+		projectRoot = os.Getenv("PROJECT_ROOT")
+	}
+
+	scriptPath := filepath.Join(projectRoot, "backend", "github", "view_item.py")
+	args := []string{"run", "--directory", projectRoot, "python", scriptPath, os.Args[2]}
+	cmd := exec.Command("uv", args...)
+	if projectRoot != "" {
+		cmd.Dir = projectRoot
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // handleWorkspace dispatches workspace subcommands
 func (cli *CLI) handleWorkspace() error {
 	subCmd := ""
@@ -1506,6 +1635,120 @@ func (cli *CLI) handleTelegramStatus() error {
 	return nil
 }
 
+// handleShellInit outputs shell integration code for eval "$(devtrack shell-init)"
+// This defines a git() function that transparently routes commit/history/messages
+// through DevTrack for monitored workspaces, passing everything else to real git.
+func (cli *CLI) handleShellInit() error {
+	fmt.Print(`# DevTrack shell integration
+# Transparently routes 'git commit' through DevTrack for monitored workspaces.
+# Add to ~/.zshrc or ~/.bashrc:
+#   eval "$(devtrack shell-init)"
+git() {
+  # Only intercept when inside a git repo
+  if command git rev-parse --git-dir >/dev/null 2>&1; then
+    # Honour explicit bypass: GIT_NO_DEVTRACK=1 git commit
+    if [ "${GIT_NO_DEVTRACK:-}" = "1" ]; then
+      command git "$@"
+      return $?
+    fi
+
+    local _dt_enabled=""
+
+    # Fast path: per-repo opt-in via 'devtrack enable-git' (reads .git/config, no subprocess)
+    _dt_enabled=$(command git config --local devtrack.enabled 2>/dev/null || true)
+
+    # Slow path: check workspaces.yaml when not explicitly set
+    if [ -z "$_dt_enabled" ] && command -v devtrack >/dev/null 2>&1; then
+      if devtrack is-workspace 2>/dev/null; then
+        _dt_enabled="true"
+      fi
+    fi
+
+    if [ "$_dt_enabled" = "true" ]; then
+      case "$1" in
+        commit|history|messages)
+          devtrack git "$@"
+          return $?
+          ;;
+      esac
+    fi
+  fi
+
+  command git "$@"
+}
+`)
+	return nil
+}
+
+// handleIsWorkspace exits 0 if the current directory is a DevTrack workspace, 1 otherwise.
+// Used by the shell-init git() function to decide whether to intercept git commands.
+func (cli *CLI) handleIsWorkspace() error {
+	// Get the git root of the current directory
+	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	out, err := cmd.Output()
+	if err != nil {
+		os.Exit(1) // not a git repo
+	}
+	gitRoot := strings.TrimSpace(string(out))
+	gitRoot, _ = filepath.Abs(gitRoot)
+
+	// Single-repo mode: check DEVTRACK_WORKSPACE
+	workspacePath := strings.TrimSpace(os.Getenv("DEVTRACK_WORKSPACE"))
+	if workspacePath != "" {
+		wsAbs, _ := filepath.Abs(workspacePath)
+		if wsAbs == gitRoot || strings.HasPrefix(gitRoot, wsAbs+string(filepath.Separator)) {
+			os.Exit(0)
+		}
+	}
+
+	// Multi-repo mode: check workspaces.yaml
+	wsCfg, err := LoadWorkspacesConfig()
+	if err != nil || wsCfg == nil {
+		os.Exit(1)
+	}
+	for _, ws := range wsCfg.GetEnabledWorkspaces() {
+		wsPath, _ := filepath.Abs(ws.Path)
+		if wsPath == gitRoot || strings.HasPrefix(gitRoot, wsPath+string(filepath.Separator)) {
+			os.Exit(0)
+		}
+	}
+
+	os.Exit(1)
+	return nil
+}
+
+// handleEnableGit sets git config devtrack.enabled=true in the current repo,
+// opting it into DevTrack shell integration without editing workspaces.yaml.
+func (cli *CLI) handleEnableGit() error {
+	cmd := exec.Command("git", "config", "--local", "devtrack.enabled", "true")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to set git config: %v\nAre you inside a git repository?", err)
+	}
+	fmt.Println("✓ DevTrack git integration enabled for this repo.")
+	fmt.Println("  'git commit' will now route through DevTrack.")
+	fmt.Println()
+	fmt.Println("  Shell integration required — add to ~/.zshrc or ~/.bashrc if not done yet:")
+	fmt.Println(`    eval "$(devtrack shell-init)"`)
+	fmt.Println()
+	fmt.Println("  To disable: devtrack disable-git")
+	return nil
+}
+
+// handleDisableGit removes git config devtrack.enabled from the current repo.
+func (cli *CLI) handleDisableGit() error {
+	cmd := exec.Command("git", "config", "--local", "--unset", "devtrack.enabled")
+	if err := cmd.Run(); err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 5 {
+			// exit code 5 = key not found; nothing to do
+		} else {
+			return fmt.Errorf("failed to unset git config: %v", err)
+		}
+	}
+	fmt.Println("✓ DevTrack git integration disabled for this repo.")
+	fmt.Println("  'git commit' will use standard git.")
+	return nil
+}
+
 // printUsage prints CLI usage information
 func (cli *CLI) printUsage() {
 	fmt.Println("DevTrack - Developer Automation Tools")
@@ -1530,6 +1773,13 @@ func (cli *CLI) printUsage() {
 	fmt.Println("  uv run python -m backend.git_sage do  '<task>'      Let git-sage execute a task")
 	fmt.Println("  uv run python -m backend.git_sage interactive        Interactive git-sage session")
 	fmt.Println()
+	fmt.Println("SHELL INTEGRATION (type 'git commit' instead of 'devtrack git commit'):")
+	fmt.Println(`  eval "$(devtrack shell-init)"  # Add to ~/.zshrc or ~/.bashrc`)
+	fmt.Println("  devtrack enable-git            Opt this repo in  (sets git config devtrack.enabled)")
+	fmt.Println("  devtrack disable-git           Opt this repo out")
+	fmt.Println("  devtrack is-workspace          Exit 0 if CWD is a DevTrack workspace (used internally)")
+	fmt.Println("  GIT_NO_DEVTRACK=1 git commit   Bypass DevTrack for a single command")
+	fmt.Println()
 	fmt.Println("AZURE DEVOPS:")
 	fmt.Println("  devtrack azure-check                  Check config and connectivity")
 	fmt.Println("  devtrack azure-list                   List work items assigned to you")
@@ -1549,6 +1799,16 @@ func (cli *CLI) printUsage() {
 	fmt.Println("  devtrack gitlab-sync                     Full resync (fetches all open issues)")
 	fmt.Println("  devtrack gitlab-sync --full              Explicit full resync")
 	fmt.Println("  devtrack gitlab-sync --hours 24          Only issues updated in last 24h")
+	fmt.Println()
+	fmt.Println("GITHUB:")
+	fmt.Println("  devtrack github-check                  Check GitHub config and connectivity")
+	fmt.Println("  devtrack github-list                   List open issues assigned to you")
+	fmt.Println("  devtrack github-list --closed          Include closed issues")
+	fmt.Println("  devtrack github-list --state <state>   Filter by state (open, closed, all)")
+	fmt.Println("  devtrack github-view <number>          Show full details for an issue")
+	fmt.Println("  devtrack github-sync                   Full resync (clears cache, fetches all issues)")
+	fmt.Println("  devtrack github-sync --full            Explicit full resync")
+	fmt.Println("  devtrack github-sync --hours 24        Only issues updated in last 24h (merges)")
 	fmt.Println()
 	fmt.Println("PM AGENT (via Telegram bot):")
 	fmt.Println("  /plan <problem>    Decompose a problem into Epic → Story → Task hierarchy")

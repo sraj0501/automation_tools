@@ -114,6 +114,27 @@ devtrack start
 devtrack status
 ```
 
+### 7. Optional: Shell Integration
+
+Enable `git commit` to route through DevTrack without the `devtrack` prefix:
+
+```bash
+# Add to ~/.zshrc or ~/.bashrc
+echo 'eval "$(devtrack shell-init)"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+Then opt repos in:
+
+```bash
+cd /path/to/your/repo
+devtrack enable-git      # sets git config devtrack.enabled=true
+```
+
+After this, `git commit` in that repo runs the full DevTrack AI enhancement flow. To undo: `devtrack disable-git`. Repos listed in `workspaces.yaml` are intercepted automatically — no `enable-git` needed.
+
+See [Git Features](GIT_FEATURES.md) for details.
+
 ---
 
 ## Optional: Ollama (Local AI)
@@ -170,6 +191,7 @@ rm -rf /path/to/automation_tools      # removes everything including Data/
 | `IPC connection failed` | Check port: `lsof -i :35893`. Change `IPC_PORT` in `.env` if in use |
 | `.env not found` | `cp .env_sample .env` from the project root |
 | `Ollama unreachable` | `ollama serve` in a separate terminal |
+| `git commit` still uses plain git | Run `source ~/.zshrc`, or check that `eval "$(devtrack shell-init)"` is in your shell config |
 
 More: [Troubleshooting Guide](TROUBLESHOOTING.md)
 
