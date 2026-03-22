@@ -1640,9 +1640,25 @@ func (cli *CLI) handleTelegramStatus() error {
 // through DevTrack for monitored workspaces, passing everything else to real git.
 func (cli *CLI) handleShellInit() error {
 	fmt.Print(`# DevTrack shell integration
-# Transparently routes 'git commit' through DevTrack for monitored workspaces.
+# Transparently routes git commands through DevTrack for monitored workspaces.
 # Add to ~/.zshrc or ~/.bashrc:
 #   eval "$(devtrack shell-init)"
+#
+# The devtrack() wrapper below auto-reloads this function after start/restart/enable-git
+# so you never need to manually re-source after updating the binary.
+
+devtrack() {
+  command devtrack "$@"
+  local _dt_exit=$?
+  # Re-evaluate shell-init after commands that may update the shell function
+  case "$1" in
+    start|restart|enable-git)
+      eval "$(command devtrack shell-init)" 2>/dev/null || true
+      ;;
+  esac
+  return $_dt_exit
+}
+
 git() {
   # Only intercept when inside a git repo
   if command git rev-parse --git-dir >/dev/null 2>&1; then
