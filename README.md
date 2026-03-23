@@ -17,6 +17,8 @@
 - **Runs 100% locally** — Ollama for AI, SQLite for storage, no cloud required
 - **Works offline** — queues everything and syncs when connectivity returns
 - **Remote-controllable** via a Telegram bot on your phone
+- **macOS auto-start** — one command installs a launchd LaunchAgent so the daemon starts automatically at login
+- **Ticket Alerter** — polls GitHub for assigned issues, PR comments, and review requests; delivers macOS OS notifications and terminal output
 
 ---
 
@@ -43,6 +45,7 @@
 | Enable "Talk Like You" | [Personalization](docs/PERSONALIZATION.md) |
 | Fix a problem | [Troubleshooting](docs/TROUBLESHOOTING.md) |
 | Understand the architecture | [Architecture](docs/ARCHITECTURE.md) |
+| Auto-start on macOS login | [macOS Auto-Start](docs/MACOS_AUTOSTART.md) |
 | Contribute or modify DevTrack | [CLAUDE.md](CLAUDE.md) |
 
 ---

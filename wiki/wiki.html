@@ -590,6 +590,12 @@ const NAV = [
     ]
   },
   {
+    group: 'System Integration',
+    items: [
+      { id: 'MACOS_AUTOSTART', label: 'macOS Auto-Start', icon: launch_icon() },
+    ]
+  },
+  {
     group: 'Advanced',
     items: [
       { id: 'OFFLINE_RESILIENCE', label: 'Offline Resilience', icon: offline_icon() },
@@ -626,6 +632,7 @@ function offline_icon()  { return svgIcon('<path fill-rule="evenodd" d="M5.05 3.
 function advanced_icon() { return svgIcon('<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>'); }
 function bug_icon()      { return svgIcon('<path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>'); }
 function map_icon()      { return svgIcon('<path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z"/>'); }
+function launch_icon()   { return svgIcon('<path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"/>'); }
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let currentPage = 'home';
@@ -763,7 +770,7 @@ function renderHome() {
         { id:'GETTING_STARTED', icon:'🚀', title:'Getting Started',   desc:'New to DevTrack? Start here — concepts, setup, and first run.' },
         { id:'QUICK_START',     icon:'⚡', title:'Quick Start',       desc:'Get running in 5 minutes with the minimal setup guide.' },
         { id:'CLI_REFERENCE',   icon:'⌨️', title:'CLI Reference',     desc:'All devtrack commands with flags and examples.' },
-        { id:'GIT_FEATURES',    icon:'🔀', title:'Git Features',      desc:'Shell integration, AI commits, and conflict resolution. Type <code>git commit</code> — DevTrack intercepts it, prompts for time spent, then opens an interactive split-pane ticket picker so you can link the commit to an issue instantly. <code>git add</code> with no args stages everything. After commit, one keypress pushes to origin. Press <kbd>E</kbd> in the refinement loop for a richer AI message. Shell setup is self-maintaining: <code>devtrack start</code> / <code>restart</code> / <code>enable-git</code> auto-reload the shell functions — no new terminal needed.' },
+        { id:'GIT_FEATURES',    icon:'🔀', title:'Git Features',      desc:'Shell integration, AI commits, and conflict resolution. Add <code>export PATH</code> and <code>eval "$(devtrack shell-init)"</code> to <code>~/.zshrc</code> once. Type <code>git commit</code> — DevTrack intercepts it, prompts for time spent, then opens an interactive split-pane ticket picker so you can link the commit to an issue instantly. <code>git add</code> with no args stages everything. After commit, one keypress pushes to origin. Press <kbd>E</kbd> in the refinement loop for a richer AI message. <code>devtrack start</code> auto-enables git interception for all workspaces — no manual <code>enable-git</code> needed. Bypass with <code>GIT_NO_DEVTRACK=1</code>.' },
         { id:'GIT_SAGE',        icon:'🤖', title:'git-sage Agent',    desc:'Autonomous local LLM agent for complex git operations.' },
         { id:'AZURE_DEVOPS',    icon:'🔷', title:'Azure DevOps',      desc:'Sync work items, auto-comment, and transition states.' },
         { id:'GITLAB',          icon:'🦊', title:'GitLab',            desc:'Full CLI and Telegram access; inbound webhooks; issue enrichment on create.' },
@@ -771,6 +778,7 @@ function renderHome() {
         { id:'TELEGRAM_BOT',    icon:'📱', title:'Telegram Bot',      desc:'Control DevTrack remotely from your phone.' },
         { id:'PM_AGENT',        icon:'🗂️', title:'PM Agent',          desc:'AI decomposes problems into Epic → Story → Task hierarchies.' },
         { id:'PERSONALIZATION', icon:'🎨', title:'Personalization',   desc:'"Talk Like You" — AI that learns your communication style.' },
+        { id:'MACOS_AUTOSTART', icon:'⚙️', title:'macOS Auto-Start',   desc:'Auto-start DevTrack at login using launchd. One command installs a LaunchAgent: <code>devtrack launchd-install</code>. Runs as your user, logs to <code>Data/logs/launchd.log</code>. Uninstall with <code>devtrack launchd-uninstall</code>.' },
         { id:'TROUBLESHOOTING', icon:'🔧', title:'Troubleshooting',   desc:'Common problems, error messages, and solutions.' },
       ].map(c => `
         <a class="home-card" href="#${c.id}" onclick="navigate('${c.id}');return false;">
@@ -810,6 +818,8 @@ devtrack enable-git   # opt this repo in</code></pre>
         { n:'Immediate PM Sync',   d:'Selecting a ticket posts a comment with the commit hash, message, and time spent — instantly, with your confirmation. No background daemon guessing required. Auto-comments, transitions states, and creates missing items in Azure/GitLab/GitHub. New issues include commit hash and message in the description and are auto-assigned to the authenticated user.' },
         { n:'Richer AI Messages',  d:'In the commit refinement loop, pressing <kbd>E</kbd> to enhance gives the AI double the normal token allowance for that call, producing more detailed and thorough commit messages.' },
         { n:'Personalized AI',     d:'Learns your style from Teams messages and writes in your voice.' },
+        { n:'Ticket Alerter',      d:'Polls GitHub for events relevant to you — assigned issues/PRs, comments on threads you are in, and review requests. Delivers macOS OS notifications (via osascript) and terminal output. Delta-synced via MongoDB so you never see the same notification twice. Configure with <code>ALERT_ENABLED=true</code> and the <code>ALERT_*</code> variables in <code>.env</code>.' },
+        { n:'macOS Auto-Start',    d:'Run <code>devtrack launchd-install</code> to register a user-level LaunchAgent. The daemon starts automatically each time you log in — no cron, no login items UI, no manual <code>devtrack start</code> after reboot.' },
         { n:'Offline-First',       d:'Queues everything and syncs when connectivity returns.' },
         { n:'Remote Control',      d:'Full Telegram bot: status, logs, create items, trigger updates.' },
       ].map((f, i) => `

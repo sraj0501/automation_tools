@@ -960,6 +960,82 @@ LEARNING_TEAMS_ENABLED=false
 LEARNING_OUTLOOK_ENABLED=false
 ```
 
+### Ticket Alerter
+
+Poll GitHub for notifications (assigned issues/PRs, comments, review requests) and deliver them as macOS OS notifications and terminal output.
+
+#### ALERT_ENABLED
+
+**What**: Enable the Ticket Alerter background poller
+**Format**: `true` or `false`
+**Default**: `false`
+
+```bash
+ALERT_ENABLED=true
+```
+
+#### ALERT_POLL_INTERVAL_SECS
+
+**What**: How often to poll GitHub for new events (seconds)
+**Format**: Integer (seconds)
+**Default**: `300` (5 minutes)
+
+```bash
+ALERT_POLL_INTERVAL_SECS=300
+```
+
+#### ALERT_GITHUB_ENABLED
+
+**What**: Poll GitHub for assigned issues/PRs, comments, and review requests
+**Format**: `true` or `false`
+**Default**: `true` (requires `ALERT_ENABLED=true` and `GITHUB_TOKEN` set)
+
+```bash
+ALERT_GITHUB_ENABLED=true
+```
+
+#### ALERT_NOTIFY_ASSIGNED
+
+**What**: Deliver a notification when an issue or PR is assigned to you
+**Format**: `true` or `false`
+**Default**: `true`
+
+```bash
+ALERT_NOTIFY_ASSIGNED=true
+```
+
+#### ALERT_NOTIFY_COMMENTS
+
+**What**: Deliver a notification when someone comments on an issue or PR you are involved in
+**Format**: `true` or `false`
+**Default**: `true`
+
+```bash
+ALERT_NOTIFY_COMMENTS=true
+```
+
+#### ALERT_NOTIFY_STATUS_CHANGES
+
+**What**: Deliver a notification when an issue or PR you are involved in changes state (e.g. closed, reopened)
+**Format**: `true` or `false`
+**Default**: `true`
+
+```bash
+ALERT_NOTIFY_STATUS_CHANGES=true
+```
+
+#### ALERT_NOTIFY_REVIEW_REQUESTED
+
+**What**: Deliver a notification when a review is requested from you on a pull request
+**Format**: `true` or `false`
+**Default**: `true`
+
+```bash
+ALERT_NOTIFY_REVIEW_REQUESTED=true
+```
+
+See [GitHub Guide](GITHUB.md) for full GitHub credential setup.
+
 ---
 
 ## Scheduling

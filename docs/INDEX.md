@@ -39,6 +39,11 @@
 |-------|---------------|
 | [TELEGRAM_BOT.md](TELEGRAM_BOT.md) | Full bot setup, all commands (Azure, GitLab, GitHub, PM Agent, scheduler) |
 
+### System Integration
+| Guide | What it covers |
+|-------|---------------|
+| [MACOS_AUTOSTART.md](MACOS_AUTOSTART.md) | Auto-start DevTrack on macOS login via launchd LaunchAgents |
+
 ### AI & Personalization
 | Guide | What it covers |
 |-------|---------------|
@@ -95,7 +100,8 @@ docs/
 │   ├── GITHUB.md             GitHub sync, issue management, Telegram commands
 │   ├── MULTI_REPO.md         Multi-repo monitoring via workspaces.yaml
 │   ├── PM_AGENT.md           AI work item decomposition
-│   └── TELEGRAM_BOT.md       Telegram remote control
+│   ├── TELEGRAM_BOT.md       Telegram remote control
+│   └── MACOS_AUTOSTART.md    Auto-start on macOS login via launchd
 │
 ├── AI & Personalization
 │   ├── LLM_GUIDE.md          provider setup and model config
