@@ -30,3 +30,4 @@ Data/
 # Claude Code — exclude machine-specific settings, keep shared memory
 .claude/settings.local.json
 .claude/worktrees/
+.claude/agent*
