@@ -157,7 +157,9 @@ class ProjectManager:
         timeline_days: Optional[int] = None,
         budget: Optional[float] = None,
         stakeholders: Optional[List[ProjectStakeholder]] = None,
-        ai_enhance: bool = True
+        ai_enhance: bool = True,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
     ) -> Project:
         """
         Create a new project.
@@ -194,9 +196,8 @@ class ProjectManager:
             for goal in goal_descriptions
         ]
 
-        # Calculate end date if timeline provided
-        end_date = None
-        if timeline_days:
+        # Calculate end date if timeline provided (only if not explicitly given)
+        if end_date is None and timeline_days:
             end_date = datetime.utcnow() + timedelta(days=timeline_days)
 
         # Assess risk
@@ -209,6 +210,7 @@ class ProjectManager:
             template_type=template,
             goals=project_goals,
             status=ProjectStatus.SETUP,
+            start_date=start_date,
             end_date=end_date,
             budget_estimate=budget,
             risk_level=risk_level,

@@ -375,11 +375,14 @@ class CommitMessageEnhancer:
 
             from backend.llm.base import LLMOptions
             from backend.config import http_timeout, commit_llm_temperature, commit_llm_max_tokens
+            import os as _os
+            _base_tokens = commit_llm_max_tokens()
+            _max_tokens = _base_tokens * 2 if _os.environ.get("COMMIT_ENHANCE_MODE") == "1" else _base_tokens
             enhanced = self._get_provider().generate(
                 prompt=prompt,
                 options=LLMOptions(
                     temperature=commit_llm_temperature(),
-                    max_tokens=commit_llm_max_tokens(),
+                    max_tokens=_max_tokens,
                 ),
                 timeout=http_timeout(),
             )

@@ -53,8 +53,18 @@ if [ -z "$GIT_COMMAND" ]; then
 fi
 shift  # Remove the subcommand (commit, add, etc.)
 
+# Handle git add — default to '.' when no paths given
+if [ "$GIT_COMMAND" = "add" ]; then
+    if [ $# -eq 0 ]; then
+        echo -e "${BLUE}🔍 No path specified — staging all changes (git add .)${NC}"
+        git add .
+    else
+        git add "$@"
+    fi
+    exit $?
+
 # Handle git commit with AI enhancement
-if [ "$GIT_COMMAND" = "commit" ]; then
+elif [ "$GIT_COMMAND" = "commit" ]; then
     # Check if there are staged changes
     if git diff --cached --quiet 2>/dev/null; then
         echo "No changes staged for commit."
@@ -113,7 +123,7 @@ if [ "$GIT_COMMAND" = "commit" ]; then
         export GIT_DIR="$REPO_ROOT/.git"
 
         echo -e "${BLUE}🔍 Analyzing with AI...${NC}"
-        ENHANCEMENT_OUTPUT=$(uv run --directory "$PROJECT_ROOT" python "$PROJECT_ROOT/backend/commit_message_enhancer.py" "$TEMP_MSG" auto 2>&1)
+        ENHANCEMENT_OUTPUT=$("$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/backend/commit_message_enhancer.py" "$TEMP_MSG" auto 2>&1)
 
         if echo "$ENHANCEMENT_OUTPUT" | grep -q "enhanced"; then
             ENHANCED_MESSAGE=$(grep -v "^#" "$TEMP_MSG" | sed '/^$/d')
@@ -172,7 +182,8 @@ if [ "$GIT_COMMAND" = "commit" ]; then
     COMMIT_CONFIRMED=false
     ATTEMPT=0
     MAX_ATTEMPTS=5
-    
+    ENHANCE_MODE=0   # set to 1 when user presses E, doubles token budget for that call
+
     while [ "$COMMIT_CONFIRMED" = false ] && [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
         ATTEMPT=$((ATTEMPT + 1))
         echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -180,9 +191,10 @@ if [ "$GIT_COMMAND" = "commit" ]; then
         echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         echo ""
 
-        # Generate/enhance message
+        # Generate/enhance message (double token budget when user explicitly asked to enhance)
         echo -e "${BLUE}🔍 Analyzing with AI...${NC}"
-        ENHANCEMENT_OUTPUT=$(uv run --directory "$PROJECT_ROOT" python "$PROJECT_ROOT/backend/commit_message_enhancer.py" "$TEMP_MSG" auto 2>&1)
+        ENHANCEMENT_OUTPUT=$(COMMIT_ENHANCE_MODE=$ENHANCE_MODE "$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/backend/commit_message_enhancer.py" "$TEMP_MSG" auto 2>&1)
+        ENHANCE_MODE=0  # reset — only applies for the single call it was requested for
 
         if echo "$ENHANCEMENT_OUTPUT" | grep -q "enhanced"; then
             # Read enhanced message (remove comment lines)
@@ -227,13 +239,32 @@ if [ "$GIT_COMMAND" = "commit" ]; then
 
         case "$CHOICE" in
             [Aa])
-                # Accept the message
+                # Run ticket picker to link commit to a PM ticket
+                TICKET_FILE=$(mktemp)
+                "$PROJECT_ROOT/.venv/bin/python" \
+                    "$PROJECT_ROOT/backend/ticket_picker.py" \
+                    --repo-path "$REPO_ROOT" \
+                    --workspaces-file "$PROJECT_ROOT/workspaces.yaml" \
+                    --commit-message "$ENHANCED_MESSAGE" \
+                    --output "$TICKET_FILE" || true
+                TICKET_ID=$(cat "$TICKET_FILE" 2>/dev/null | tr -d '[:space:]')
+                rm -f "$TICKET_FILE"
+
+                # Append ticket reference to commit message
+                if [ -n "$TICKET_ID" ]; then
+                    CURRENT_MSG=$(grep -v "^#" "$TEMP_MSG" | sed '/^$/d')
+                    printf '%s\n\nRefs: %s\n' "$CURRENT_MSG" "$TICKET_ID" > "$TEMP_MSG"
+                    echo ""
+                    echo -e "${GREEN}✓ Linked to ${TICKET_ID}${NC}"
+                fi
+
                 COMMIT_CONFIRMED=true
                 ;;
             [Ee])
-                # Enhance current message (use it as input for next iteration)
+                # Enhance current message (use it as input for next iteration, with double token budget)
                 if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
                     echo "$ENHANCED_MESSAGE" > "$TEMP_MSG"
+                    ENHANCE_MODE=1
                 else
                     echo -e "${YELLOW}✗ Maximum attempts reached. Cannot enhance further.${NC}"
                     echo ""
@@ -336,42 +367,56 @@ if [ "$GIT_COMMAND" = "commit" ]; then
             echo -e "${YELLOW}🔔 DevTrack: Log this work? (y/n)${NC}"
             read -r -n 1 RESPONSE
             echo ""
-            
+
             if [[ "$RESPONSE" =~ ^[Yy]$ ]]; then
-                # Get the commit hash
                 COMMIT_HASH=$(git rev-parse HEAD)
-                COMMIT_SHORT=$(git rev-parse --short HEAD)
-                
-                # Extract ticket ID if present (common patterns: AB-234, PROJ-123, #234)
-                TICKET_ID=$(echo "$FINAL_MESSAGE" | grep -oE '([A-Z]+-[0-9]+|#[0-9]+)' | head -1 || true)
-                
-                # Show logged message (first line only)
-                FIRST_LINE=$(echo "$FINAL_MESSAGE" | head -1)
-                echo -e "${GREEN}✓ Logged work: ${FIRST_LINE}${NC}"
-                
-                # Detect and show git provider
-                REPO_URL=$(git config --get remote.origin.url 2>/dev/null || true)
-                if [ -n "$REPO_URL" ]; then
-                    if echo "$REPO_URL" | grep -q "github.com"; then
-                        echo -e "${GREEN}✓ Logged to GitHub commit ${COMMIT_SHORT}${NC}"
-                    elif echo "$REPO_URL" | grep -q "gitlab"; then
-                        echo -e "${GREEN}✓ Logged to GitLab commit ${COMMIT_SHORT}${NC}"
-                    elif echo "$REPO_URL" | grep -q "dev.azure.com"; then
-                        echo -e "${GREEN}✓ Logged to Azure Repos commit ${COMMIT_SHORT}${NC}"
-                        if [ -n "$TICKET_ID" ]; then
-                            echo -e "${GREEN}✓ Work item ${TICKET_ID} referenced${NC}"
-                        fi
-                    else
-                        echo -e "${GREEN}✓ Logged to Git commit ${COMMIT_SHORT}${NC}"
-                    fi
+                BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+                GIT_AUTHOR_NAME=$(git log -1 --format="%an")
+
+                # Ask for time spent (optional, 15s timeout)
+                echo -ne "${YELLOW}How long did this take? (e.g. 2h, 30m) [Enter to skip]: ${NC}"
+                TIME_SPENT=""
+                if read -r -t 15 TIME_SPENT 2>/dev/null; then
+                    TIME_SPENT=$(echo "$TIME_SPENT" | tr -d '[:space:]')
                 else
-                    echo -e "${GREEN}✓ Logged to local Git commit ${COMMIT_SHORT}${NC}"
+                    echo ""
                 fi
-                
-                # Daemon will handle project management sync if configured
-                echo -e "${BLUE}  → DevTrack daemon will sync with project management...${NC}"
+
+                echo ""
+                echo -e "${BLUE}→ Syncing to project management...${NC}"
+
+                export GIT_AUTHOR_NAME
+                LOG_OUTPUT=$("$PROJECT_ROOT/.venv/bin/python" \
+                    "$PROJECT_ROOT/backend/log_work.py" \
+                    --commit  "$COMMIT_HASH" \
+                    --message "$FINAL_MESSAGE" \
+                    --branch  "$BRANCH" \
+                    --repo    "$REPO_ROOT" \
+                    ${TIME_SPENT:+--time "$TIME_SPENT"} \
+                    ${TICKET_ID:+--ticket "$TICKET_ID"} 2>/dev/null)
+
+                if [ -n "$LOG_OUTPUT" ]; then
+                    echo "$LOG_OUTPUT"
+                fi
             else
-                echo -e "${BLUE}  Skipped logging. Commit saved to Git.${NC}"
+                echo -e "${BLUE}  Skipped. Daemon will auto-sync in background.${NC}"
+            fi
+
+            # Offer to push to current branch
+            echo ""
+            CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+            echo -e "${YELLOW}🚀 Push to origin/${CURRENT_BRANCH}? (y/n)${NC}"
+            read -r -n 1 PUSH_RESPONSE
+            echo ""
+            if [[ "$PUSH_RESPONSE" =~ ^[Yy]$ ]]; then
+                echo -e "${BLUE}→ Pushing...${NC}"
+                if GIT_NO_DEVTRACK=1 git push origin "$CURRENT_BRANCH" 2>&1; then
+                    echo -e "${GREEN}✓ Pushed to origin/${CURRENT_BRANCH}${NC}"
+                else
+                    echo -e "${RED}✗ Push failed. Run 'git push origin ${CURRENT_BRANCH}' to retry.${NC}"
+                fi
+            else
+                echo -e "${BLUE}  Skipped. Run 'git push origin ${CURRENT_BRANCH}' when ready.${NC}"
             fi
         fi
     else

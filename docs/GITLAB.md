@@ -48,6 +48,13 @@ All configuration is via `.env`. Copy from `.env_sample`.
 | `GITLAB_SYNC_ENABLED` | `false` | Enable background sync on daemon start |
 | `GITLAB_SYNC_WINDOW_HOURS` | `0` | Hours to look back (`0` = full sync, `N` = last N hours) |
 
+### Optional Enrichment Behaviors
+
+| Variable | Default | Description |
+|---|---|---|
+| `GITLAB_AUTO_UPDATE_DESCRIPTION` | `false` | Append the latest commit hash and message to the body of a matched issue |
+| `GITLAB_DEFAULT_MILESTONE_ID` | _(unset)_ | Milestone ID to assign when DevTrack creates a new issue |
+
 ### Assignment Poller
 
 | Variable | Default | Description |
@@ -141,6 +148,50 @@ GITLAB_POLL_ENABLED=true
 GITLAB_POLL_INTERVAL_MINS=5
 TELEGRAM_ENABLED=true
 ```
+
+---
+
+## Inbound Webhooks
+
+DevTrack can receive real-time events from GitLab via the built-in webhook server.
+
+### Endpoint
+
+```
+POST /webhooks/gitlab
+```
+
+Authenticated with `X-Gitlab-Token` header — GitLab sends the secret you configure, DevTrack validates it against `WEBHOOK_GITLAB_SECRET` in `.env`.
+
+### Supported Hook Types
+
+| Hook type | What DevTrack does |
+|-----------|--------------------|
+| Issue Hook (`opened`, `assigned`) | OS + terminal notification |
+| Merge Request Hook (`opened`, `review_requested`) | OS + terminal notification |
+| Note Hook (comment on issue/MR) | Notification if comment is on your item |
+
+### Setup
+
+1. In your GitLab project: **Settings → Webhooks → Add new webhook**
+2. URL: `https://your-server/webhooks/gitlab`
+3. Secret token: set to `WEBHOOK_GITLAB_SECRET` in `.env`
+4. Trigger: Issue events, Merge request events, Comments
+
+```env
+WEBHOOK_ENABLED=true
+WEBHOOK_GITLAB_SECRET=your_secret_here
+```
+
+---
+
+## Issue Enrichment on Create
+
+When DevTrack creates a new GitLab issue (via bidirectional sync or Telegram `/gitlabcreate`), it automatically:
+
+- Appends the triggering commit hash and message to the issue description
+- Assigns the issue to the authenticated user
+- Applies `GITLAB_DEFAULT_MILESTONE_ID` if configured
 
 ---
 

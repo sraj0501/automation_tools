@@ -6,11 +6,106 @@ Complete guide to DevTrack's git-powered workflows: enhanced commits, conflict r
 
 ## Overview
 
-DevTrack adds three powerful layers to your Git workflow:
+DevTrack adds five powerful layers to your Git workflow:
 
+0. **Shell Integration** - Type `git commit` as normal; DevTrack intercepts it transparently
 1. **Enhanced Commits** - AI-powered commit messages with context awareness
 2. **Conflict Resolution** - Automatic detection and smart resolution of merge conflicts
 3. **Work Update Parsing** - Natural language work updates with PR/issue auto-detection
+4. **Interactive PM Sync** - After every commit, an interactive ticket picker lets you link the commit to the right issue and log time spent — no context-switching to a browser
+
+---
+
+## Shell Integration — Type `git commit` Natively
+
+The biggest friction with DevTrack's git features is remembering to type `devtrack git commit` instead of `git commit`. Shell integration eliminates that entirely.
+
+### One-Time Setup
+
+Add to `~/.zshrc` or `~/.bashrc`:
+
+```bash
+eval "$(devtrack shell-init)"
+```
+
+Reload your shell:
+
+```bash
+source ~/.zshrc    # or ~/.bashrc
+```
+
+That single line installs **two** shell functions:
+
+- **`git()`** — intercepts `git commit`, `git history`, and `git messages` for DevTrack workspaces.
+- **`devtrack()`** — a thin wrapper around the binary that automatically re-evals `shell-init` after `devtrack start`, `devtrack restart`, or `devtrack enable-git`, keeping the `git()` function up to date without any manual steps.
+
+After the one-time `eval`, the setup is **self-maintaining**: running `devtrack restart` (e.g. after rebuilding the binary) silently refreshes the shell functions in the current session. No need to open a new terminal or re-run `eval "$(devtrack shell-init)"` again.
+
+### Opt Repos In
+
+**Option A — Per-repo git config (fastest)**
+
+```bash
+cd /path/to/your/repo
+devtrack enable-git
+```
+
+This sets `devtrack.enabled = true` in the repo's `.git/config`. From now on `git commit` in that repo goes through DevTrack.
+
+To undo: `devtrack disable-git`
+
+**Option B — workspaces.yaml (automatic)**
+
+Any repo already listed in `workspaces.yaml` is intercepted automatically — no `devtrack enable-git` needed.
+
+### How Detection Works
+
+The shell `git()` function runs two checks before deciding to intercept:
+
+1. **Fast path** — reads `.git/config` locally (no subprocess): was `devtrack enable-git` run here?
+2. **Slow path** — runs `devtrack is-workspace`, which checks `workspaces.yaml`
+
+If either check passes and the command is `commit`, `history`, or `messages`, the call routes to `devtrack git`. Everything else (`git push`, `git pull`, `git status`, `git log`, …) goes straight to the real git binary — completely unaffected.
+
+### Bypass DevTrack for One Command
+
+```bash
+GIT_NO_DEVTRACK=1 git commit -m "skip devtrack this time"
+```
+
+Or call the real git explicitly:
+
+```bash
+command git commit -m "message"
+```
+
+### After Setup
+
+```bash
+# These all work identically now:
+git commit -m "fix auth redirect"       # intercepted → AI enhanced
+git push                                 # not intercepted → real git
+git status                               # not intercepted → real git
+
+# Same result, always works without shell setup:
+devtrack git commit -m "fix auth redirect"
+```
+
+### `git add` with No Arguments
+
+When shell integration is active, running `git add` with no path arguments automatically stages all changes (`git add .`):
+
+```bash
+git add
+# No path specified — staging all changes (git add .)
+```
+
+Paths work normally when provided:
+
+```bash
+git add src/auth.js       # stages only that file, as usual
+git add src/ tests/       # multiple paths, unchanged behaviour
+```
 
 ---
 
@@ -43,7 +138,10 @@ Your commit message + git context
 # Stage your changes
 git add .
 
-# Use devtrack git commit
+# With shell integration active (recommended):
+git commit -m "fixed auth bug"
+
+# Or always works without shell setup:
 devtrack git commit -m "fixed auth bug"
 ```
 
@@ -71,6 +169,85 @@ Your choice [1-5]: 1
 
 Committed with enhanced message.
 Log this work? (y/n): y
+```
+
+> **Tip — pressing `2` (Enhance):** When you choose Enhance to ask the AI to improve the message further, the model is given double the normal token budget (`COMMIT_LLM_MAX_TOKENS × 2`) for that single call, allowing a richer and more detailed result. The budget resets to the normal limit for any subsequent iteration unless you press Enhance again.
+
+### Log This Work — Interactive PM Sync
+
+When you answer `y` to "Log this work?", DevTrack first asks how long the work took, then opens a full-screen split-pane ticket picker so you can link the commit to the right issue without leaving the terminal.
+
+#### Time Prompt
+
+```
+How long did this take? (e.g. 2h, 30m) [Enter to skip]: 1h
+→ Syncing to project management...
+```
+
+#### Interactive Ticket Picker
+
+The picker fetches your open issues once and displays them in a split-pane curses UI — no network round-trips while you browse:
+
+```
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║  Select a ticket to link  (filter: /)   select: Enter   new: n   skip: Esc/q   ║
+╠════════════════════════════╦═══════════════════════════════════════════════════ ╣
+║  #12  Refactor DB layer    ║  #42  Fix OAuth authentication bug                 ║
+║  #35  Add rate limiting    ║  ─────────────────────────────────────────────     ║
+║  #38  Update CI pipeline   ║  Reported by: alice · opened 3 days ago            ║
+║  #41  Improve error msgs   ║                                                     ║
+║ ▶ #42  Fix OAuth auth bug  ║  Users are occasionally seeing a 401 on the         ║
+║  #47  Docs: API reference  ║  /refresh endpoint after a token rotation.          ║
+║  #53  Bump dependencies    ║  Root cause appears to be a race condition in        ║
+║                            ║  the JWT validation middleware when two requests     ║
+║                            ║  arrive within the same millisecond window.         ║
+║                            ║                                                     ║
+║                            ║  Steps to reproduce:                                ║
+║                            ║    1. Issue two simultaneous refresh calls          ║
+║                            ║    2. Observe 401 on the second response            ║
+║                            ║                                                     ║
+║                            ║  Labels: bug · auth · priority:high                 ║
+╠════════════════════════════╩════════════════════════════════════════════════════╣
+║  ↑/↓ or j/k  navigate    PgUp/PgDn  page    Home/End  jump    /  filter        ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+```
+
+**Controls**:
+
+| Key | Action |
+|-----|--------|
+| `↑` / `↓` or `j` / `k` | Move highlight up / down |
+| `PgUp` / `PgDn` | Scroll one page |
+| `Home` / `End` | Jump to first / last ticket |
+| `/` | Enter filter mode — type to narrow the list in real time (client-side, no network) |
+| `Enter` | Select highlighted ticket and link the commit |
+| `n` | Create a new issue from the commit message |
+| `Esc` or `q` | Skip without linking |
+
+The right pane updates instantly as you move the highlight, showing the full issue body with automatic word-wrap. If the terminal is not a TTY (e.g. piped output or a dumb terminal), the picker falls back to a simple numbered list.
+
+#### Result
+
+```
+✓ Commented on GitHub issue #42: Fix OAuth authentication bug
+  → 1h logged · commit a3f9c12 linked
+```
+
+#### Auto-Push Prompt
+
+After the log-work flow completes, DevTrack asks whether to push the commit immediately:
+
+```
+🚀 Push to origin/bot_automation? (y/n)
+y
+→ Pushing...
+✓ Pushed to origin/bot_automation
+```
+
+Pressing `n` prints a reminder instead of pushing:
+
+```
+Skipped. Run 'git push origin bot_automation' when ready.
 ```
 
 #### Dry-Run Mode (Preview Only)
@@ -118,6 +295,9 @@ OLLAMA_MODEL=mistral
 # Commit enhancement settings
 COMMIT_MAX_ATTEMPTS=5            # Max refinement attempts
 COMMIT_CONTEXT_ENABLED=true      # Include git context
+COMMIT_LLM_MAX_TOKENS=512        # Normal token budget per LLM call
+                                 # Pressing E (Enhance) doubles this to 1024
+                                 # for that call only; resets to normal afterwards
 ```
 
 ### Examples
@@ -511,7 +691,7 @@ git checkout -b feature/oauth-upgrade
 
 # 2. Make changes and commit regularly
 git add src/auth.js
-devtrack git commit -m "updated auth module"
+git commit -m "updated auth module"    # intercepted if shell integration active
 # → AI enhances with: "Updated OAuth authentication module with v2.0 support"
 # → Extracts: Task = PR #42
 # → Updates project management

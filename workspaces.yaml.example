@@ -1,0 +1,73 @@
+# workspaces.yaml — Multi-repo monitoring configuration for DevTrack
+#
+# Place this file at $PROJECT_ROOT/workspaces.yaml (same directory as .env).
+# When present, DevTrack monitors all enabled workspaces below instead of the
+# single DEVTRACK_WORKSPACE path. DEVTRACK_WORKSPACE is ignored.
+#
+# pm_platform options: azure | gitlab | github | jira | none | "" (priority chain)
+# pm_project:          optional platform-specific project ID / key / namespace
+#                      azure  → ignored (uses AZURE_DEVOPS_PROJECT from .env)
+#                      gitlab → numeric project ID (e.g. "12345")
+#                      github → "owner/repo" slug override (e.g. "acme/api")
+#                      jira   → project key (e.g. "PROJ")
+#
+# Per-workspace PM settings (all optional — override platform defaults):
+#   pm_assignee:       Azure assigned_to display name or GitHub username.
+#                      Leave blank to auto-assign to the authenticated user.
+#   pm_iteration_path: Azure DevOps sprint path (e.g. "MyProject\\Sprint 5")
+#   pm_area_path:      Azure DevOps area path (e.g. "MyProject\\Backend")
+#   pm_milestone:      GitHub milestone number OR GitLab milestone ID to assign
+#                      when auto-creating new issues (0 = no milestone).
+
+version: "1"
+workspaces:
+  # Work projects tracked in Azure DevOps
+  - name: "work-api"
+    path: "/Users/you/work/api"
+    pm_platform: "azure"
+    pm_project: ""
+    enabled: true
+    ignore_branches: ["dependabot/*", "renovate/*"]
+    tags: ["work", "backend"]
+    pm_iteration_path: "MyProject\\Sprint 5"   # optional: sprint path
+    pm_area_path: "MyProject\\Backend"          # optional: area path
+    pm_assignee: ""                             # optional: leave blank to auto-assign
+
+  - name: "work-frontend"
+    path: "/Users/you/work/frontend"
+    pm_platform: "azure"
+    pm_project: ""
+    enabled: true
+    ignore_branches: []
+    tags: ["work", "frontend"]
+    pm_iteration_path: "MyProject\\Sprint 5"
+    pm_area_path: "MyProject\\Frontend"
+
+  # Personal projects tracked in GitHub
+  - name: "personal-tools"
+    path: "~/git_apps/personal/automation_tools"
+    pm_platform: "github"
+    pm_project: "myuser/automation_tools"
+    enabled: true
+    ignore_branches: []
+    tags: ["personal"]
+    pm_milestone: 3   # optional: GitHub milestone number to assign on new issues
+
+  # GitLab project (supply the numeric project ID)
+  - name: "oss-lib"
+    path: "~/code/oss/mylib"
+    pm_platform: "gitlab"
+    pm_project: "98765"
+    enabled: false
+    ignore_branches: ["main", "release/*"]
+    tags: ["oss"]
+    pm_milestone: 12  # optional: GitLab milestone ID to assign on new issues
+
+  # Repo you want monitored but NOT synced to any PM tool
+  - name: "experiments"
+    path: "~/code/experiments"
+    pm_platform: "none"
+    pm_project: ""
+    enabled: true
+    ignore_branches: []
+    tags: ["personal"]

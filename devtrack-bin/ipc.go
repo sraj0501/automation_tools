@@ -64,9 +64,14 @@ type CommitTriggerData struct {
 	FilesChanged  []string `json:"files_changed"`
 	Branch        string   `json:"branch"`
 	// Workspace routing fields (omitempty — zero value = fall back to priority chain)
-	WorkspaceName string `json:"workspace_name,omitempty"`
-	PMPlatform    string `json:"pm_platform,omitempty"`
-	PMProject     string `json:"pm_project,omitempty"`
+	WorkspaceName   string `json:"workspace_name,omitempty"`
+	PMPlatform      string `json:"pm_platform,omitempty"`
+	PMProject       string `json:"pm_project,omitempty"`
+	// Per-workspace PM settings (omitempty — zero value = no override)
+	PMAssignee      string `json:"pm_assignee,omitempty"`
+	PMIterationPath string `json:"pm_iteration_path,omitempty"`
+	PMAreaPath      string `json:"pm_area_path,omitempty"`
+	PMMilestone     int    `json:"pm_milestone,omitempty"`
 }
 
 // TimerTriggerData contains information about a scheduled trigger
@@ -75,9 +80,14 @@ type TimerTriggerData struct {
 	IntervalMins int    `json:"interval_mins"`
 	TriggerCount int    `json:"trigger_count"`
 	// Workspace routing fields (omitempty — populated from most-recently-active workspace)
-	WorkspaceName string `json:"workspace_name,omitempty"`
-	PMPlatform    string `json:"pm_platform,omitempty"`
-	PMProject     string `json:"pm_project,omitempty"`
+	WorkspaceName   string `json:"workspace_name,omitempty"`
+	PMPlatform      string `json:"pm_platform,omitempty"`
+	PMProject       string `json:"pm_project,omitempty"`
+	// Per-workspace PM settings (omitempty — zero value = no override)
+	PMAssignee      string `json:"pm_assignee,omitempty"`
+	PMIterationPath string `json:"pm_iteration_path,omitempty"`
+	PMAreaPath      string `json:"pm_area_path,omitempty"`
+	PMMilestone     int    `json:"pm_milestone,omitempty"`
 }
 
 // TaskUpdateData contains information about a task update
@@ -448,6 +458,18 @@ func CreateCommitTriggerMessage(data CommitTriggerData) IPCMessage {
 	if data.PMProject != "" {
 		msgData["pm_project"] = data.PMProject
 	}
+	if data.PMAssignee != "" {
+		msgData["pm_assignee"] = data.PMAssignee
+	}
+	if data.PMIterationPath != "" {
+		msgData["pm_iteration_path"] = data.PMIterationPath
+	}
+	if data.PMAreaPath != "" {
+		msgData["pm_area_path"] = data.PMAreaPath
+	}
+	if data.PMMilestone != 0 {
+		msgData["pm_milestone"] = data.PMMilestone
+	}
 	return IPCMessage{
 		Type:      MsgTypeCommitTrigger,
 		Timestamp: time.Now(),
@@ -471,6 +493,18 @@ func CreateTimerTriggerMessage(data TimerTriggerData) IPCMessage {
 	}
 	if data.PMProject != "" {
 		msgData["pm_project"] = data.PMProject
+	}
+	if data.PMAssignee != "" {
+		msgData["pm_assignee"] = data.PMAssignee
+	}
+	if data.PMIterationPath != "" {
+		msgData["pm_iteration_path"] = data.PMIterationPath
+	}
+	if data.PMAreaPath != "" {
+		msgData["pm_area_path"] = data.PMAreaPath
+	}
+	if data.PMMilestone != 0 {
+		msgData["pm_milestone"] = data.PMMilestone
 	}
 	return IPCMessage{
 		Type:      MsgTypeTimerTrigger,

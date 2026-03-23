@@ -115,6 +115,16 @@ async def _verify_github_signature(request: Request) -> None:
         raise HTTPException(status_code=403, detail="Invalid signature")
 
 
+async def _verify_gitlab_token(request: Request) -> None:
+    """Validate GitLab webhook secret token."""
+    secret = _cfg("WEBHOOK_GITLAB_SECRET")
+    if not secret:
+        return  # No secret configured — allow all (dev mode)
+    token = request.headers.get("X-Gitlab-Token", "")
+    if token != secret:
+        raise HTTPException(status_code=401, detail="Invalid GitLab token")
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -155,6 +165,23 @@ async def handle_github_webhook(
 
     event_type = request.headers.get("X-GitHub-Event", "unknown")
     result = await handler.handle_github_event(event_type, body)
+    return JSONResponse(content=result)
+
+
+@app.post("/webhooks/gitlab")
+async def handle_gitlab_webhook(
+    request: Request,
+    _auth: None = Depends(_verify_gitlab_token),
+) -> JSONResponse:
+    """Handle GitLab webhook events (issue events, MR events, comments)."""
+    handler = _get_handler()
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    event_type = request.headers.get("X-Gitlab-Event", "unknown")
+    result = await handler.handle_gitlab_event(event_type, body)
     return JSONResponse(content=result)
 
 

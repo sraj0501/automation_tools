@@ -34,6 +34,11 @@ type WorkspaceConfig struct {
 	Enabled        bool     `yaml:"enabled"`
 	IgnoreBranches []string `yaml:"ignore_branches"`
 	Tags           []string `yaml:"tags"`
+	// Per-workspace PM settings (override global .env defaults)
+	PMAssignee      string `yaml:"pm_assignee"`       // Azure: assigned_to; GitHub: assignees[0] override
+	PMIterationPath string `yaml:"pm_iteration_path"` // Azure: sprint/iteration path (e.g. MyProject\Sprint 5)
+	PMAreaPath      string `yaml:"pm_area_path"`      // Azure: area path (e.g. MyProject\Backend)
+	PMMilestone     int    `yaml:"pm_milestone"`      // GitHub: milestone number; GitLab: milestone_id
 }
 
 // WorkspacesConfig is the top-level structure of workspaces.yaml
@@ -77,6 +82,25 @@ func expandWorkspacePath(path string) string {
 		return filepath.Join(homeDir, path[2:])
 	}
 	return path
+}
+
+// Save writes the WorkspacesConfig back to the workspaces.yaml file.
+func (wc *WorkspacesConfig) Save() error {
+	path := GetWorkspacesFilePath()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return fmt.Errorf("failed to create directory for workspaces file: %w", err)
+	}
+
+	data, err := yaml.Marshal(wc)
+	if err != nil {
+		return fmt.Errorf("failed to marshal workspaces config: %w", err)
+	}
+
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return fmt.Errorf("failed to write workspaces file: %w", err)
+	}
+
+	return nil
 }
 
 // GetEnabledWorkspaces returns all enabled workspace configs

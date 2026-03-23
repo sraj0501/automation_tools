@@ -37,7 +37,9 @@ func main() {
 			cmd == "learning-remove-cron" || cmd == "learning-cron-status" ||
 			cmd == "learning-reset" ||
 			cmd == "commit-queue" || cmd == "commits" || cmd == "queue" ||
-			cmd == "telegram-status" || cmd == "azure-check" || cmd == "azure-list" || cmd == "azure-sync" || cmd == "azure-view" || cmd == "settings" {
+			cmd == "telegram-status" || cmd == "azure-check" || cmd == "azure-list" || cmd == "azure-sync" || cmd == "azure-view" || cmd == "settings" ||
+			cmd == "workspace" ||
+			cmd == "shell-init" || cmd == "is-workspace" || cmd == "enable-git" || cmd == "disable-git" {
 			cli, err := NewCLI()
 			if err != nil {
 				fmt.Printf("Error initializing CLI: %v\n", err)
@@ -68,7 +70,7 @@ func printBasicUsage() {
 	fmt.Println("DAEMON:    start | stop | restart | status")
 	fmt.Println("SCHEDULER: pause | resume | force-trigger | skip-next | send-summary")
 	fmt.Println("INFO:      logs | db-stats | stats | version | help")
-	fmt.Println("GIT:       git commit -m 'message'   (AI-enhanced commit)")
+	fmt.Println("GIT:       git add | git commit -m 'message'   (AI-enhanced; shell-init required for bare 'git' commands)")
 	fmt.Println("COMMITS:   commits pending | commits review")
 	fmt.Println("REPORTS:   preview-report | send-report | save-report")
 	fmt.Println()

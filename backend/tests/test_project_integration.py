@@ -231,7 +231,7 @@ class TestProjectIntegration:
 
         # Test progress percentage
         progress = project.progress_percentage()
-        assert 40 <= progress <= 60  # Should be around 33% (10 days elapsed / 30 total)
+        assert 28 <= progress <= 40  # Should be around 33% (10 days elapsed / 30 total)
 
         # Test without dates
         no_dates = manager.create_project(

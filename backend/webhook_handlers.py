@@ -140,6 +140,101 @@ class WebhookEventHandler:
         return {"status": "ignored", "reason": "github handler not implemented"}
 
     # ------------------------------------------------------------------
+    # GitLab
+    # ------------------------------------------------------------------
+
+    async def handle_gitlab_event(self, event_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Route GitLab webhook events to specific handlers."""
+        handler_map = {
+            "Issue Hook": self._handle_gitlab_issue,
+            "Merge Request Hook": self._handle_gitlab_merge_request,
+            "Note Hook": self._handle_gitlab_note,
+        }
+        handler = handler_map.get(event_type)
+        if not handler:
+            logger.info(f"Unhandled GitLab event type: {event_type}")
+            return {"handled": False, "reason": f"unknown event type: {event_type}"}
+        return await handler(payload)
+
+    async def _handle_gitlab_issue(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """GitLab Issue Hook — issue opened/closed/updated."""
+        attrs = payload.get("object_attributes", {})
+        project = payload.get("project", {})
+        assignees = payload.get("assignees", [])
+
+        issue_iid = attrs.get("iid")
+        title = attrs.get("title", "Untitled")
+        state = attrs.get("state", "")
+        action = attrs.get("action", "updated")
+        url = attrs.get("url", "")
+        project_name = project.get("name", "Unknown project")
+        assignee_name = assignees[0].get("name", "") if assignees else ""
+
+        notification_title = f"GitLab issue #{issue_iid} {action} in {project_name}"
+        message_parts = [title]
+        if assignee_name:
+            message_parts.append(f"Assigned to: {assignee_name}")
+        message = " — ".join(message_parts)
+
+        await self.notifier.notify(notification_title, message, source="gitlab")
+        await self._send_ipc_event("gitlab.issue", {
+            "issue_iid": issue_iid, "title": title, "state": state,
+            "action": action, "project": project_name, "assignee": assignee_name,
+        })
+        logger.info(f"GitLab: {notification_title}")
+        return {"handled": True, "event": "Issue Hook", "action": action}
+
+    async def _handle_gitlab_merge_request(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """GitLab Merge Request Hook — MR opened/merged/closed."""
+        attrs = payload.get("object_attributes", {})
+        project = payload.get("project", {})
+        assignees = payload.get("assignees", [])
+
+        mr_iid = attrs.get("iid")
+        title = attrs.get("title", "Untitled")
+        state = attrs.get("state", "")
+        action = attrs.get("action", "updated")
+        target_branch = attrs.get("target_branch", "")
+        project_name = project.get("name", "Unknown project")
+        assignee_name = assignees[0].get("name", "") if assignees else ""
+
+        notification_title = f"GitLab MR !{mr_iid} {action} in {project_name}"
+        message_parts = [title]
+        if target_branch:
+            message_parts.append(f"→ {target_branch}")
+        if assignee_name:
+            message_parts.append(f"Assigned to: {assignee_name}")
+        message = " — ".join(message_parts)
+
+        await self.notifier.notify(notification_title, message, source="gitlab")
+        await self._send_ipc_event("gitlab.merge_request", {
+            "mr_iid": mr_iid, "title": title, "state": state,
+            "action": action, "target_branch": target_branch,
+            "project": project_name, "assignee": assignee_name,
+        })
+        logger.info(f"GitLab: {notification_title}")
+        return {"handled": True, "event": "Merge Request Hook", "action": action}
+
+    async def _handle_gitlab_note(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """GitLab Note Hook — comment on issue or MR."""
+        attrs = payload.get("object_attributes", {})
+        user = payload.get("user", {})
+
+        noteable_type = payload.get("noteable_type", "")
+        note_body = attrs.get("note", "")
+        commenter = user.get("name", "Unknown")
+
+        display_note = note_body[:120] + "…" if len(note_body) > 120 else note_body
+        notification_title = f"GitLab comment by {commenter} on {noteable_type}"
+
+        await self.notifier.notify(notification_title, display_note, source="gitlab")
+        await self._send_ipc_event("gitlab.note", {
+            "noteable_type": noteable_type, "commenter": commenter, "note": note_body,
+        })
+        logger.info(f"GitLab: {notification_title}")
+        return {"handled": True, "event": "Note Hook", "action": "commented"}
+
+    # ------------------------------------------------------------------
     # Jira (placeholder)
     # ------------------------------------------------------------------
 

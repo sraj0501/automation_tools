@@ -37,9 +37,165 @@ devtrack send-summary    # Generate and send the daily summary now
 devtrack git commit -m "message"           # AI-enhanced commit (up to 5 refinement attempts)
 devtrack git commit -m "message" --dry-run # Preview AI suggestion without committing
 devtrack git history                       # Show recent commit history
+devtrack git messages                      # Alias for git history
 ```
 
+**Refinement loop — Enhance token budget:** In the interactive refinement loop, choosing **E** (Enhance/improve message) doubles the AI model's token allowance to `COMMIT_LLM_MAX_TOKENS × 2` for that single call, producing richer and more detailed messages. The budget resets to the normal limit for any subsequent iteration unless you press **E** again.
+
 See [GIT_COMMIT_WORKFLOW.md](GIT_COMMIT_WORKFLOW.md) for the full interactive workflow.
+
+### Work Logging Flow (after commit accepted)
+
+After a commit is created and you answer **y** to `Log this work? (y/n):`, DevTrack runs a two-step work logging sequence.
+
+#### Step 1 — Time spent prompt
+
+```
+How long did this take? (e.g. 2h, 30m) [Enter to skip]:
+```
+
+Type a duration (`2h`, `30m`, `1h30m`) or press **Enter** to skip. The value is attached to the comment posted on the linked issue.
+
+#### Step 2 — Interactive ticket picker
+
+A curses split-pane picker opens so you can link the commit to an existing issue without leaving the terminal.
+
+```
+┌─────────────────────────────┬──────────────────────────────────────────┐
+│  Open Issues          [3]   │  #42 Fix login redirect loop             │
+│ ─────────────────────────── │ ──────────────────────────────────────── │
+│ ▶ #42  Fix login redirect   │  Users are stuck in a redirect loop      │
+│   #38  Add dark mode toggle │  when the session cookie is missing.     │
+│   #31  Update README        │                                          │
+│                             │  Labels: bug, auth                       │
+│  / to filter  n new  q skip │  Opened 2026-03-20 by sraj               │
+└─────────────────────────────┴──────────────────────────────────────────┘
+```
+
+**Left pane** — scrollable list of your open issues from the workspace's configured PM platform (GitHub, GitLab, or Azure DevOps).
+
+**Right pane** — full body of the currently highlighted issue, updated as you move.
+
+**Keyboard controls:**
+
+| Key | Action |
+|-----|--------|
+| `↑` / `k` | Move selection up |
+| `↓` / `j` | Move selection down |
+| `Enter` | Select highlighted issue and post comment |
+| `/` | Open filter bar — type to narrow the list by title |
+| `n` | Create a new issue on the PM platform and link it |
+| `Esc` / `q` | Skip — do not link to any issue |
+
+When an issue is selected, DevTrack posts a comment containing:
+
+- Commit hash (short SHA)
+- Commit message
+- Time spent (if provided in Step 1)
+
+#### Step 3 — Auto-push prompt
+
+After the ticket picker closes (whether an issue was linked or skipped), DevTrack asks whether to push the commit:
+
+```
+🚀 Push to origin/<branch>? (y/n)
+y
+→ Pushing...
+✓ Pushed to origin/bot_automation
+```
+
+Pressing `n` prints a reminder and skips the push:
+
+```
+Skipped. Run 'git push origin <branch>' when ready.
+```
+
+#### Non-TTY / no-terminal fallback
+
+When DevTrack is running without an interactive terminal (e.g. inside a CI pipeline, over SSH without a PTY, or when the curses library is unavailable), the picker falls back to a numbered list printed to stdout:
+
+```
+Open issues:
+  1. #42  Fix login redirect loop
+  2. #38  Add dark mode toggle
+  3. #31  Update README
+  0. Skip (do not link)
+
+Select issue number:
+```
+
+Type the number and press **Enter**, or **0** to skip.
+
+---
+
+## Shell Integration
+
+Skip the `devtrack` prefix — type `git commit` directly for monitored repos.
+
+### Setup (one time)
+
+```bash
+# Add to ~/.zshrc or ~/.bashrc, then reload your shell
+eval "$(devtrack shell-init)"
+source ~/.zshrc
+```
+
+`eval "$(devtrack shell-init)"` installs two shell functions:
+
+| Function | Purpose |
+|----------|---------|
+| `git()` | Intercepts `git commit`, `git history`, and `git messages` for DevTrack workspaces; passes everything else straight to the real git binary |
+| `devtrack()` | Wraps the devtrack binary; after `devtrack start`, `devtrack restart`, or `devtrack enable-git` it automatically re-evals `shell-init` so the `git()` function is always current |
+
+The setup is **self-maintaining**: after the one-time addition to your rc file, you never need to run `eval "$(devtrack shell-init)"` again manually. Rebuilding or updating the binary? Just run `devtrack restart` and the shell functions refresh silently in the current session.
+
+### Per-Repo Opt-In
+
+```bash
+devtrack enable-git    # Opt this repo in  — sets git config devtrack.enabled=true
+devtrack disable-git   # Opt this repo out — removes git config devtrack.enabled
+```
+
+### Workspace Detection
+
+```bash
+devtrack is-workspace  # Exit 0 if CWD is a DevTrack workspace (used internally)
+```
+
+This command is called automatically by the shell `git()` function to check `workspaces.yaml`. Repos already in `workspaces.yaml` are intercepted without `devtrack enable-git`.
+
+### Bypass
+
+```bash
+GIT_NO_DEVTRACK=1 git commit -m "message"   # Skip DevTrack for this one command
+command git commit -m "message"             # Always calls real git
+```
+
+### What gets intercepted
+
+| Command | Intercepted? |
+|---------|-------------|
+| `git commit` | Yes — routed through DevTrack AI enhancement |
+| `git add` (no args) | Yes — automatically stages all changes (`git add .`) |
+| `git history` | Yes — shows DevTrack commit history |
+| `git messages` | Yes — alias for git history |
+| `git push`, `git pull`, `git status`, `git log`, … | No — always real git |
+
+### `git add` with No Arguments
+
+When shell integration is active, running `git add` with no path prints a notice and stages everything:
+
+```
+$ git add
+No path specified — staging all changes (git add .)
+```
+
+Providing one or more paths passes them straight to the real `git add` with no change in behaviour:
+
+```bash
+git add src/auth.js        # stages only that file
+git add src/ tests/        # multiple paths, unchanged
+```
 
 ---
 
@@ -87,6 +243,23 @@ devtrack gitlab-sync --hours 24            # Only issues updated in last 24 h
 ```
 
 See [GITLAB.md](GITLAB.md) for setup and configuration.
+
+---
+
+## GitHub
+
+```bash
+devtrack github-check                        # Test config and connectivity
+devtrack github-list                         # List open issues assigned to you
+devtrack github-list --closed               # Include closed issues
+devtrack github-list --state <state>        # Filter by state (open, closed, all)
+devtrack github-view <number>               # Show full details for an issue
+devtrack github-sync                         # Full resync (fetches all open issues)
+devtrack github-sync --full                 # Explicit full resync
+devtrack github-sync --hours 24            # Only issues updated in last 24 h
+```
+
+See [GITHUB.md](GITHUB.md) for setup and configuration.
 
 ---
 
@@ -177,6 +350,9 @@ devtrack telegram-status   # Show whether the Telegram bot process is alive
 | `/gitlab` | List GitLab issues from cache |
 | `/gitlabissue <project_id> <iid>` | View a specific GitLab issue |
 | `/gitlabcreate` | Create a new GitLab issue interactively |
+| `/github` | List open GitHub issues assigned to you |
+| `/githubissue <number>` | View a specific GitHub issue |
+| `/githubcreate [bug\|feature\|task] <title>` | Create a new GitHub issue |
 | `/plan <problem>` | Decompose a problem → Epic/Story/Task → create items |
 
 ---

@@ -5,6 +5,11 @@
 #
 # pm_platform options: azure | gitlab | github | jira | none
 # pm_project: optional platform-specific project key (GitLab project ID, Azure project name, etc.)
+#
+# Per-workspace PM settings (pm_assignee, pm_iteration_path, pm_area_path, pm_milestone):
+#   These override the global defaults previously set via .env.
+#   Leave blank / 0 to use the platform default (e.g. unassigned, no sprint, no milestone).
+#
 
 version: "1"
 workspaces:
@@ -15,6 +20,11 @@ workspaces:
     enabled: true
     ignore_branches: ["main", "master"]
     tags: ["work"]
+    # Per-workspace PM settings:
+    pm_assignee: ""              # Azure: assigned_to (e.g. john@company.com)
+    pm_iteration_path: ""        # Azure: sprint/iteration path (e.g. "MyProject\\Sprint 5")
+    pm_area_path: ""             # Azure: area path (e.g. "MyProject\\Backend")
+    pm_milestone: 0              # GitHub: milestone number; GitLab: milestone_id (0 = none)
 
   - name: "oss-lib"
     path: "~/oss/my-lib"
@@ -23,6 +33,8 @@ workspaces:
     enabled: true
     ignore_branches: []
     tags: ["oss"]
+    pm_assignee: ""
+    pm_milestone: 0
 
   - name: "internal-tools"
     path: "~/work/tools"
@@ -31,3 +43,5 @@ workspaces:
     enabled: true
     ignore_branches: []
     tags: ["work"]
+    pm_assignee: ""
+    pm_milestone: 0              # GitLab: milestone_id
