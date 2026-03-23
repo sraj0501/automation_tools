@@ -914,3 +914,40 @@ def is_telegram_notify_triggers() -> bool:
 def is_telegram_notify_health() -> bool:
     """Send health alert notifications to Telegram. TELEGRAM_NOTIFY_HEALTH."""
     return get_bool("TELEGRAM_NOTIFY_HEALTH", True)
+
+
+# ── Ticket Alerter ────────────────────────────────────────────────────────────
+
+def is_alert_enabled() -> bool:
+    """Whether the ticket alerter polling loop is active. ALERT_ENABLED (default: true)."""
+    return get_bool("ALERT_ENABLED", True)
+
+
+def get_alert_poll_interval() -> int:
+    """Seconds between alert poll cycles. ALERT_POLL_INTERVAL_SECS (default: 300)."""
+    return get_int("ALERT_POLL_INTERVAL_SECS", 300)
+
+
+def is_alert_github_enabled() -> bool:
+    """Whether GitHub alert polling is enabled. ALERT_GITHUB_ENABLED (default: true)."""
+    return get_bool("ALERT_GITHUB_ENABLED", True)
+
+
+def is_alert_notify_assigned() -> bool:
+    """Deliver notifications for assignment events. ALERT_NOTIFY_ASSIGNED (default: true)."""
+    return get_bool("ALERT_NOTIFY_ASSIGNED", True)
+
+
+def is_alert_notify_comments() -> bool:
+    """Deliver notifications for comment events. ALERT_NOTIFY_COMMENTS (default: true)."""
+    return get_bool("ALERT_NOTIFY_COMMENTS", True)
+
+
+def is_alert_notify_status_changes() -> bool:
+    """Deliver notifications for status-change events. ALERT_NOTIFY_STATUS_CHANGES (default: true)."""
+    return get_bool("ALERT_NOTIFY_STATUS_CHANGES", True)
+
+
+def is_alert_notify_review_requested() -> bool:
+    """Deliver notifications for review-request events. ALERT_NOTIFY_REVIEW_REQUESTED (default: true)."""
+    return get_bool("ALERT_NOTIFY_REVIEW_REQUESTED", True)

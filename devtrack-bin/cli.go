@@ -20,7 +20,7 @@ func NewCLI() (*CLI, error) {
 	// For status/help commands, we don't need a full daemon
 	if len(os.Args) > 1 {
 		cmd := os.Args[1]
-		if cmd == "help" || cmd == "version" || cmd == "commit-queue" || cmd == "commits" || cmd == "queue" || cmd == "telegram-status" || cmd == "azure-check" || cmd == "gitlab-check" || cmd == "github-check" || cmd == "workspace" || cmd == "shell-init" || cmd == "is-workspace" || cmd == "enable-git" || cmd == "disable-git" {
+		if cmd == "help" || cmd == "version" || cmd == "commit-queue" || cmd == "commits" || cmd == "queue" || cmd == "telegram-status" || cmd == "azure-check" || cmd == "gitlab-check" || cmd == "github-check" || cmd == "workspace" || cmd == "shell-init" || cmd == "is-workspace" || cmd == "enable-git" || cmd == "disable-git" || cmd == "launchd-install" || cmd == "launchd-uninstall" || cmd == "alerts" {
 			return &CLI{}, nil
 		}
 	}
@@ -184,6 +184,12 @@ func (cli *CLI) Execute() error {
 		return cli.handleEnableGit()
 	case "disable-git":
 		return cli.handleDisableGit()
+	case "launchd-install":
+		return cli.handleLaunchdInstall()
+	case "launchd-uninstall":
+		return cli.handleLaunchdUninstall()
+	case "alerts":
+		return cli.handleAlerts()
 	case "help":
 		cli.printUsage()
 		return nil
@@ -1454,6 +1460,54 @@ func (cli *CLI) handleGitHubView() error {
 	return nil
 }
 
+// handleAlerts shows ticket alert notifications or marks them as read.
+//
+// Usage:
+//
+//	devtrack alerts           — show unread notifications (last 24h)
+//	devtrack alerts --all     — show all notifications
+//	devtrack alerts --clear   — mark all as read
+func (cli *CLI) handleAlerts() error {
+	config, _ := LoadEnvConfig()
+	projectRoot := ""
+	if config != nil {
+		projectRoot = config.ProjectRoot
+	}
+	if projectRoot == "" {
+		projectRoot = os.Getenv("PROJECT_ROOT")
+	}
+
+	// Build uv run python -m backend.alert_poller [flags]
+	uvArgs := []string{"run", "--directory", projectRoot, "python", "-m", "backend.alert_poller"}
+
+	// Forward flags: --all, --clear (default is --show)
+	showFlag := true
+	for _, arg := range os.Args[2:] {
+		switch arg {
+		case "--all":
+			uvArgs = append(uvArgs, "--show", "--all")
+			showFlag = false
+		case "--clear":
+			uvArgs = append(uvArgs, "--clear")
+			showFlag = false
+		}
+	}
+	if showFlag {
+		uvArgs = append(uvArgs, "--show")
+	}
+
+	cmd := exec.Command("uv", uvArgs...)
+	if projectRoot != "" {
+		cmd.Dir = projectRoot
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // handleWorkspace dispatches workspace subcommands
 func (cli *CLI) handleWorkspace() error {
 	subCmd := ""
@@ -1778,6 +1832,174 @@ func (cli *CLI) handleDisableGit() error {
 	return nil
 }
 
+// launchdPlistTemplatePath returns the path to the bundled plist template.
+// It searches relative to the running binary (supports both the dev tree and
+// an installed binary whose configs dir lives beside it).
+func launchdPlistTemplatePath() (string, error) {
+	// 1. Try PROJECT_ROOT env var (set by daemon, set in .env, or by user)
+	projectRoot := os.Getenv("PROJECT_ROOT")
+	if projectRoot == "" {
+		// 2. Walk up from binary looking for Data/configs/dev.devtrack.plist
+		execPath, err := os.Executable()
+		if err != nil {
+			execPath = os.Args[0]
+		}
+		execPath, _ = filepath.Abs(execPath)
+		dir := filepath.Dir(execPath)
+		for i := 0; i < 6; i++ {
+			candidate := filepath.Join(dir, "Data", "configs", "dev.devtrack.plist")
+			if _, err := os.Stat(candidate); err == nil {
+				// dir is the project root
+				projectRoot = dir
+				break
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+	}
+	if projectRoot == "" {
+		return "", fmt.Errorf("cannot determine project root: set PROJECT_ROOT or run from the DevTrack directory")
+	}
+	tmplPath := filepath.Join(projectRoot, "Data", "configs", "dev.devtrack.plist")
+	if _, err := os.Stat(tmplPath); err != nil {
+		return "", fmt.Errorf("plist template not found at %s: %w", tmplPath, err)
+	}
+	return tmplPath, nil
+}
+
+// handleLaunchdInstall installs the launchd plist to ~/Library/LaunchAgents
+// and loads it with launchctl so DevTrack auto-starts on login.
+func (cli *CLI) handleLaunchdInstall() error {
+	// Resolve project root (used as WorkingDirectory and in env paths)
+	projectRoot := os.Getenv("PROJECT_ROOT")
+	if projectRoot == "" {
+		config, _ := LoadEnvConfig()
+		if config != nil {
+			projectRoot = config.ProjectRoot
+		}
+	}
+	if projectRoot == "" {
+		// Derive from the binary location
+		execPath, err := os.Executable()
+		if err != nil {
+			execPath = os.Args[0]
+		}
+		execPath, _ = filepath.Abs(execPath)
+		dir := filepath.Dir(execPath)
+		for i := 0; i < 6; i++ {
+			if _, err := os.Stat(filepath.Join(dir, "Data", "configs", "dev.devtrack.plist")); err == nil {
+				projectRoot = dir
+				break
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+	}
+	if projectRoot == "" {
+		return fmt.Errorf("cannot determine PROJECT_ROOT; set it in .env or as an environment variable")
+	}
+	projectRoot, _ = filepath.Abs(projectRoot)
+
+	// Resolve the DevTrack binary path
+	binaryPath, err := os.Executable()
+	if err != nil {
+		binaryPath = os.Args[0]
+	}
+	binaryPath, _ = filepath.Abs(binaryPath)
+
+	// Read the plist template
+	tmplPath, err := launchdPlistTemplatePath()
+	if err != nil {
+		return err
+	}
+	tmplData, err := os.ReadFile(tmplPath)
+	if err != nil {
+		return fmt.Errorf("failed to read plist template: %w", err)
+	}
+
+	// Substitute placeholders
+	plistContent := strings.ReplaceAll(string(tmplData), "DEVTRACK_BINARY_PLACEHOLDER", binaryPath)
+	plistContent = strings.ReplaceAll(plistContent, "PROJECT_ROOT_PLACEHOLDER", projectRoot)
+
+	// Determine destination: ~/Library/LaunchAgents/dev.devtrack.plist
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("cannot determine home directory: %w", err)
+	}
+	launchAgentsDir := filepath.Join(homeDir, "Library", "LaunchAgents")
+	if err := os.MkdirAll(launchAgentsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create LaunchAgents directory: %w", err)
+	}
+	destPath := filepath.Join(launchAgentsDir, "dev.devtrack.plist")
+
+	// Unload first if already loaded (ignore errors — it may not be loaded yet)
+	_ = exec.Command("launchctl", "unload", destPath).Run()
+
+	// Write the plist
+	if err := os.WriteFile(destPath, []byte(plistContent), 0644); err != nil {
+		return fmt.Errorf("failed to write plist to %s: %w", destPath, err)
+	}
+
+	// Load with launchctl
+	loadCmd := exec.Command("launchctl", "load", destPath)
+	loadCmd.Stdout = os.Stdout
+	loadCmd.Stderr = os.Stderr
+	if err := loadCmd.Run(); err != nil {
+		return fmt.Errorf("launchctl load failed: %w\nPlist installed at %s — load it manually with: launchctl load %s", err, destPath, destPath)
+	}
+
+	fmt.Println("DevTrack launchd service installed.")
+	fmt.Printf("  Plist:   %s\n", destPath)
+	fmt.Printf("  Binary:  %s\n", binaryPath)
+	fmt.Printf("  Root:    %s\n", projectRoot)
+	fmt.Println()
+	fmt.Println("DevTrack will now start automatically at login.")
+	fmt.Println("Use 'devtrack status' to verify it is running.")
+	fmt.Println("Use 'devtrack launchd-uninstall' to remove auto-start.")
+	return nil
+}
+
+// handleLaunchdUninstall unloads and removes the launchd plist.
+func (cli *CLI) handleLaunchdUninstall() error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("cannot determine home directory: %w", err)
+	}
+	plistPath := filepath.Join(homeDir, "Library", "LaunchAgents", "dev.devtrack.plist")
+
+	if _, err := os.Stat(plistPath); os.IsNotExist(err) {
+		fmt.Println("DevTrack launchd service is not installed.")
+		return nil
+	}
+
+	// Unload
+	unloadCmd := exec.Command("launchctl", "unload", plistPath)
+	unloadCmd.Stdout = os.Stdout
+	unloadCmd.Stderr = os.Stderr
+	if err := unloadCmd.Run(); err != nil {
+		fmt.Printf("Warning: launchctl unload returned an error: %v\n", err)
+		fmt.Println("Proceeding to remove plist anyway...")
+	}
+
+	// Remove plist
+	if err := os.Remove(plistPath); err != nil {
+		return fmt.Errorf("failed to remove plist %s: %w", plistPath, err)
+	}
+
+	fmt.Println("DevTrack launchd service removed.")
+	fmt.Printf("  Removed: %s\n", plistPath)
+	fmt.Println()
+	fmt.Println("DevTrack will no longer start automatically at login.")
+	fmt.Println("The running daemon (if any) was not stopped — use 'devtrack stop' to stop it.")
+	return nil
+}
+
 // printUsage prints CLI usage information
 func (cli *CLI) printUsage() {
 	fmt.Println("DevTrack - Developer Automation Tools")
@@ -1854,6 +2076,14 @@ func (cli *CLI) printUsage() {
 	fmt.Println("  devtrack github-sync --full            Explicit full resync")
 	fmt.Println("  devtrack github-sync --hours 24        Only issues updated in last 24h (merges)")
 	fmt.Println()
+	fmt.Println("TICKET ALERTS (polls GitHub for events relevant to you):")
+	fmt.Println("  devtrack alerts          Show unread notifications (last 24h)")
+	fmt.Println("  devtrack alerts --all    Show all notifications (no time filter)")
+	fmt.Println("  devtrack alerts --clear  Mark all notifications as read")
+	fmt.Println("  Configure in .env: ALERT_ENABLED, ALERT_POLL_INTERVAL_SECS,")
+	fmt.Println("                     ALERT_GITHUB_ENABLED, ALERT_NOTIFY_ASSIGNED,")
+	fmt.Println("                     ALERT_NOTIFY_COMMENTS, ALERT_NOTIFY_REVIEW_REQUESTED")
+	fmt.Println()
 	fmt.Println("PM AGENT (via Telegram bot):")
 	fmt.Println("  /plan <problem>    Decompose a problem into Epic → Story → Task hierarchy")
 	fmt.Println("                     Platform picker → LLM preview → confirm to create items")
@@ -1897,6 +2127,11 @@ func (cli *CLI) printUsage() {
 	fmt.Println("  devtrack workspace enable <name>                 Enable a workspace")
 	fmt.Println("  devtrack workspace disable <name>                Disable a workspace")
 	fmt.Println("  devtrack workspace reload                         Signal daemon to reload workspaces.yaml")
+	fmt.Println()
+	fmt.Println("MACOS AUTO-START (launchd):")
+	fmt.Println("  devtrack launchd-install    Install plist to ~/Library/LaunchAgents and load it")
+	fmt.Println("                              DevTrack will start automatically at login")
+	fmt.Println("  devtrack launchd-uninstall  Unload and remove the launchd plist")
 	fmt.Println()
 	fmt.Println("INFO COMMANDS:")
 	fmt.Println("  devtrack logs          Show recent log entries")

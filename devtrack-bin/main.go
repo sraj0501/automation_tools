@@ -39,7 +39,9 @@ func main() {
 			cmd == "commit-queue" || cmd == "commits" || cmd == "queue" ||
 			cmd == "telegram-status" || cmd == "azure-check" || cmd == "azure-list" || cmd == "azure-sync" || cmd == "azure-view" || cmd == "settings" ||
 			cmd == "workspace" ||
-			cmd == "shell-init" || cmd == "is-workspace" || cmd == "enable-git" || cmd == "disable-git" {
+			cmd == "shell-init" || cmd == "is-workspace" || cmd == "enable-git" || cmd == "disable-git" ||
+			cmd == "launchd-install" || cmd == "launchd-uninstall" ||
+		cmd == "alerts" {
 			cli, err := NewCLI()
 			if err != nil {
 				fmt.Printf("Error initializing CLI: %v\n", err)
@@ -72,6 +74,7 @@ func printBasicUsage() {
 	fmt.Println("INFO:      logs | db-stats | stats | version | help")
 	fmt.Println("GIT:       git add | git commit -m 'message'   (AI-enhanced; shell-init required for bare 'git' commands)")
 	fmt.Println("COMMITS:   commits pending | commits review")
+	fmt.Println("ALERTS:    alerts | alerts --all | alerts --clear")
 	fmt.Println("REPORTS:   preview-report | send-report | save-report")
 	fmt.Println()
 	fmt.Println("Run 'devtrack help' for full usage.")
