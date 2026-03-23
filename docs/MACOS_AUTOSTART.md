@@ -1,5 +1,7 @@
 # macOS Auto-Start with launchd
 
+> **Note:** This page covers macOS-specific launchd details. For the cross-platform guide (macOS / Linux / WSL) see [AUTOSTART.md](AUTOSTART.md).
+
 Automatically start the DevTrack daemon when you log in to macOS, using the native launchd service manager.
 
 ---

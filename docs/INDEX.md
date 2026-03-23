@@ -42,7 +42,8 @@
 ### System Integration
 | Guide | What it covers |
 |-------|---------------|
-| [MACOS_AUTOSTART.md](MACOS_AUTOSTART.md) | Auto-start DevTrack on macOS login via launchd LaunchAgents |
+| [AUTOSTART.md](AUTOSTART.md) | Auto-start DevTrack at login — OS-aware (macOS launchd, Linux/WSL systemd, shell profile) |
+| [MACOS_AUTOSTART.md](MACOS_AUTOSTART.md) | macOS launchd details (legacy reference) |
 
 ### AI & Personalization
 | Guide | What it covers |
@@ -101,7 +102,8 @@ docs/
 │   ├── MULTI_REPO.md         Multi-repo monitoring via workspaces.yaml
 │   ├── PM_AGENT.md           AI work item decomposition
 │   ├── TELEGRAM_BOT.md       Telegram remote control
-│   └── MACOS_AUTOSTART.md    Auto-start on macOS login via launchd
+│   ├── AUTOSTART.md          Auto-start (OS-aware: launchd / systemd / shell profile)
+│   └── MACOS_AUTOSTART.md    Auto-start on macOS login via launchd (legacy reference)
 │
 ├── AI & Personalization
 │   ├── LLM_GUIDE.md          provider setup and model config

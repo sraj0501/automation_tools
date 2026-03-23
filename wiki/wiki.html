@@ -592,7 +592,7 @@ const NAV = [
   {
     group: 'System Integration',
     items: [
-      { id: 'MACOS_AUTOSTART', label: 'macOS Auto-Start', icon: launch_icon() },
+      { id: 'AUTOSTART',       label: 'Auto-Start',       icon: launch_icon() },
     ]
   },
   {
@@ -778,7 +778,7 @@ function renderHome() {
         { id:'TELEGRAM_BOT',    icon:'📱', title:'Telegram Bot',      desc:'Control DevTrack remotely from your phone.' },
         { id:'PM_AGENT',        icon:'🗂️', title:'PM Agent',          desc:'AI decomposes problems into Epic → Story → Task hierarchies.' },
         { id:'PERSONALIZATION', icon:'🎨', title:'Personalization',   desc:'"Talk Like You" — AI that learns your communication style.' },
-        { id:'MACOS_AUTOSTART', icon:'⚙️', title:'macOS Auto-Start',   desc:'Auto-start DevTrack at login using launchd. One command installs a LaunchAgent: <code>devtrack launchd-install</code>. Runs as your user, logs to <code>Data/logs/launchd.log</code>. Uninstall with <code>devtrack launchd-uninstall</code>.' },
+        { id:'AUTOSTART', icon:'⚙️', title:'Auto-Start',   desc:'Auto-start DevTrack at login — OS-aware. Run <code>devtrack autostart-install</code>: launchd LaunchAgent on macOS, systemd user service on Linux/WSL with systemd, or a shell profile block on WSL without systemd. Uninstall with <code>devtrack autostart-uninstall</code>.' },
         { id:'TROUBLESHOOTING', icon:'🔧', title:'Troubleshooting',   desc:'Common problems, error messages, and solutions.' },
       ].map(c => `
         <a class="home-card" href="#${c.id}" onclick="navigate('${c.id}');return false;">
@@ -819,7 +819,7 @@ devtrack enable-git   # opt this repo in</code></pre>
         { n:'Richer AI Messages',  d:'In the commit refinement loop, pressing <kbd>E</kbd> to enhance gives the AI double the normal token allowance for that call, producing more detailed and thorough commit messages.' },
         { n:'Personalized AI',     d:'Learns your style from Teams messages and writes in your voice.' },
         { n:'Ticket Alerter',      d:'Polls GitHub for events relevant to you — assigned issues/PRs, comments on threads you are in, and review requests. Delivers macOS OS notifications (via osascript) and terminal output. Delta-synced via MongoDB so you never see the same notification twice. Configure with <code>ALERT_ENABLED=true</code> and the <code>ALERT_*</code> variables in <code>.env</code>.' },
-        { n:'macOS Auto-Start',    d:'Run <code>devtrack launchd-install</code> to register a user-level LaunchAgent. The daemon starts automatically each time you log in — no cron, no login items UI, no manual <code>devtrack start</code> after reboot.' },
+        { n:'OS-Aware Auto-Start', d:'Run <code>devtrack autostart-install</code> — DevTrack detects your OS and picks the right mechanism: launchd LaunchAgent on macOS, systemd user service on Linux/WSL with systemd, or a shell profile block on WSL without systemd. The daemon starts automatically each time you log in — no cron, no manual <code>devtrack start</code> after reboot.' },
         { n:'Offline-First',       d:'Queues everything and syncs when connectivity returns.' },
         { n:'Remote Control',      d:'Full Telegram bot: status, logs, create items, trigger updates.' },
       ].map((f, i) => `

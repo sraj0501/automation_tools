@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -20,7 +22,7 @@ func NewCLI() (*CLI, error) {
 	// For status/help commands, we don't need a full daemon
 	if len(os.Args) > 1 {
 		cmd := os.Args[1]
-		if cmd == "help" || cmd == "version" || cmd == "commit-queue" || cmd == "commits" || cmd == "queue" || cmd == "telegram-status" || cmd == "azure-check" || cmd == "gitlab-check" || cmd == "github-check" || cmd == "workspace" || cmd == "shell-init" || cmd == "is-workspace" || cmd == "enable-git" || cmd == "disable-git" || cmd == "launchd-install" || cmd == "launchd-uninstall" || cmd == "alerts" {
+		if cmd == "help" || cmd == "version" || cmd == "commit-queue" || cmd == "commits" || cmd == "queue" || cmd == "telegram-status" || cmd == "azure-check" || cmd == "gitlab-check" || cmd == "github-check" || cmd == "workspace" || cmd == "shell-init" || cmd == "is-workspace" || cmd == "enable-git" || cmd == "disable-git" || cmd == "launchd-install" || cmd == "launchd-uninstall" || cmd == "autostart-install" || cmd == "autostart-uninstall" || cmd == "autostart-status" || cmd == "alerts" {
 			return &CLI{}, nil
 		}
 	}
@@ -188,6 +190,12 @@ func (cli *CLI) Execute() error {
 		return cli.handleLaunchdInstall()
 	case "launchd-uninstall":
 		return cli.handleLaunchdUninstall()
+	case "autostart-install":
+		return cli.handleAutostartInstall()
+	case "autostart-uninstall":
+		return cli.handleAutostartUninstall()
+	case "autostart-status":
+		return cli.handleAutostartStatus()
 	case "alerts":
 		return cli.handleAlerts()
 	case "help":
@@ -2000,6 +2008,413 @@ func (cli *CLI) handleLaunchdUninstall() error {
 	return nil
 }
 
+// ---------------------------------------------------------------------------
+// OS-agnostic autostart (detectOSType / handleAutostart*)
+// ---------------------------------------------------------------------------
+
+// osType enumerates the autostart mechanisms we support.
+type osType string
+
+const (
+	osDarwin      osType = "darwin"
+	osLinuxSystemd osType = "linux-systemd"
+	osWSLSystemd  osType = "wsl-systemd"
+	osWSLNoSystemd osType = "wsl-nosystemd"
+)
+
+// detectOSType returns the appropriate autostart mechanism for the current OS.
+func detectOSType() osType {
+	switch runtime.GOOS {
+	case "darwin":
+		return osDarwin
+	case "linux":
+		if isWSL() {
+			if hasSystemd() {
+				return osWSLSystemd
+			}
+			return osWSLNoSystemd
+		}
+		if hasSystemd() {
+			return osLinuxSystemd
+		}
+		// Linux without systemd — fall back to profile-based (same as WSL-nosystemd)
+		return osWSLNoSystemd
+	default:
+		return osDarwin // best guess for unknown OS
+	}
+}
+
+// isWSL returns true when running inside Windows Subsystem for Linux.
+func isWSL() bool {
+	data, err := os.ReadFile("/proc/version")
+	if err != nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(string(data)), "microsoft")
+}
+
+// hasSystemd returns true when systemd is the active init system.
+func hasSystemd() bool {
+	// Most reliable: private systemd runtime directory.
+	if _, err := os.Stat("/run/systemd/private"); err == nil {
+		return true
+	}
+	// Check PID-1 comm.
+	if data, err := os.ReadFile("/proc/1/comm"); err == nil {
+		if strings.TrimSpace(string(data)) == "systemd" {
+			return true
+		}
+	}
+	// Fall back to pidof.
+	if err := exec.Command("pidof", "systemd").Run(); err == nil {
+		return true
+	}
+	return false
+}
+
+// resolveProjectRootForAutostart returns the project root, trying PROJECT_ROOT
+// env var first and then walking up from the binary.
+func resolveProjectRootForAutostart() (string, error) {
+	projectRoot := os.Getenv("PROJECT_ROOT")
+	if projectRoot == "" {
+		config, _ := LoadEnvConfig()
+		if config != nil {
+			projectRoot = config.ProjectRoot
+		}
+	}
+	if projectRoot == "" {
+		execPath, err := os.Executable()
+		if err != nil {
+			execPath = os.Args[0]
+		}
+		execPath, _ = filepath.Abs(execPath)
+		dir := filepath.Dir(execPath)
+		for i := 0; i < 6; i++ {
+			if _, err := os.Stat(filepath.Join(dir, "Data", "configs")); err == nil {
+				projectRoot = dir
+				break
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+	}
+	if projectRoot == "" {
+		return "", fmt.Errorf("cannot determine PROJECT_ROOT; set it in .env or as an environment variable")
+	}
+	abs, _ := filepath.Abs(projectRoot)
+	return abs, nil
+}
+
+// installSystemdService writes the unit file and enables + starts it.
+func installSystemdService(projectRoot, binaryPath, envFilePath string) error {
+	tmplPath := filepath.Join(projectRoot, "Data", "configs", "dev.devtrack.service")
+	tmplData, err := os.ReadFile(tmplPath)
+	if err != nil {
+		return fmt.Errorf("systemd service template not found at %s: %w", tmplPath, err)
+	}
+
+	svcContent := strings.ReplaceAll(string(tmplData), "DEVTRACK_BINARY_PLACEHOLDER", binaryPath)
+	svcContent = strings.ReplaceAll(svcContent, "PROJECT_ROOT_PLACEHOLDER", projectRoot)
+	svcContent = strings.ReplaceAll(svcContent, "DEVTRACK_ENV_FILE_PLACEHOLDER", envFilePath)
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("cannot determine home directory: %w", err)
+	}
+	svcDir := filepath.Join(homeDir, ".config", "systemd", "user")
+	if err := os.MkdirAll(svcDir, 0755); err != nil {
+		return fmt.Errorf("failed to create systemd user directory: %w", err)
+	}
+	destPath := filepath.Join(svcDir, "devtrack.service")
+	if err := os.WriteFile(destPath, []byte(svcContent), 0644); err != nil {
+		return fmt.Errorf("failed to write service file: %w", err)
+	}
+
+	for _, args := range [][]string{
+		{"--user", "daemon-reload"},
+		{"--user", "enable", "devtrack"},
+		{"--user", "start", "devtrack"},
+	} {
+		cmd := exec.Command("systemctl", args...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("systemctl %s failed: %w", strings.Join(args, " "), err)
+		}
+	}
+
+	fmt.Println("DevTrack systemd user service installed.")
+	fmt.Printf("  Unit:    %s\n", destPath)
+	fmt.Printf("  Binary:  %s\n", binaryPath)
+	fmt.Printf("  Root:    %s\n", projectRoot)
+	fmt.Println()
+	fmt.Println("DevTrack will now start automatically at login.")
+	fmt.Println("Use 'devtrack status' to verify it is running.")
+	fmt.Println("Use 'devtrack autostart-uninstall' to remove auto-start.")
+	return nil
+}
+
+// uninstallSystemdService stops, disables, and removes the unit file.
+func uninstallSystemdService() error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("cannot determine home directory: %w", err)
+	}
+	svcPath := filepath.Join(homeDir, ".config", "systemd", "user", "devtrack.service")
+
+	if _, err := os.Stat(svcPath); os.IsNotExist(err) {
+		fmt.Println("DevTrack systemd user service is not installed.")
+		return nil
+	}
+
+	for _, args := range [][]string{
+		{"--user", "stop", "devtrack"},
+		{"--user", "disable", "devtrack"},
+	} {
+		cmd := exec.Command("systemctl", args...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("Warning: systemctl %s returned an error: %v\n", strings.Join(args, " "), err)
+		}
+	}
+
+	if err := os.Remove(svcPath); err != nil {
+		return fmt.Errorf("failed to remove service file %s: %w", svcPath, err)
+	}
+
+	// Reload so systemd forgets the unit.
+	_ = exec.Command("systemctl", "--user", "daemon-reload").Run()
+
+	fmt.Println("DevTrack systemd user service removed.")
+	fmt.Printf("  Removed: %s\n", svcPath)
+	fmt.Println()
+	fmt.Println("DevTrack will no longer start automatically at login.")
+	fmt.Println("The running daemon (if any) was not stopped — use 'devtrack stop' to stop it.")
+	return nil
+}
+
+// profileShellFile returns the preferred shell profile path for the current
+// user (~/.zshrc if it exists, otherwise ~/.bashrc).
+func profileShellFile() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("cannot determine home directory: %w", err)
+	}
+	zshrc := filepath.Join(homeDir, ".zshrc")
+	if _, err := os.Stat(zshrc); err == nil {
+		return zshrc, nil
+	}
+	return filepath.Join(homeDir, ".bashrc"), nil
+}
+
+const (
+	autostartMarkerBegin = "# DevTrack auto-start"
+	autostartMarkerEnd   = "# End DevTrack auto-start"
+)
+
+// installProfileAutostart appends a startup block to the shell profile.
+func installProfileAutostart(binaryPath, envFilePath string) error {
+	profilePath, err := profileShellFile()
+	if err != nil {
+		return err
+	}
+
+	// Read existing profile to check for idempotency.
+	existing := ""
+	if data, err := os.ReadFile(profilePath); err == nil {
+		existing = string(data)
+	}
+	if strings.Contains(existing, autostartMarkerBegin) {
+		fmt.Printf("DevTrack auto-start block already present in %s\n", profilePath)
+		fmt.Println("Use 'devtrack autostart-uninstall' first if you want to reinstall.")
+		return nil
+	}
+
+	block := fmt.Sprintf("\n%s\nDEVTRACK_ENV_FILE=%s %s start 2>/dev/null || true\n%s\n",
+		autostartMarkerBegin, envFilePath, binaryPath, autostartMarkerEnd)
+
+	f, err := os.OpenFile(profilePath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open %s: %w", profilePath, err)
+	}
+	defer f.Close()
+	if _, err := f.WriteString(block); err != nil {
+		return fmt.Errorf("failed to write to %s: %w", profilePath, err)
+	}
+
+	fmt.Println("DevTrack auto-start block added.")
+	fmt.Printf("  Profile: %s\n", profilePath)
+	fmt.Printf("  Binary:  %s\n", binaryPath)
+	fmt.Println()
+	fmt.Println("DevTrack will start automatically when a new shell session opens.")
+	fmt.Printf("Re-source now:  source %s\n", profilePath)
+	fmt.Println("Use 'devtrack autostart-uninstall' to remove auto-start.")
+	return nil
+}
+
+// uninstallProfileAutostart removes the startup block from the shell profile.
+func uninstallProfileAutostart() error {
+	profilePath, err := profileShellFile()
+	if err != nil {
+		return err
+	}
+
+	data, err := os.ReadFile(profilePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("No shell profile found — nothing to remove.")
+			return nil
+		}
+		return fmt.Errorf("failed to read %s: %w", profilePath, err)
+	}
+
+	content := string(data)
+	if !strings.Contains(content, autostartMarkerBegin) {
+		fmt.Printf("DevTrack auto-start block not found in %s\n", profilePath)
+		return nil
+	}
+
+	// Remove the block between markers (inclusive).
+	scanner := bufio.NewScanner(strings.NewReader(content))
+	var lines []string
+	inBlock := false
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.Contains(line, autostartMarkerBegin) {
+			inBlock = true
+			continue
+		}
+		if inBlock {
+			if strings.Contains(line, autostartMarkerEnd) {
+				inBlock = false
+			}
+			continue
+		}
+		lines = append(lines, line)
+	}
+
+	newContent := strings.Join(lines, "\n")
+	// Trim trailing blank lines added by the removal.
+	newContent = strings.TrimRight(newContent, "\n") + "\n"
+
+	if err := os.WriteFile(profilePath, []byte(newContent), 0644); err != nil {
+		return fmt.Errorf("failed to write %s: %w", profilePath, err)
+	}
+
+	fmt.Println("DevTrack auto-start block removed.")
+	fmt.Printf("  Profile: %s\n", profilePath)
+	fmt.Println()
+	fmt.Println("DevTrack will no longer start automatically on new shell sessions.")
+	return nil
+}
+
+// handleAutostartInstall installs the OS-appropriate auto-start mechanism.
+func (cli *CLI) handleAutostartInstall() error {
+	projectRoot, err := resolveProjectRootForAutostart()
+	if err != nil {
+		return err
+	}
+
+	binaryPath, err := os.Executable()
+	if err != nil {
+		binaryPath = os.Args[0]
+	}
+	binaryPath, _ = filepath.Abs(binaryPath)
+
+	envFilePath := os.Getenv("DEVTRACK_ENV_FILE")
+	if envFilePath == "" {
+		envFilePath = filepath.Join(projectRoot, ".env")
+	}
+	envFilePath, _ = filepath.Abs(envFilePath)
+
+	switch detectOSType() {
+	case osDarwin:
+		return cli.handleLaunchdInstall()
+	case osLinuxSystemd, osWSLSystemd:
+		return installSystemdService(projectRoot, binaryPath, envFilePath)
+	case osWSLNoSystemd:
+		return installProfileAutostart(binaryPath, envFilePath)
+	default:
+		return cli.handleLaunchdInstall()
+	}
+}
+
+// handleAutostartUninstall removes the OS-appropriate auto-start mechanism.
+func (cli *CLI) handleAutostartUninstall() error {
+	switch detectOSType() {
+	case osDarwin:
+		return cli.handleLaunchdUninstall()
+	case osLinuxSystemd, osWSLSystemd:
+		return uninstallSystemdService()
+	case osWSLNoSystemd:
+		return uninstallProfileAutostart()
+	default:
+		return cli.handleLaunchdUninstall()
+	}
+}
+
+// handleAutostartStatus shows the status of the OS-appropriate auto-start mechanism.
+func (cli *CLI) handleAutostartStatus() error {
+	ot := detectOSType()
+	switch ot {
+	case osDarwin:
+		fmt.Println("Auto-start mechanism: launchd (macOS)")
+		fmt.Println()
+		cmd := exec.Command("launchctl", "list")
+		out, err := cmd.Output()
+		if err != nil {
+			fmt.Println("launchctl list failed — launchd may not be available.")
+		} else {
+			found := false
+			for _, line := range strings.Split(string(out), "\n") {
+				if strings.Contains(line, "dev.devtrack") {
+					fmt.Printf("  %s\n", strings.TrimSpace(line))
+					found = true
+				}
+			}
+			if !found {
+				fmt.Println("  Service not registered (devtrack autostart-install to add it).")
+			}
+		}
+
+	case osLinuxSystemd, osWSLSystemd:
+		label := "Linux"
+		if ot == osWSLSystemd {
+			label = "WSL"
+		}
+		fmt.Printf("Auto-start mechanism: systemd user service (%s)\n", label)
+		fmt.Println()
+		cmd := exec.Command("systemctl", "--user", "status", "devtrack")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		_ = cmd.Run() // non-zero exit when stopped is normal
+
+	case osWSLNoSystemd:
+		fmt.Println("Auto-start mechanism: shell profile (WSL without systemd)")
+		fmt.Println()
+		profilePath, err := profileShellFile()
+		if err != nil {
+			return err
+		}
+		data, _ := os.ReadFile(profilePath)
+		if strings.Contains(string(data), autostartMarkerBegin) {
+			fmt.Printf("  Block present in: %s\n", profilePath)
+		} else {
+			fmt.Printf("  Block NOT present in: %s\n", profilePath)
+			fmt.Println("  Run 'devtrack autostart-install' to add it.")
+		}
+		fmt.Println()
+		// Also show daemon status.
+		return cli.handleStatus()
+	}
+
+	return nil
+}
+
 // printUsage prints CLI usage information
 func (cli *CLI) printUsage() {
 	fmt.Println("DevTrack - Developer Automation Tools")
@@ -2128,7 +2543,16 @@ func (cli *CLI) printUsage() {
 	fmt.Println("  devtrack workspace disable <name>                Disable a workspace")
 	fmt.Println("  devtrack workspace reload                         Signal daemon to reload workspaces.yaml")
 	fmt.Println()
-	fmt.Println("MACOS AUTO-START (launchd):")
+	fmt.Println("AUTO-START (OS-aware):")
+	fmt.Println("  devtrack autostart-install    Install auto-start for this OS and enable it")
+	fmt.Println("                                  macOS        → launchd LaunchAgent (~/Library/LaunchAgents)")
+	fmt.Println("                                  Linux/systemd → systemd user service (~/.config/systemd/user)")
+	fmt.Println("                                  WSL/systemd  → systemd user service (~/.config/systemd/user)")
+	fmt.Println("                                  WSL (no systemd) → shell profile block (~/.zshrc / ~/.bashrc)")
+	fmt.Println("  devtrack autostart-uninstall  Remove auto-start for this OS")
+	fmt.Println("  devtrack autostart-status     Show auto-start status for this OS")
+	fmt.Println()
+	fmt.Println("MACOS AUTO-START (launchd, legacy aliases):")
 	fmt.Println("  devtrack launchd-install    Install plist to ~/Library/LaunchAgents and load it")
 	fmt.Println("                              DevTrack will start automatically at login")
 	fmt.Println("  devtrack launchd-uninstall  Unload and remove the launchd plist")
