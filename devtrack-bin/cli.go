@@ -257,6 +257,8 @@ func (cli *CLI) handleStart() error {
 	fmt.Printf("   Log: %s\n", logPath)
 	fmt.Println("\nUse 'devtrack status' to check status")
 
+	enableGitForWorkspaces()
+
 	return nil
 }
 
@@ -1724,6 +1726,21 @@ func (cli *CLI) handleIsWorkspace() error {
 
 	os.Exit(1)
 	return nil
+}
+
+// enableGitForWorkspaces sets devtrack.enabled=true in all enabled workspaces.
+// Called automatically on `devtrack start` so users never need to run enable-git manually.
+func enableGitForWorkspaces() {
+	cfg, err := LoadWorkspacesConfig()
+	if err != nil || cfg == nil {
+		return
+	}
+	for _, ws := range cfg.GetEnabledWorkspaces() {
+		cmd := exec.Command("git", "-C", ws.Path, "config", "--local", "devtrack.enabled", "true")
+		if err := cmd.Run(); err == nil {
+			fmt.Printf("  ✓ Git integration enabled: %s\n", ws.Name)
+		}
+	}
 }
 
 // handleEnableGit sets git config devtrack.enabled=true in the current repo,
