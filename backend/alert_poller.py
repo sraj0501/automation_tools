@@ -1,7 +1,7 @@
 """
 Alert poller for DevTrack.
 
-Background async loop that polls GitHub (and future sources) for events
+Background async loop that polls GitHub and Azure DevOps for events
 relevant to the developer, stores results in MongoDB, and delivers
 OS/terminal notifications.
 
@@ -15,6 +15,7 @@ Configuration (.env):
     ALERT_ENABLED=true
     ALERT_POLL_INTERVAL_SECS=300
     ALERT_GITHUB_ENABLED=true
+    ALERT_AZURE_ENABLED=true
     ALERT_NOTIFY_ASSIGNED=true
     ALERT_NOTIFY_COMMENTS=true
     ALERT_NOTIFY_STATUS_CHANGES=true
@@ -104,6 +105,32 @@ async def _poll_github(
     return notifications
 
 
+async def _poll_azure(
+    store,
+    user_id: str,
+) -> List[Dict[str, Any]]:
+    """Run one poll cycle for Azure DevOps and return new notification dicts."""
+    from backend.alerters.azure_alerter import AzureAlerter
+
+    last_checked: Optional[datetime] = None
+    if user_id and store.is_available():
+        last_checked = await store.load_last_checked(user_id, "azure")
+
+    notifications: List[Dict[str, Any]] = []
+    async with AzureAlerter() as alerter:
+        if not alerter.is_configured():
+            logger.debug("Azure alerter: not configured, skipping")
+            return []
+        notifications = await alerter.poll(last_checked=last_checked)
+
+    # Persist last_checked timestamp
+    if user_id and store.is_available() and notifications is not None:
+        now = datetime.now(tz=timezone.utc)
+        await store.save_last_checked(user_id, "azure", now)
+
+    return notifications
+
+
 async def _run_one_cycle(store, user_id: str) -> List[Dict[str, Any]]:
     """Run a single poll cycle across all enabled sources."""
     if not _is_enabled():
@@ -118,6 +145,13 @@ async def _run_one_cycle(store, user_id: str) -> List[Dict[str, Any]]:
             all_notifications.extend(github_notifs)
         except Exception as e:
             logger.warning(f"GitHub poll failed: {e}")
+
+    if cfg.get_bool("ALERT_AZURE_ENABLED", True):
+        try:
+            azure_notifs = await _poll_azure(store, user_id)
+            all_notifications.extend(azure_notifs)
+        except Exception as e:
+            logger.warning(f"Azure poll failed: {e}")
 
     # Persist to MongoDB and deliver notifications
     new_notifications = []

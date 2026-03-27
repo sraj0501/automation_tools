@@ -962,7 +962,7 @@ LEARNING_OUTLOOK_ENABLED=false
 
 ### Ticket Alerter
 
-Poll GitHub for notifications (assigned issues/PRs, comments, review requests) and deliver them as macOS OS notifications and terminal output.
+Polls GitHub and Azure DevOps for events relevant to you (assignments, comments, state changes) and delivers macOS OS notifications and terminal output. Delta-synced via MongoDB so you never see the same notification twice.
 
 #### ALERT_ENABLED
 
@@ -976,7 +976,7 @@ ALERT_ENABLED=true
 
 #### ALERT_POLL_INTERVAL_SECS
 
-**What**: How often to poll GitHub for new events (seconds)
+**What**: How often to poll all sources for new events (seconds)
 **Format**: Integer (seconds)
 **Default**: `300` (5 minutes)
 
@@ -994,9 +994,28 @@ ALERT_POLL_INTERVAL_SECS=300
 ALERT_GITHUB_ENABLED=true
 ```
 
+#### ALERT_AZURE_ENABLED
+
+**What**: Poll Azure DevOps for assigned work items, new comments, and state changes
+**Format**: `true` or `false`
+**Default**: `true` (requires `ALERT_ENABLED=true`, `AZURE_ORGANIZATION`, and `AZURE_DEVOPS_PAT` set)
+
+```bash
+ALERT_AZURE_ENABLED=true
+```
+
+#### AZURE_EMAIL *(optional)*
+
+**What**: Your Azure DevOps display name or email address. Used to filter out your own comments from Azure notifications. Falls back to the Azure profile API if unset.
+**Format**: Email or display name string
+
+```bash
+AZURE_EMAIL=you@yourorg.com
+```
+
 #### ALERT_NOTIFY_ASSIGNED
 
-**What**: Deliver a notification when an issue or PR is assigned to you
+**What**: Deliver a notification when a work item or issue/PR is assigned to you
 **Format**: `true` or `false`
 **Default**: `true`
 
@@ -1006,7 +1025,7 @@ ALERT_NOTIFY_ASSIGNED=true
 
 #### ALERT_NOTIFY_COMMENTS
 
-**What**: Deliver a notification when someone comments on an issue or PR you are involved in
+**What**: Deliver a notification when someone comments on a work item or issue you are involved in
 **Format**: `true` or `false`
 **Default**: `true`
 
@@ -1016,7 +1035,7 @@ ALERT_NOTIFY_COMMENTS=true
 
 #### ALERT_NOTIFY_STATUS_CHANGES
 
-**What**: Deliver a notification when an issue or PR you are involved in changes state (e.g. closed, reopened)
+**What**: Deliver a notification when a work item assigned to you changes state (e.g. Active → Resolved, closed, reopened)
 **Format**: `true` or `false`
 **Default**: `true`
 
@@ -1026,7 +1045,7 @@ ALERT_NOTIFY_STATUS_CHANGES=true
 
 #### ALERT_NOTIFY_REVIEW_REQUESTED
 
-**What**: Deliver a notification when a review is requested from you on a pull request
+**What**: Deliver a notification when a review is requested from you on a GitHub pull request
 **Format**: `true` or `false`
 **Default**: `true`
 
@@ -1034,7 +1053,7 @@ ALERT_NOTIFY_STATUS_CHANGES=true
 ALERT_NOTIFY_REVIEW_REQUESTED=true
 ```
 
-See [GitHub Guide](GITHUB.md) for full GitHub credential setup.
+See [GitHub Guide](GITHUB.md) and [Azure DevOps Guide](AZURE_DEVOPS.md) for full credential setup.
 
 ---
 

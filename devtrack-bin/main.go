@@ -19,6 +19,12 @@ func main() {
 			return
 		}
 
+		// Delegate "sage" to the Python git-sage module
+		if cmd == "sage" {
+			runGitSage()
+			return
+		}
+
 		// Handle test commands (but not CLI commands that start with "test-")
 		if strings.HasPrefix(cmd, "test-") && cmd != "test-response" {
 			RunDemo()
@@ -73,12 +79,63 @@ func printBasicUsage() {
 	fmt.Println("SCHEDULER: pause | resume | force-trigger | skip-next | send-summary")
 	fmt.Println("INFO:      logs | db-stats | stats | version | help")
 	fmt.Println("GIT:       git add | git commit -m 'message'   (AI-enhanced; shell-init required for bare 'git' commands)")
+	fmt.Println("SAGE:      sage ask '<question>' | sage do '<task>' | sage interactive")
 	fmt.Println("COMMITS:   commits pending | commits review")
 	fmt.Println("ALERTS:    alerts | alerts --all | alerts --clear")
 	fmt.Println("REPORTS:   preview-report | send-report | save-report")
 	fmt.Println()
 	fmt.Println("Run 'devtrack help' for full usage.")
 	fmt.Println()
+}
+
+// runGitSage delegates to the Python git-sage module, forwarding all args after "sage"
+func runGitSage() {
+	projectRoot := os.Getenv("PROJECT_ROOT")
+	if projectRoot == "" {
+		execPath, err := os.Executable()
+		if err != nil {
+			execPath = os.Args[0]
+		}
+		execPath, _ = filepath.Abs(execPath)
+		searchDir := filepath.Dir(execPath)
+		for i := 0; i < 6; i++ {
+			if _, err := os.Stat(filepath.Join(searchDir, "backend", "git_sage")); err == nil {
+				projectRoot = searchDir
+				break
+			}
+			parent := filepath.Dir(searchDir)
+			if parent == searchDir {
+				break
+			}
+			searchDir = parent
+		}
+	}
+
+	if projectRoot == "" {
+		fmt.Println("Error: Could not find backend/git_sage directory")
+		fmt.Println("Set PROJECT_ROOT to the automation_tools path")
+		os.Exit(1)
+	}
+
+	// Forward all args after "sage" to the Python module
+	sageArgs := append([]string{"run", "python", "-m", "backend.git_sage"}, os.Args[2:]...)
+
+	env := os.Environ()
+	env = append(env, "PROJECT_ROOT="+projectRoot)
+	env = append(env, "DEVTRACK_ENV_FILE="+filepath.Join(projectRoot, ".env"))
+
+	cmd := exec.Command("uv", sageArgs...)
+	cmd.Dir = projectRoot
+	cmd.Env = env
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			os.Exit(exitErr.ExitCode())
+		}
+		os.Exit(1)
+	}
 }
 
 // runGitWrapper execs devtrack-git-wrapper.sh for AI-enhanced git commits

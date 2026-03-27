@@ -32,6 +32,7 @@ dependencies = [
     # RAG-based personalization (vector store for few-shot style retrieval)
     "chromadb>=0.4.0",
     "python-telegram-bot>=22.7",
+    "motor>=3.7.1",
 ]
 
 [project.optional-dependencies]

@@ -27,3 +27,12 @@ workspaces:
     enabled: true
     ignore_branches: []
     tags: ["personal"]
+
+  # Demo project (created by demo/setup.sh)
+  - name: "devtrack-demo"
+    path: "/Users/sraj/git_apps/personal/devtrack-demo"
+    pm_platform: "github"
+    pm_project: "projects/1"
+    enabled: true
+    ignore_branches: []
+    tags: ["demo"]
