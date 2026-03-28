@@ -14,14 +14,9 @@ builds:
     goos:
       - linux
       - darwin
-      - windows
     goarch:
       - amd64
       - arm64
-    # Skip unsupported combinations
-    ignore:
-      - goos: windows
-        goarch: arm64
     env:
       - CGO_ENABLED=0
     ldflags:
@@ -35,9 +30,6 @@ archives:
     builds:
       - devtrack
     name_template: "devtrack_{{ .Os }}_{{ .Arch }}"
-    format_overrides:
-      - goos: windows
-        formats: [zip]
     files:
       - LICENSE
 
@@ -75,7 +67,7 @@ release:
   header: |
     ## DevTrack {{.Version}}
 
-    Pre-built binaries for macOS (Apple Silicon + Intel), Linux (amd64 + arm64), and Windows (amd64).
+    Pre-built binaries for macOS (Apple Silicon + Intel) and Linux (amd64 + arm64).
 
     > **DevTrack is a client-server tool.**
     > The `devtrack` binary is the client/daemon. The Python backend runs separately.
