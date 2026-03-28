@@ -370,6 +370,125 @@ class GitHubClient:
             return True
         return False
 
+    # -- team & capacity operations (project planning) ----------------------
+
+    async def list_org_members(self, org: Optional[str] = None) -> List[Dict[str, Any]]:
+        """List members of a GitHub organization.
+
+        Returns list of dicts with login, id, html_url, avatar_url.
+        Uses GET /orgs/{org}/members with pagination.
+        """
+        target_org = org or self._owner
+        if not target_org:
+            logger.warning("list_org_members: no org configured")
+            return []
+
+        results: List[Dict[str, Any]] = []
+        url: Optional[str] = self._api(f"/orgs/{target_org}/members")
+        params: Dict[str, Any] = {"per_page": 100}
+        while url:
+            data, headers = await self._get_with_headers(url, params=params)
+            if not isinstance(data, list):
+                break
+            for member in data:
+                results.append({
+                    "login": member.get("login", ""),
+                    "id": member.get("id", 0),
+                    "html_url": member.get("html_url", ""),
+                    "avatar_url": member.get("avatar_url", ""),
+                })
+            url = self._parse_next_link(headers.get("Link", ""))
+            params = {}
+        return results
+
+    async def list_repo_collaborators(self) -> List[Dict[str, Any]]:
+        """List collaborators on the configured repo.
+
+        Fallback for repos not in an org. Returns same shape as list_org_members.
+        """
+        results: List[Dict[str, Any]] = []
+        url: Optional[str] = self._api(f"/repos/{self._owner}/{self._repo}/collaborators")
+        params: Dict[str, Any] = {"per_page": 100}
+        while url:
+            data, headers = await self._get_with_headers(url, params=params)
+            if not isinstance(data, list):
+                break
+            for member in data:
+                results.append({
+                    "login": member.get("login", ""),
+                    "id": member.get("id", 0),
+                    "html_url": member.get("html_url", ""),
+                    "avatar_url": member.get("avatar_url", ""),
+                })
+            url = self._parse_next_link(headers.get("Link", ""))
+            params = {}
+        return results
+
+    async def get_issues_for_user(
+        self,
+        username: str,
+        state: str = "open",
+        max_results: int = 100,
+    ) -> List[GitHubIssue]:
+        """Fetch issues assigned to a specific user in the configured repo.
+
+        Uses GET /repos/{owner}/{repo}/issues?assignee={username}&state={state}.
+        """
+        url: Optional[str] = self._api(f"/repos/{self._owner}/{self._repo}/issues")
+        params: Dict[str, Any] = {
+            "assignee": username,
+            "state": state,
+            "per_page": 100,
+        }
+        results: List[GitHubIssue] = []
+        while url and len(results) < max_results:
+            data, headers = await self._get_with_headers(url, params=params)
+            if not isinstance(data, list):
+                break
+            for item in data:
+                if item.get("pull_request"):
+                    continue
+                results.append(self._parse_issue(item))
+                if len(results) >= max_results:
+                    break
+            url = self._parse_next_link(headers.get("Link", ""))
+            params = {}
+        return results
+
+    async def create_milestone(
+        self,
+        title: str,
+        due_on: Optional[str] = None,
+        description: str = "",
+    ) -> Optional[Dict[str, Any]]:
+        """POST /repos/{owner}/{repo}/milestones — create a sprint milestone.
+
+        Args:
+            title: Milestone title (e.g. "Sprint 1").
+            due_on: ISO 8601 date string "YYYY-MM-DDTHH:MM:SSZ" or "YYYY-MM-DD".
+            description: Optional description.
+
+        Returns the created milestone dict or None on failure.
+        """
+        body: Dict[str, Any] = {"title": title}
+        if description:
+            body["description"] = description
+        if due_on:
+            # Ensure full ISO-8601 timestamp
+            if "T" not in due_on:
+                due_on = f"{due_on}T23:59:59Z"
+            body["due_on"] = due_on
+
+        url = self._api(f"/repos/{self._owner}/{self._repo}/milestones")
+        data = await self._post(url, json_body=body)
+        if data:
+            logger.info(f"Created GitHub milestone '{title}' (#{data.get('number')})")
+        return data
+
+    async def get_user_info(self, username: str) -> Optional[Dict[str, Any]]:
+        """GET /users/{username} — fetch name, email, bio for a user."""
+        return await self._get(self._api(f"/users/{username}"))
+
     # -- pagination helper --------------------------------------------------
 
     @staticmethod

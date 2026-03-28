@@ -235,25 +235,20 @@ class AsyncTeamsDataCollector(TeamsDataCollector):
             return samples_collected
 
 
-def _get_state_file() -> Path:
-    """Return path to delta state file."""
-    try:
-        from backend.config import learning_dir
-        return Path(learning_dir()) / "state.json"
-    except Exception:
-        return Path(__file__).resolve().parent.parent / "Data" / "learning" / "state.json"
-
-
 def _load_last_collected() -> Optional[datetime]:
-    """Load the last successful collection timestamp."""
-    state_file = _get_state_file()
-    if not state_file.exists():
-        return None
+    """Load the last successful collection timestamp from SQLite."""
     try:
-        data = json.loads(state_file.read_text())
-        ts = data.get("last_collected")
-        if ts:
-            dt = datetime.fromisoformat(ts)
+        # user_email may not be known at module level; read from DB by scanning all rows
+        # and returning the most recent one — or None if table is empty.
+        from backend.db.learning_store import _db_path
+        import sqlite3
+        con = sqlite3.connect(_db_path())
+        row = con.execute(
+            "SELECT last_collected FROM learning_sync_state ORDER BY last_collected DESC LIMIT 1"
+        ).fetchone()
+        con.close()
+        if row and row[0]:
+            dt = datetime.fromisoformat(row[0])
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
             return dt
@@ -262,18 +257,13 @@ def _load_last_collected() -> Optional[datetime]:
     return None
 
 
-def _save_last_collected(ts: datetime) -> None:
+def _save_last_collected(ts: datetime, user_email: str = "") -> None:
     """Persist the collection timestamp for next delta run."""
-    state_file = _get_state_file()
-    state_file.parent.mkdir(parents=True, exist_ok=True)
-    existing: dict = {}
-    if state_file.exists():
-        try:
-            existing = json.loads(state_file.read_text())
-        except Exception:
-            pass
-    existing["last_collected"] = ts.isoformat()
-    state_file.write_text(json.dumps(existing, indent=2))
+    try:
+        from backend.db.learning_store import save_last_collected
+        save_last_collected(user_email or "default", ts)
+    except Exception:
+        pass
 
 
 class LearningIntegration:
@@ -308,27 +298,22 @@ class LearningIntegration:
                     self.user_email = user.mail or user.user_principal_name
                     print(f"📧 Using email: {self.user_email}")
                 self.user_object_id = getattr(user, 'id', None)
-                # Persist to consent.json so future runs can use it without re-auth
+                # Persist user_object_id to DB so future runs can use it without re-auth
                 try:
-                    from backend.config import learning_dir
-                    consent_path = Path(learning_dir()) / "consent.json"
-                    if consent_path.exists():
-                        consent_data = json.loads(consent_path.read_text())
-                        consent_data["user_object_id"] = self.user_object_id
-                        consent_path.write_text(json.dumps(consent_data, indent=2))
+                    from backend.db.learning_store import update_user_object_id
+                    if self.user_email and self.user_object_id:
+                        update_user_object_id(self.user_email, self.user_object_id)
                 except Exception:
                     pass
             except Exception as e:
                 print(f"⚠️  Could not get user info from Graph: {e}")
-                # Load from consent file (persisted from previous successful auth)
+                # Load from DB (persisted from previous successful auth)
                 try:
-                    from backend.config import learning_dir
-                    consent_path = Path(learning_dir()) / "consent.json"
-                    if consent_path.exists():
-                        consent_data = json.loads(consent_path.read_text())
-                        if not self.user_email:
-                            self.user_email = consent_data.get("user_email", "")
-                        self.user_object_id = consent_data.get("user_object_id")
+                    from backend.db.learning_store import load_consent
+                    if self.user_email:
+                        record = load_consent(self.user_email)
+                        if record:
+                            self.user_object_id = record.get("user_object_id")
                 except Exception:
                     pass
                 # Fall back to env var if still empty
@@ -449,10 +434,10 @@ class LearningIntegration:
             print(f"✅ Successfully collected and processed {count} samples")
             print("=" * 70)
 
-        # Persist delta state — MongoDB first, file as fallback
+        # Persist delta state — MongoDB first, SQLite as fallback
         if self._mongo and self._mongo.is_available():
             await self._mongo.save_last_collected(self.user_email, collection_start)
-        _save_last_collected(collection_start)  # always update file too for CLI display
+        _save_last_collected(collection_start, user_email=self.user_email or "")
 
         return count
     

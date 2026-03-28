@@ -34,10 +34,23 @@
 | [MULTI_REPO.md](MULTI_REPO.md) | Monitor multiple repos, each routed to its own PM platform via workspaces.yaml |
 | [PM_AGENT.md](PM_AGENT.md) | AI decomposition of problems into Epic → Story → Task hierarchies |
 
+### Productivity
+| Guide | What it covers |
+|-------|---------------|
+| [TICKET_ALERTER.md](TICKET_ALERTER.md) | Background poller for GitHub, Azure DevOps, and Jira — OS + terminal notifications |
+| [PROJECT_PLANNING.md](PROJECT_PLANNING.md) | AI project planning via `/newproject` — spec generation, team workloads, approval flow |
+| [WORK_TRACKER.md](WORK_TRACKER.md) | Automatic session-based time tracking + AI EOD report with email delivery |
+
 ### Remote Control
 | Guide | What it covers |
 |-------|---------------|
 | [TELEGRAM_BOT.md](TELEGRAM_BOT.md) | Full bot setup, all commands (Azure, GitLab, GitHub, PM Agent, scheduler) |
+
+### System Integration
+| Guide | What it covers |
+|-------|---------------|
+| [AUTOSTART.md](AUTOSTART.md) | Auto-start DevTrack at login — OS-aware (macOS launchd, Linux/WSL systemd, shell profile) |
+| [MACOS_AUTOSTART.md](MACOS_AUTOSTART.md) | macOS launchd details (legacy reference) |
 
 ### AI & Personalization
 | Guide | What it covers |
@@ -95,7 +108,9 @@ docs/
 │   ├── GITHUB.md             GitHub sync, issue management, Telegram commands
 │   ├── MULTI_REPO.md         Multi-repo monitoring via workspaces.yaml
 │   ├── PM_AGENT.md           AI work item decomposition
-│   └── TELEGRAM_BOT.md       Telegram remote control
+│   ├── TELEGRAM_BOT.md       Telegram remote control
+│   ├── AUTOSTART.md          Auto-start (OS-aware: launchd / systemd / shell profile)
+│   └── MACOS_AUTOSTART.md    Auto-start on macOS login via launchd (legacy reference)
 │
 ├── AI & Personalization
 │   ├── LLM_GUIDE.md          provider setup and model config

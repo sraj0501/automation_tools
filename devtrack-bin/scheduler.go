@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
+	"os/exec"
+	"strconv"
 	"sync"
 	"time"
 
@@ -101,6 +104,12 @@ func (s *Scheduler) Start() error {
 	s.updateNextTrigger()
 
 	log.Printf("✓ Scheduler started. Next trigger at: %s", s.nextTrigger.Format(time.RFC1123))
+
+	// Optional: auto EOD report at configured hour
+	s.scheduleEODReport()
+
+	// Optional: auto-stop idle sessions
+	s.scheduleIdleSessionStop()
 
 	return nil
 }
@@ -322,6 +331,124 @@ func (s *Scheduler) IsWorkingHours() bool {
 	hour := now.Hour()
 
 	return hour >= s.config.Settings.WorkStartHour && hour < s.config.Settings.WorkEndHour
+}
+
+// scheduleEODReport adds a daily cron job at EOD_REPORT_HOUR (0 = disabled).
+// When triggered it auto-stops any active work session, then calls the Python
+// EOD report generator which emails the report to EOD_REPORT_EMAIL if set.
+func (s *Scheduler) scheduleEODReport() {
+	hourStr := os.Getenv("EOD_REPORT_HOUR")
+	if hourStr == "" {
+		return
+	}
+	hour, err := strconv.Atoi(hourStr)
+	if err != nil || hour <= 0 || hour > 23 {
+		if hourStr != "0" {
+			log.Printf("⚠️  EOD_REPORT_HOUR=%s is invalid — skipping auto EOD report", hourStr)
+		}
+		return
+	}
+
+	// "0 0 H * * *" fires at H:00:00 every day (cron with seconds)
+	cronExpr := fmt.Sprintf("0 0 %d * * *", hour)
+	_, err = s.cron.AddFunc(cronExpr, func() {
+		log.Printf("⏰ EOD auto-trigger at hour %d", hour)
+
+		// Auto-stop active session
+		db, dbErr := NewDatabase()
+		if dbErr == nil {
+			active, _ := db.GetActiveWorkSession()
+			if active != nil {
+				endedAt := time.Now().UTC().Format("2006-01-02 15:04:05")
+				startTime, parseErr := time.Parse("2006-01-02 15:04:05", active.StartedAt)
+				durationMins := 0
+				if parseErr == nil {
+					durationMins = int(time.Since(startTime).Minutes())
+					if durationMins < 0 {
+						durationMins = 0
+					}
+				}
+				if stopErr := db.EndWorkSession(active.ID, endedAt, durationMins); stopErr == nil {
+					log.Printf("✅ Auto-stopped work session #%d for EOD report", active.ID)
+				}
+			}
+		}
+
+		// Run Python EOD report generator
+		projectRoot := os.Getenv("PROJECT_ROOT")
+		if projectRoot == "" {
+			log.Println("⚠️  EOD report: PROJECT_ROOT not set — cannot run report generator")
+			return
+		}
+
+		args := []string{"run", "--directory", projectRoot, "python", "-m", "backend.work_tracker.eod_report_generator"}
+		recipient := os.Getenv("EOD_REPORT_EMAIL")
+		if recipient != "" {
+			args = append(args, "--email", recipient)
+		}
+
+		cmd := exec.Command("uv", args...)
+		cmd.Dir = projectRoot
+		if out, runErr := cmd.CombinedOutput(); runErr != nil {
+			log.Printf("⚠️  EOD report generator error: %v\n%s", runErr, string(out))
+		} else {
+			log.Printf("✅ EOD report generated%s", func() string {
+				if recipient != "" {
+					return " and emailed to " + recipient
+				}
+				return ""
+			}())
+		}
+	})
+	if err != nil {
+		log.Printf("⚠️  Could not schedule EOD report cron: %v", err)
+		return
+	}
+	log.Printf("✓ EOD auto-report scheduled at %02d:00 daily", hour)
+}
+
+// scheduleIdleSessionStop adds a periodic check that auto-stops sessions idle
+// for longer than WORK_SESSION_AUTO_STOP_MINUTES (0 = disabled).
+func (s *Scheduler) scheduleIdleSessionStop() {
+	idleStr := os.Getenv("WORK_SESSION_AUTO_STOP_MINUTES")
+	if idleStr == "" {
+		return
+	}
+	idleMins, err := strconv.Atoi(idleStr)
+	if err != nil || idleMins <= 0 {
+		return
+	}
+
+	// Check every minute whether the active session has been idle too long.
+	_, err = s.cron.AddFunc("0 * * * * *", func() {
+		db, dbErr := NewDatabase()
+		if dbErr != nil {
+			return
+		}
+		active, fetchErr := db.GetActiveWorkSession()
+		if fetchErr != nil || active == nil {
+			return
+		}
+
+		startTime, parseErr := time.Parse("2006-01-02 15:04:05", active.StartedAt)
+		if parseErr != nil {
+			return
+		}
+		elapsedMins := int(time.Since(startTime).Minutes())
+		if elapsedMins >= idleMins {
+			endedAt := time.Now().UTC().Format("2006-01-02 15:04:05")
+			if stopErr := db.EndWorkSession(active.ID, endedAt, elapsedMins); stopErr == nil {
+				// Mark auto_stopped flag
+				db.db.Exec("UPDATE work_sessions SET auto_stopped = 1 WHERE id = ?", active.ID)
+				log.Printf("⏱️  Work session #%d auto-stopped after %d idle minutes", active.ID, elapsedMins)
+			}
+		}
+	})
+	if err != nil {
+		log.Printf("⚠️  Could not schedule idle session check: %v", err)
+		return
+	}
+	log.Printf("✓ Work session idle auto-stop enabled (%d minutes)", idleMins)
 }
 
 // GetWorkHoursStatus returns current work hours status

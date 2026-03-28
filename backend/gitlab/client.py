@@ -352,3 +352,127 @@ class GitLabClient:
             logger.info(f"Added comment to GitLab issue !{issue_iid}")
             return True
         return False
+
+    # -- team & capacity operations (project planning) ----------------------
+
+    async def list_project_members(
+        self,
+        project_id: Optional[int] = None,
+        include_inherited: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """List all members of a GitLab project.
+
+        Returns list of dicts with id, username, name, state, access_level.
+        Uses GET /projects/{id}/members/all (includes inherited group members).
+        """
+        pid = project_id or self._project_id
+        if not pid:
+            logger.warning("list_project_members: no project_id configured")
+            return []
+
+        endpoint = "members/all" if include_inherited else "members"
+        results: List[Dict[str, Any]] = []
+        page = 1
+        while True:
+            data, headers = await self._get_with_headers(
+                self._api(f"projects/{pid}/{endpoint}"),
+                params={"per_page": 100, "page": page},
+            )
+            if not isinstance(data, list) or not data:
+                break
+            for m in data:
+                results.append({
+                    "id": m.get("id", 0),
+                    "username": m.get("username", ""),
+                    "name": m.get("name", ""),
+                    "state": m.get("state", ""),
+                    "access_level": m.get("access_level", 0),
+                })
+            next_page = headers.get("X-Next-Page", "")
+            if not next_page:
+                break
+            page = int(next_page)
+        return results
+
+    async def get_issues_for_user(
+        self,
+        username: str,
+        state: str = "opened",
+        project_id: Optional[int] = None,
+        max_results: int = 100,
+    ) -> List[GitLabIssue]:
+        """Fetch open issues assigned to a specific user.
+
+        Uses GET /projects/{id}/issues?assignee_username={X}&state=opened.
+        Falls back to instance-level issues API if no project_id.
+        """
+        pid = project_id or self._project_id
+        if pid:
+            endpoint = f"projects/{pid}/issues"
+        else:
+            endpoint = "issues"
+
+        params: Dict[str, Any] = {
+            "assignee_username": username,
+            "state": state,
+            "per_page": 100,
+            "page": 1,
+        }
+        results: List[GitLabIssue] = []
+        while len(results) < max_results:
+            data, headers = await self._get_with_headers(self._api(endpoint), params=params)
+            if not isinstance(data, list) or not data:
+                break
+            for item in data:
+                results.append(self._parse_issue(item))
+                if len(results) >= max_results:
+                    break
+            next_page = headers.get("X-Next-Page", "")
+            if not next_page:
+                break
+            params["page"] = int(next_page)
+        return results
+
+    async def create_milestone(
+        self,
+        title: str,
+        due_date: Optional[str] = None,
+        start_date: Optional[str] = None,
+        description: str = "",
+        project_id: Optional[int] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """POST /projects/:id/milestones — create a sprint milestone.
+
+        Args:
+            title: Milestone title (e.g. "Sprint 1").
+            due_date: "YYYY-MM-DD" end date.
+            start_date: "YYYY-MM-DD" start date.
+            description: Optional description.
+            project_id: Project ID override.
+
+        Returns the created milestone dict or None on failure.
+        """
+        pid = project_id or self._project_id
+        if not pid:
+            logger.error("create_milestone requires GITLAB_PROJECT_ID or project_id arg")
+            return None
+
+        body: Dict[str, Any] = {"title": title}
+        if description:
+            body["description"] = description
+        if due_date:
+            body["due_date"] = due_date
+        if start_date:
+            body["start_date"] = start_date
+
+        data = await self._post(self._api(f"projects/{pid}/milestones"), json_body=body)
+        if data:
+            logger.info(f"Created GitLab milestone '{title}' (#{data.get('id')})")
+        return data
+
+    async def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        """GET /users?username={username} — lookup user profile."""
+        data = await self._get(self._api("users"), params={"username": username})
+        if isinstance(data, list) and data:
+            return data[0]
+        return None

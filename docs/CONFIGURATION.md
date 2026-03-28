@@ -960,6 +960,116 @@ LEARNING_TEAMS_ENABLED=false
 LEARNING_OUTLOOK_ENABLED=false
 ```
 
+### Ticket Alerter
+
+Polls GitHub, Azure DevOps, and Jira for events relevant to you (assignments, comments, state changes) and delivers macOS OS notifications and terminal output. Delta-synced via MongoDB so you never see the same notification twice.
+
+#### ALERT_ENABLED
+
+**What**: Enable the Ticket Alerter background poller
+**Format**: `true` or `false`
+**Default**: `false`
+
+```bash
+ALERT_ENABLED=true
+```
+
+#### ALERT_POLL_INTERVAL_SECS
+
+**What**: How often to poll all sources for new events (seconds)
+**Format**: Integer (seconds)
+**Default**: `300` (5 minutes)
+
+```bash
+ALERT_POLL_INTERVAL_SECS=300
+```
+
+#### ALERT_GITHUB_ENABLED
+
+**What**: Poll GitHub for assigned issues/PRs, comments, and review requests
+**Format**: `true` or `false`
+**Default**: `true` (requires `ALERT_ENABLED=true` and `GITHUB_TOKEN` set)
+
+```bash
+ALERT_GITHUB_ENABLED=true
+```
+
+#### ALERT_AZURE_ENABLED
+
+**What**: Poll Azure DevOps for assigned work items, new comments, and state changes
+**Format**: `true` or `false`
+**Default**: `true` (requires `ALERT_ENABLED=true`, `AZURE_ORGANIZATION`, and `AZURE_DEVOPS_PAT` set)
+
+```bash
+ALERT_AZURE_ENABLED=true
+```
+
+#### ALERT_JIRA_ENABLED
+
+**What**: Poll Jira for issues newly assigned to you, new comments on your issues, and status changes on your issues
+**Format**: `true` or `false`
+**Default**: `false` (requires `ALERT_ENABLED=true`, `JIRA_URL`, `JIRA_USERNAME`, and `JIRA_API_TOKEN` set)
+
+Events tracked:
+- **Assigned** — issue newly assigned to you (first-run guard: skipped on the very first poll to avoid backfilling old assignments)
+- **Comment** — new comment added to an issue you are assigned to or created
+- **Status change** — issue transitions to a new status (first-run guard: same as assigned)
+
+```bash
+ALERT_JIRA_ENABLED=true
+```
+
+#### AZURE_EMAIL *(optional)*
+
+**What**: Your Azure DevOps display name or email address. Used to filter out your own comments from Azure notifications. Falls back to the Azure profile API if unset.
+**Format**: Email or display name string
+
+```bash
+AZURE_EMAIL=you@yourorg.com
+```
+
+#### ALERT_NOTIFY_ASSIGNED
+
+**What**: Deliver a notification when a work item or issue/PR is assigned to you
+**Format**: `true` or `false`
+**Default**: `true`
+
+```bash
+ALERT_NOTIFY_ASSIGNED=true
+```
+
+#### ALERT_NOTIFY_COMMENTS
+
+**What**: Deliver a notification when someone comments on a work item or issue you are involved in
+**Format**: `true` or `false`
+**Default**: `true`
+
+```bash
+ALERT_NOTIFY_COMMENTS=true
+```
+
+#### ALERT_NOTIFY_STATUS_CHANGES
+
+**What**: Deliver a notification when a work item assigned to you changes state (e.g. Active → Resolved, closed, reopened)
+**Format**: `true` or `false`
+**Default**: `true`
+
+```bash
+ALERT_NOTIFY_STATUS_CHANGES=true
+```
+
+#### ALERT_NOTIFY_REVIEW_REQUESTED
+
+**What**: Deliver a notification when a review is requested from you on a GitHub pull request
+**Format**: `true` or `false`
+**Default**: `true`
+
+```bash
+ALERT_NOTIFY_REVIEW_REQUESTED=true
+```
+
+See [GitHub Guide](GITHUB.md), [Azure DevOps Guide](AZURE_DEVOPS.md), and the Jira section in this file for full credential setup.
+
 ---
 
 ## Scheduling

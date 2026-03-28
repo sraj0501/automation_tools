@@ -30,9 +30,7 @@ type IntegratedMonitor struct {
 	workspaceMonitors    []*WorkspaceMonitor // one per repo (single-repo has exactly one)
 	scheduler            *Scheduler
 	config               *Config
-	ipcServer            *IPCServer
 	database             *Database
-	messageQueue         *MessageQueue
 	lastActiveWorkspace  *WorkspaceMonitor
 	lastActiveWorkspaceMu sync.Mutex
 }
@@ -44,12 +42,6 @@ func NewIntegratedMonitor(repoPath string) (*IntegratedMonitor, error) {
 	config, err := LoadConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
-	}
-
-	// Create IPC server
-	ipcServer, err := NewIPCServer()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create IPC server: %w", err)
 	}
 
 	// Create database connection
@@ -102,15 +94,8 @@ func NewIntegratedMonitor(repoPath string) (*IntegratedMonitor, error) {
 	monitor := &IntegratedMonitor{
 		workspaceMonitors: workspaceMonitors,
 		config:            config,
-		ipcServer:         ipcServer,
 		database:          database,
 	}
-
-	// Register IPC handlers
-	monitor.registerIPCHandlers()
-
-	// Create message queue for offline resilience
-	monitor.messageQueue = NewMessageQueue(database, ipcServer)
 
 	// Create scheduler with shared trigger handler
 	scheduler := NewScheduler(config, monitor.handleTrigger)
@@ -122,12 +107,6 @@ func NewIntegratedMonitor(repoPath string) (*IntegratedMonitor, error) {
 // Start begins monitoring both Git commits and time-based triggers
 func (im *IntegratedMonitor) Start() error {
 	log.Println("Starting integrated monitoring system...")
-
-	// Start IPC server
-	if err := im.ipcServer.Start(); err != nil {
-		return fmt.Errorf("failed to start IPC server: %w", err)
-	}
-	log.Println("✓ IPC server started")
 
 	// Start Git monitor(s) — one per workspace
 	for _, ws := range im.workspaceMonitors {
@@ -150,12 +129,6 @@ func (im *IntegratedMonitor) Start() error {
 	}
 	log.Println("✓ Scheduler started")
 
-	// Start message queue drain goroutine
-	if im.messageQueue != nil {
-		im.messageQueue.Start()
-		log.Println("✓ Message queue started")
-	}
-
 	return nil
 }
 
@@ -163,22 +136,10 @@ func (im *IntegratedMonitor) Start() error {
 func (im *IntegratedMonitor) Stop() {
 	log.Println("Stopping integrated monitoring system...")
 
-	// Stop message queue
-	if im.messageQueue != nil {
-		im.messageQueue.Stop()
-	}
-
-	// Send shutdown message to Python
-	if im.ipcServer != nil {
-		shutdownMsg := IPCMessage{
-			Type:      MsgTypeShutdown,
-			Timestamp: time.Now(),
-			ID:        "shutdown",
-			Data:      make(map[string]interface{}),
-		}
-		im.ipcServer.SendMessage(shutdownMsg)
-		time.Sleep(500 * time.Millisecond) // Give Python time to process
-		im.ipcServer.Stop()
+	// Notify Python of graceful shutdown (best-effort)
+	httpClient := NewHTTPTriggerClient()
+	if err := httpClient.SendShutdown(); err != nil {
+		log.Printf("Could not send HTTP shutdown to Python: %v", err)
 	}
 
 	for _, ws := range im.workspaceMonitors {
@@ -198,158 +159,54 @@ func (im *IntegratedMonitor) Stop() {
 	log.Println("✓ Monitoring stopped")
 }
 
-// registerIPCHandlers registers handlers for IPC messages from Python
-func (im *IntegratedMonitor) registerIPCHandlers() {
-	// Handle task update responses from Python
-	im.ipcServer.RegisterHandler(MsgTypeTaskUpdate, func(msg IPCMessage) error {
-		log.Printf("Received task update from Python: %+v", msg.Data)
+// ReloadWorkspaces hot-reloads the workspace configuration.
+// Called from the SIGHUP handler in daemon.go after the Go config is updated.
+func (im *IntegratedMonitor) ReloadWorkspaces() {
+	newCfg, err := LoadWorkspacesConfig()
+	if err != nil {
+		log.Printf("Failed to reload workspaces.yaml: %v", err)
+		return
+	}
+	if newCfg == nil {
+		log.Println("workspaces.yaml removed — single-repo mode active on restart")
+		return
+	}
 
-		// Log to database
-		if im.database != nil {
-			record := TaskUpdateRecord{
-				Timestamp:  time.Now(),
-				Project:    getStringFromMap(msg.Data, "project"),
-				TicketID:   getStringFromMap(msg.Data, "ticket_id"),
-				UpdateText: getStringFromMap(msg.Data, "description"),
-				Status:     getStringFromMap(msg.Data, "status"),
-				Synced:     getBoolFromMap(msg.Data, "synced"),
-				Platform:   getStringFromMap(msg.Data, "synced_platform"),
-			}
-
-			// Use "python" as default platform if not specified
-			if record.Platform == "" {
-				record.Platform = "python"
-			}
-
-			if _, err := im.database.InsertTaskUpdate(record); err != nil {
-				log.Printf("Failed to log task update to database: %v", err)
-			}
+	for _, ws := range im.workspaceMonitors {
+		if ws.gitMonitor != nil {
+			ws.gitMonitor.Stop()
 		}
+	}
 
-		return nil
-	})
-
-	// Handle responses from Python
-	im.ipcServer.RegisterHandler(MsgTypeResponse, func(msg IPCMessage) error {
-		log.Printf("Received response from Python: %+v", msg.Data)
-		return nil
-	})
-
-	// Handle errors from Python
-	im.ipcServer.RegisterHandler(MsgTypeError, func(msg IPCMessage) error {
-		log.Printf("Received error from Python: %s", msg.Error)
-
-		// Log error to database
-		if im.database != nil {
-			logRecord := LogRecord{
-				Timestamp: time.Now(),
-				Level:     "error",
-				Component: "python_ipc",
-				Message:   msg.Error,
-			}
-			im.database.InsertLog(logRecord)
-		}
-
-		return nil
-	})
-
-	// Handle acknowledgments from Python
-	im.ipcServer.RegisterHandler(MsgTypeAck, func(msg IPCMessage) error {
-		log.Printf("Received ACK from Python for message: %s", msg.ID)
-		return nil
-	})
-
-	// Handle webhook events (from webhook server via Python)
-	im.ipcServer.RegisterHandler(MsgTypeWebhookEvent, func(msg IPCMessage) error {
-		log.Printf("Webhook event received: %+v", msg.Data)
-
-		// Log webhook event to database
-		if im.database != nil {
-			logRecord := LogRecord{
-				Timestamp: time.Now(),
-				Level:     "info",
-				Component: "webhook",
-				Message:   fmt.Sprintf("Webhook event: %v", msg.Data),
-			}
-			im.database.InsertLog(logRecord)
-		}
-
-		return nil
-	})
-
-	// Handle external updates (from bidirectional sync)
-	im.ipcServer.RegisterHandler(MsgTypeExternalUpdate, func(msg IPCMessage) error {
-		log.Printf("External update received: %+v", msg.Data)
-
-		// Log external update to database
-		if im.database != nil {
-			logRecord := LogRecord{
-				Timestamp: time.Now(),
-				Level:     "info",
-				Component: "external_sync",
-				Message:   fmt.Sprintf("External update: %v", msg.Data),
-			}
-			im.database.InsertLog(logRecord)
-		}
-
-		return nil
-	})
-
-	// Handle workspace reload requests
-	im.ipcServer.RegisterHandler(MsgTypeWorkspaceReload, func(msg IPCMessage) error {
-		log.Println("Workspace reload requested")
-
-		newCfg, err := LoadWorkspacesConfig()
+	var newMonitors []*WorkspaceMonitor
+	for _, ws := range newCfg.GetEnabledWorkspaces() {
+		gm, err := NewGitMonitor(ws.Path)
 		if err != nil {
-			log.Printf("Failed to reload workspaces.yaml: %v", err)
-			return nil
+			log.Printf("Warning: skipping workspace %q (%s) on reload: %v", ws.Name, ws.Path, err)
+			continue
 		}
+		newMonitors = append(newMonitors, &WorkspaceMonitor{
+			gitMonitor:      gm,
+			workspaceName:   ws.Name,
+			pmPlatform:      ws.PMPlatform,
+			pmProject:       ws.PMProject,
+			pmAssignee:      ws.PMAssignee,
+			pmIterationPath: ws.PMIterationPath,
+			pmAreaPath:      ws.PMAreaPath,
+			pmMilestone:     ws.PMMilestone,
+		})
+	}
+	im.workspaceMonitors = newMonitors
 
-		if newCfg == nil {
-			log.Println("workspaces.yaml removed — single-repo mode will be active on restart")
-			return nil
+	for _, wsMon := range im.workspaceMonitors {
+		wsCopy := wsMon
+		if err := wsCopy.gitMonitor.Start(func(commit CommitInfo) {
+			im.handleCommitForWorkspace(commit, wsCopy)
+		}); err != nil {
+			log.Printf("Warning: failed to start git monitor for %q on reload: %v", wsCopy.workspaceName, err)
 		}
-
-		for _, ws := range im.workspaceMonitors {
-			if ws.gitMonitor != nil {
-				ws.gitMonitor.Stop()
-			}
-		}
-
-		var newMonitors []*WorkspaceMonitor
-		for _, ws := range newCfg.GetEnabledWorkspaces() {
-			gm, err := NewGitMonitor(ws.Path)
-			if err != nil {
-				log.Printf("Warning: skipping workspace %q (%s) on reload: %v", ws.Name, ws.Path, err)
-				continue
-			}
-			wsMon := &WorkspaceMonitor{
-				gitMonitor:      gm,
-				workspaceName:   ws.Name,
-				pmPlatform:      ws.PMPlatform,
-				pmProject:       ws.PMProject,
-				pmAssignee:      ws.PMAssignee,
-				pmIterationPath: ws.PMIterationPath,
-				pmAreaPath:      ws.PMAreaPath,
-				pmMilestone:     ws.PMMilestone,
-			}
-			newMonitors = append(newMonitors, wsMon)
-		}
-
-		im.workspaceMonitors = newMonitors
-
-		for _, wsMon := range im.workspaceMonitors {
-			wsCopy := wsMon
-			if err := wsCopy.gitMonitor.Start(func(commit CommitInfo) {
-				im.handleCommitForWorkspace(commit, wsCopy)
-			}); err != nil {
-				log.Printf("Warning: failed to start git monitor for %q on reload: %v", wsCopy.workspaceName, err)
-			}
-		}
-
-		log.Printf("Workspace reload complete: %d workspace(s) active", len(im.workspaceMonitors))
-		return nil
-	})
+	}
+	log.Printf("Workspace reload complete: %d workspace(s) active", len(im.workspaceMonitors))
 }
 
 // Helper functions to extract values from map[string]interface{}
@@ -402,8 +259,11 @@ func (im *IntegratedMonitor) handleTrigger(event TriggerEvent) {
 	fmt.Printf("Timestamp: %s\n", event.Timestamp.Format(time.RFC1123))
 	fmt.Printf("Source:    %s\n", event.Source)
 
-	var ipcMsg IPCMessage
 	var triggerRecord TriggerRecord
+
+	// Typed payload vars — populated inside the switch, sent via HTTP
+	var commitData *CommitTriggerData
+	var timerData *TimerTriggerData
 
 	switch event.Type {
 	case TriggerTypeCommit:
@@ -418,8 +278,7 @@ func (im *IntegratedMonitor) handleTrigger(event TriggerEvent) {
 				fmt.Printf("Workspace: %s (%s)\n", event.WorkspaceName, event.PMPlatform)
 			}
 
-			// Create IPC message for commit trigger
-			ipcMsg = CreateCommitTriggerMessage(CommitTriggerData{
+			cd := CommitTriggerData{
 				RepoPath:        event.RepoPath,
 				CommitHash:      commit.Hash,
 				CommitMessage:   commit.Message,
@@ -434,9 +293,9 @@ func (im *IntegratedMonitor) handleTrigger(event TriggerEvent) {
 				PMIterationPath: event.PMIterationPath,
 				PMAreaPath:      event.PMAreaPath,
 				PMMilestone:     event.PMMilestone,
-			})
+			}
+			commitData = &cd
 
-			// Prepare database record
 			triggerRecord = TriggerRecord{
 				TriggerType:   "commit",
 				Timestamp:     event.Timestamp,
@@ -458,14 +317,13 @@ func (im *IntegratedMonitor) handleTrigger(event TriggerEvent) {
 				fmt.Printf("Interval:   %d minutes\n", interval)
 			}
 
-			// Create IPC message for timer trigger
 			triggerCount := 0
 			intervalMins := im.config.Settings.PromptInterval
 			if count, ok := data["trigger_count"].(int); ok {
 				triggerCount = count
 			}
 
-			timerData := TimerTriggerData{
+			td := TimerTriggerData{
 				Timestamp:    event.Timestamp.Format(time.RFC3339),
 				IntervalMins: intervalMins,
 				TriggerCount: triggerCount,
@@ -475,18 +333,17 @@ func (im *IntegratedMonitor) handleTrigger(event TriggerEvent) {
 			lastWS := im.lastActiveWorkspace
 			im.lastActiveWorkspaceMu.Unlock()
 			if lastWS != nil {
-				timerData.WorkspaceName   = lastWS.workspaceName
-				timerData.PMPlatform      = lastWS.pmPlatform
-				timerData.PMProject       = lastWS.pmProject
-				timerData.PMAssignee      = lastWS.pmAssignee
-				timerData.PMIterationPath = lastWS.pmIterationPath
-				timerData.PMAreaPath      = lastWS.pmAreaPath
-				timerData.PMMilestone     = lastWS.pmMilestone
+				td.WorkspaceName   = lastWS.workspaceName
+				td.PMPlatform      = lastWS.pmPlatform
+				td.PMProject       = lastWS.pmProject
+				td.PMAssignee      = lastWS.pmAssignee
+				td.PMIterationPath = lastWS.pmIterationPath
+				td.PMAreaPath      = lastWS.pmAreaPath
+				td.PMMilestone     = lastWS.pmMilestone
 			}
 
-			ipcMsg = CreateTimerTriggerMessage(timerData)
+			timerData = &td
 
-			// Prepare database record
 			triggerRecord = TriggerRecord{
 				TriggerType: "timer",
 				Timestamp:   event.Timestamp,
@@ -506,32 +363,25 @@ func (im *IntegratedMonitor) handleTrigger(event TriggerEvent) {
 		}
 	}
 
-	// Send IPC message to Python (with store-and-forward)
-	if im.messageQueue != nil {
-		if err := im.messageQueue.SendOrQueue(ipcMsg); err != nil {
-			log.Printf("Failed to send/queue IPC message: %v", err)
-		} else if im.ipcServer.HasClients() {
-			log.Println("✓ Sent trigger to Python via IPC")
-		} else {
-			log.Println("✓ Trigger queued for delivery when Python reconnects")
-		}
-	} else if im.ipcServer != nil {
-		if err := im.ipcServer.SendMessage(ipcMsg); err != nil {
-			log.Printf("Failed to send IPC message: %v", err)
-		} else {
-			log.Println("✓ Sent trigger to Python via IPC")
-		}
+	// Route trigger to Python backend via HTTPS POST (CS-1: always HTTP).
+	httpClient := NewHTTPTriggerClient()
+	var sendErr error
+	switch {
+	case commitData != nil:
+		sendErr = httpClient.SendCommitTrigger(*commitData)
+	case timerData != nil:
+		sendErr = httpClient.SendTimerTrigger(*timerData)
+	}
+	if sendErr != nil {
+		log.Printf("Warning: HTTP trigger failed (%v) — trigger not delivered", sendErr)
 	}
 
 	fmt.Println()
 	fmt.Println("📝 What happens next:")
-	fmt.Println("   1. Python receives trigger via IPC")
-	fmt.Println("   2. Prompt user: 'What did you work on?'")
-	fmt.Println("   3. Parse text with NLP (spaCy)")
-	fmt.Println("   4. Match to existing tasks (semantic matching)")
-	fmt.Println("   5. Update Azure DevOps / GitHub / JIRA")
-	fmt.Println("   6. Logged to SQLite database ✓")
-	fmt.Println("   7. Generate email report at EOD")
+	fmt.Println("   1. Python server receives trigger via HTTPS")
+	fmt.Println("   2. NLP parse → PM sync (Azure / GitHub / GitLab / Jira)")
+	fmt.Println("   3. Timer triggers → Telegram prompt sent to developer")
+	fmt.Println("   4. Logged to SQLite database ✓")
 	fmt.Println()
 	fmt.Println("⏳ Waiting for next event...")
 	fmt.Println()

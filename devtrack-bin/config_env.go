@@ -682,12 +682,18 @@ func GetLearningDefaultDays() int {
 }
 
 func GetDevTrackVersion() string {
+	// Prefer ldflags-injected version (set by GoReleaser at build time)
+	if Version != "dev" {
+		return Version
+	}
 	config, err := LoadEnvConfig()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "ERROR: Failed to load configuration: %v\n", err)
-		os.Exit(1)
+		return Version // return "dev" rather than crashing
 	}
-	return config.DevTrackVersion
+	if config.DevTrackVersion != "" {
+		return config.DevTrackVersion
+	}
+	return Version
 }
 
 func GetDevTrackBuildDate() string {
@@ -861,6 +867,12 @@ func GetDeferredCommitExpiryHours() int {
 // IsTelegramEnabled returns whether the Telegram bot is enabled
 func IsTelegramEnabled() bool {
 	val := os.Getenv("TELEGRAM_ENABLED")
+	return strings.EqualFold(val, "true") || val == "1"
+}
+
+// IsSlackEnabled returns whether the Slack bot is enabled
+func IsSlackEnabled() bool {
+	val := os.Getenv("SLACK_ENABLED")
 	return strings.EqualFold(val, "true") || val == "1"
 }
 

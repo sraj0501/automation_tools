@@ -423,3 +423,157 @@ class AzureDevOpsClient:
             logger.info(f"Added comment to work item #{work_item_id}")
             return True
         return False
+
+    # -- team & capacity operations (project planning) ----------------------
+
+    async def list_team_members(
+        self,
+        project: Optional[str] = None,
+        team: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """List members of a project team.
+
+        Returns a list of dicts with keys: id, displayName, uniqueName (email).
+        Uses GET _apis/projects/{project}/teams/{team}/members.
+        If team is None, fetches the default team for the project.
+        """
+        proj = project or self._project
+        if not proj:
+            logger.warning("list_team_members: no project configured")
+            return []
+
+        # Resolve default team name if not provided
+        if not team:
+            proj_data = await self._get(self._org_url(f"_apis/projects/{proj}"))
+            if proj_data:
+                default_team = proj_data.get("defaultTeam", {})
+                team = default_team.get("name", proj + " Team")
+            else:
+                team = proj + " Team"
+
+        url = self._org_url(f"_apis/projects/{proj}/teams/{team}/members")
+        data = await self._get(url)
+        if not data:
+            return []
+        members = []
+        for m in data.get("value", []):
+            identity = m.get("identity", m)
+            members.append({
+                "id": identity.get("id", ""),
+                "displayName": identity.get("displayName", ""),
+                "uniqueName": identity.get("uniqueName", ""),  # email
+            })
+        return members
+
+    async def get_work_items_for_user(
+        self,
+        user_email: str,
+        max_results: int = 100,
+    ) -> List[AzureWorkItem]:
+        """Fetch active work items assigned to a specific user (by email/UPN).
+
+        Uses WIQL: AssignedTo = '{user_email}' AND State NOT IN (Done, Resolved, Closed).
+        """
+        safe_email = user_email.replace("'", "''")
+        wiql = (
+            f"SELECT [System.Id] FROM WorkItems "
+            f"WHERE [System.AssignedTo] = '{safe_email}' "
+            f"AND [System.State] NOT IN ('Done', 'Resolved', 'Closed', 'Removed') "
+            f"ORDER BY [System.ChangedDate] DESC"
+        )
+        url = self._project_url("_apis/wit/wiql")
+        data = await self._post(url, json_body={"query": wiql, "$top": max_results})
+        if not data:
+            return []
+        ids = [item["id"] for item in data.get("workItems", [])]
+        if not ids:
+            return []
+        return await self.get_work_items_batch(ids[:max_results])
+
+    async def create_iteration(
+        self,
+        name: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        project: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Create a new iteration (sprint) in the project classification nodes.
+
+        Args:
+            name: Sprint name (e.g. "Sprint 1").
+            start_date: ISO date string "YYYY-MM-DD".
+            end_date: ISO date string "YYYY-MM-DD".
+            project: Project name override.
+
+        Returns the created iteration dict or None on failure.
+        """
+        proj = project or self._project
+        if not proj:
+            logger.warning("create_iteration: no project configured")
+            return None
+
+        body: Dict[str, Any] = {"name": name}
+        if start_date or end_date:
+            body["attributes"] = {}
+            if start_date:
+                body["attributes"]["startDate"] = f"{start_date}T00:00:00Z"
+            if end_date:
+                body["attributes"]["finishDate"] = f"{end_date}T00:00:00Z"
+
+        url = self._org_url(f"_apis/wit/classificationNodes/{proj}/iterations")
+        data = await self._post(url, json_body=body)
+        if data:
+            logger.info(f"Created iteration '{name}' in project '{proj}'")
+        return data
+
+    async def create_work_item_with_story_points(
+        self,
+        title: str,
+        story_points: Optional[float] = None,
+        description: str = "",
+        work_item_type: str = "Task",
+        parent_id: Optional[int] = None,
+        area_path: Optional[str] = None,
+        iteration_path: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        assigned_to: Optional[str] = None,
+    ) -> Optional[AzureWorkItem]:
+        """Create a work item with optional story points field."""
+        operations: List[Dict[str, Any]] = [
+            {"op": "add", "path": "/fields/System.Title", "value": title},
+        ]
+        if description:
+            operations.append({"op": "add", "path": "/fields/System.Description", "value": description})
+        if area_path:
+            operations.append({"op": "add", "path": "/fields/System.AreaPath", "value": area_path})
+        if iteration_path:
+            operations.append({"op": "add", "path": "/fields/System.IterationPath", "value": iteration_path})
+        if tags:
+            operations.append({"op": "add", "path": "/fields/System.Tags", "value": "; ".join(tags)})
+        if assigned_to:
+            operations.append({"op": "add", "path": "/fields/System.AssignedTo", "value": assigned_to})
+        if story_points is not None:
+            operations.append({
+                "op": "add",
+                "path": "/fields/Microsoft.VSTS.Scheduling.StoryPoints",
+                "value": story_points,
+            })
+        if parent_id is not None:
+            parent_url = f"{self.BASE_URL}/{self._org}/_apis/wit/workitems/{parent_id}"
+            operations.append({
+                "op": "add",
+                "path": "/relations/-",
+                "value": {
+                    "rel": "System.LinkTypes.Hierarchy-Reverse",
+                    "url": parent_url,
+                },
+            })
+
+        safe_type = work_item_type.replace(" ", "%20")
+        url = self._project_url(f"_apis/wit/workitems/${safe_type}")
+        data = await self._post(url, json_body=operations, content_type="application/json-patch+json")
+        if data:
+            wi = self._parse_work_item(data)
+            logger.info(f"Created work item #{wi.id} ({story_points} pts): {title}")
+            return wi
+        return None

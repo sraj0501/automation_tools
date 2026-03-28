@@ -104,19 +104,14 @@ class PersonalizedAI:
         
         self.data_dir = data_dir
         os.makedirs(self.data_dir, exist_ok=True)
-        
-        # Storage files
-        self.samples_file = os.path.join(data_dir, "communication_samples.jsonl")
-        self.profile_file = os.path.join(data_dir, "user_profile.json")
-        self.consent_file = os.path.join(data_dir, "consent.json")
-        
+
         # Load existing data
         self.samples: List[CommunicationSample] = []
         self.profile: Optional[UserProfile] = None
         self.consent_given = self._check_consent()
-        # When True, skip JSONL file writes (MongoDB is the primary store)
+        # When True, skip SQLite sample writes (MongoDB is the primary store)
         self._mongo_mode: bool = False
-        
+
         if self.consent_given:
             self._load_samples()
             self._load_profile()
@@ -126,15 +121,12 @@ class PersonalizedAI:
         logger.info(f"Samples loaded: {len(self.samples)}")
     
     def _check_consent(self) -> bool:
-        """Check if user has given explicit consent"""
-        if not os.path.exists(self.consent_file):
-            return False
-        
+        """Check if user has given explicit consent."""
         try:
-            with open(self.consent_file, 'r') as f:
-                consent = json.load(f)
-                return consent.get('consent_given', False)
-        except:
+            from backend.db.learning_store import load_consent
+            record = load_consent(self.user_email)
+            return bool(record and record.get("consent_given"))
+        except Exception:
             return False
     
     def request_consent(self) -> bool:
@@ -172,25 +164,17 @@ class PersonalizedAI:
         response = input("Do you consent to this data collection and learning? (yes/no): ").strip().lower()
         
         if response in ['yes', 'y']:
-            consent_data = {
-                'consent_given': True,
-                'timestamp': datetime.now().isoformat(),
-                'user_email': self.user_email,
-                'version': '1.0',
-                'features': [
-                    'communication_learning',
-                    'style_analysis',
-                    'response_suggestions'
-                ]
-            }
-            
-            with open(self.consent_file, 'w') as f:
-                json.dump(consent_data, f, indent=2)
-            
+            from backend.db.learning_store import save_consent
+            save_consent(
+                user_email=self.user_email,
+                consent_given=True,
+                version="1.0",
+                features=["communication_learning", "style_analysis", "response_suggestions"],
+            )
             self.consent_given = True
             print()
             print("✅ Consent recorded. The AI will now start learning from your communications.")
-            print(f"   Data stored in: {self.data_dir}")
+            print(f"   Data stored in: devtrack.db (learning_consent table)")
             print()
             return True
         else:
@@ -211,10 +195,15 @@ class PersonalizedAI:
         delete = input("Do you want to DELETE all collected data? (yes/no): ").strip().lower()
         
         if delete in ['yes', 'y']:
-            # Delete all data
-            for file in [self.samples_file, self.profile_file, self.consent_file]:
-                if os.path.exists(file):
-                    os.remove(file)
+            # Delete all data from SQLite
+            try:
+                from backend.db.learning_store import (
+                    delete_all_samples, delete_consent_and_profile
+                )
+                delete_all_samples(self.user_email)
+                delete_consent_and_profile(self.user_email)
+            except Exception:
+                pass
 
             # Wipe RAG vector store
             try:
@@ -230,81 +219,93 @@ class PersonalizedAI:
             print("✅ Consent revoked and all data deleted.")
         else:
             # Just revoke consent, keep data
-            consent_data = {
-                'consent_given': False,
-                'revoked_at': datetime.now().isoformat(),
-                'user_email': self.user_email
-            }
-            
-            with open(self.consent_file, 'w') as f:
-                json.dump(consent_data, f, indent=2)
-            
+            from backend.db.learning_store import save_consent
+            save_consent(user_email=self.user_email, consent_given=False)
             self.consent_given = False
             print("✅ Consent revoked. Data preserved but AI learning disabled.")
     
     def _load_samples(self):
-        """Load communication samples from disk"""
-        if not os.path.exists(self.samples_file):
-            return
-        
+        """Load communication samples from SQLite."""
         try:
-            with open(self.samples_file, 'r') as f:
-                for line in f:
-                    if line.strip():
-                        data = json.loads(line)
-                        data['timestamp'] = datetime.fromisoformat(data['timestamp'])
-                        sample = CommunicationSample(**data)
-                        self.samples.append(sample)
-            
+            from backend.db.learning_store import load_samples
+            rows = load_samples(self.user_email, limit=2000)
+            for row in rows:
+                try:
+                    ts = datetime.fromisoformat(row["timestamp"]) if row.get("timestamp") else datetime.now()
+                    sample = CommunicationSample(
+                        id=row["sample_id"],
+                        source=row["source"],
+                        timestamp=ts,
+                        context_type=row["context_type"],
+                        trigger=row["trigger_text"],
+                        response=row["response_text"],
+                        metadata=row.get("metadata") or {},
+                    )
+                    self.samples.append(sample)
+                except Exception:
+                    continue
             logger.info(f"Loaded {len(self.samples)} communication samples")
         except Exception as e:
             logger.error(f"Error loading samples: {e}")
     
     def _load_profile(self):
-        """Load user profile from disk"""
-        if not os.path.exists(self.profile_file):
-            return
-        
+        """Load user profile from SQLite."""
         try:
-            with open(self.profile_file, 'r') as f:
-                data = json.load(f)
-                data['last_updated'] = datetime.fromisoformat(data['last_updated'])
-                
-                # Convert response_patterns back to objects
-                patterns = {}
-                for key, pattern_data in data.get('response_patterns', {}).items():
-                    patterns[key] = CommunicationPattern(**pattern_data)
-                data['response_patterns'] = patterns
-                
-                self.profile = UserProfile(**data)
-            
+            from backend.db.learning_store import load_profile
+            data = load_profile(self.user_email)
+            if not data:
+                return
+            data['last_updated'] = datetime.fromisoformat(
+                data.get('last_updated') or data.get('_last_updated') or datetime.now().isoformat()
+            )
+            # Convert response_patterns back to objects
+            patterns = {}
+            for key, pattern_data in data.get('response_patterns', {}).items():
+                patterns[key] = CommunicationPattern(**pattern_data)
+            data['response_patterns'] = patterns
+            # Remove internal keys before unpacking
+            for k in list(data):
+                if k.startswith('_'):
+                    del data[k]
+            self.profile = UserProfile(**data)
             logger.info(f"Loaded user profile: {self.profile.total_samples} samples analyzed")
         except Exception as e:
             logger.error(f"Error loading profile: {e}")
     
     def _save_sample(self, sample: CommunicationSample):
-        """Save a communication sample to file (skipped in MongoDB mode)."""
+        """Save a communication sample to SQLite (skipped in MongoDB mode)."""
         if self._mongo_mode:
             return
-        with open(self.samples_file, 'a') as f:
-            f.write(json.dumps(sample.to_dict()) + '\n')
+        try:
+            from backend.db.learning_store import save_sample
+            save_sample(
+                sample_id=sample.id,
+                user_email=self.user_email,
+                source=sample.source,
+                timestamp=sample.timestamp.isoformat(),
+                context_type=sample.context_type,
+                trigger_text=sample.trigger,
+                response_text=sample.response,
+                metadata=sample.metadata or {},
+            )
+        except Exception as e:
+            logger.error(f"Error saving sample to DB: {e}")
     
     def _save_profile(self):
-        """Save user profile to file (skipped in MongoDB mode)."""
+        """Save user profile to SQLite (skipped in MongoDB mode)."""
         if self._mongo_mode or not self.profile:
             return
-        
-        profile_data = asdict(self.profile)
-        profile_data['last_updated'] = self.profile.last_updated.isoformat()
-        
-        # Convert CommunicationPattern objects
-        patterns = {}
-        for key, pattern in self.profile.response_patterns.items():
-            patterns[key] = asdict(pattern)
-        profile_data['response_patterns'] = patterns
-        
-        with open(self.profile_file, 'w') as f:
-            json.dump(profile_data, f, indent=2)
+        try:
+            from backend.db.learning_store import save_profile
+            profile_data = asdict(self.profile)
+            profile_data['last_updated'] = self.profile.last_updated.isoformat()
+            patterns = {}
+            for key, pattern in self.profile.response_patterns.items():
+                patterns[key] = asdict(pattern)
+            profile_data['response_patterns'] = patterns
+            save_profile(self.user_email, profile_data, total_samples=self.profile.total_samples)
+        except Exception as e:
+            logger.error(f"Error saving profile to DB: {e}")
     
     def add_communication_sample(
         self,

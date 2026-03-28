@@ -20,10 +20,19 @@ workspaces:
     tags: ["personal"]
 
   # Repo you want monitored but NOT synced to any PM tool
-  - name: "social_media_microservices"
-    path: "/Users/sraj/git_apps/personal/social_media_app/social_media_microserv"
+  - name: "better_logger"
+    path: "/Users/sraj/git_apps/personal/better_logger"
     pm_platform: "none"
     pm_project: ""
     enabled: true
     ignore_branches: []
     tags: ["personal"]
+
+  # Demo project (created by demo/setup.sh)
+  - name: "devtrack-demo"
+    path: "/Users/sraj/git_apps/personal/devtrack-demo"
+    pm_platform: "github"
+    pm_project: "projects/1"
+    enabled: true
+    ignore_branches: []
+    tags: ["demo"]

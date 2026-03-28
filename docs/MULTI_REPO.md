@@ -107,7 +107,7 @@ workspaces:
 | `azure` | Azure DevOps | Uses `AZURE_DEVOPS_ORG`, `AZURE_DEVOPS_PROJECT` from `.env` |
 | `gitlab` | GitLab | Uses `GITLAB_PROJECT_ID` from `.env` unless `pm_project` is set |
 | `github` | GitHub | Uses `GITHUB_OWNER`/`GITHUB_REPO` from `.env` |
-| `jira` | Jira | Not yet implemented |
+| `jira` | Jira | Uses `JIRA_URL`, `JIRA_USERNAME`, `JIRA_API_TOKEN` from `.env` |
 | `none` | — | Monitoring active, PM sync disabled for this repo |
 | `` (empty) | Priority chain | Falls back to Azure → GitLab → GitHub (single-repo behavior) |
 

@@ -546,24 +546,24 @@ Cron runs at `LEARNING_CRON_SCHEDULE` (default `0 20 * * *`) via `backend/run_da
 - Check git repo is valid and on a feature branch
 - Review logs: `tail -f Data/logs/python_bridge.log | grep "context"`
 
-## Ticket Alerter (Planned Feature)
+## Ticket Alerter
 
 ### Overview
 
-A background polling service that watches Jira, Azure DevOps, and GitHub for ticket events relevant to the developer, delivering OS/terminal notifications and persisting them to MongoDB.
+A background polling service that watches GitHub and Azure DevOps for ticket events relevant to the developer, delivering OS/terminal notifications and persisting them to MongoDB. Jira support is planned.
 
-### Events to Watch
+### Events by Source
 
-| Source | Events |
-|---|---|
-| Jira | Assigned to me, comment added, status changed, priority changed |
-| Azure DevOps | Work item assigned, comment added, state changed |
-| GitHub | Issue/PR assigned, review requested, comment on my PR |
+| Source | Events | Status |
+|---|---|---|
+| GitHub | Issue/PR assigned, review requested, comment on involved issue | ✅ Shipped |
+| Azure DevOps | Work item assigned, comment added, state changed | ✅ Shipped |
+| Jira | Assigned to me, comment added, status changed, priority changed | Planned |
 
 ### Notification Delivery
 
-- **macOS OS notification**: `osascript -e 'display notification ...'` or `terminal-notifier` (richer, with actions)
-- **Terminal**: Bell + formatted output when devtrack is in foreground
+- **macOS OS notification**: `osascript -e 'display notification ...'`
+- **Terminal**: formatted output when devtrack is in foreground
 - **Configurable per-source**: opt in/out of each integration and event type via `.env`
 
 ### MongoDB Schema
@@ -571,9 +571,9 @@ A background polling service that watches Jira, Azure DevOps, and GitHub for tic
 ```
 notifications collection:
   _id: ObjectId
-  source: "jira" | "azure" | "github"
+  source: "github" | "azure"
   event_type: "assigned" | "comment" | "status_change" | "review_requested"
-  ticket_id: "PROJ-123"
+  ticket_id: "org#123" | "owner/repo#456"
   title: "Fix login bug"
   summary: "John commented: ..."
   url: "https://..."
@@ -583,65 +583,65 @@ notifications collection:
   raw: { ...full API payload... }
 ```
 
-### CLI Commands (Planned)
+### CLI Commands
 
 ```bash
 devtrack alerts                   # Show unread notifications (last 24h)
 devtrack alerts --all             # Show all notifications
 devtrack alerts --clear           # Mark all as read
-devtrack alerts --pause           # Pause polling
-devtrack alerts --resume          # Resume polling
 ```
 
 ### Architecture
 
 ```
 Poller (Python, async)
-  ├── JiraPoller      — REST API, polls every ALERT_POLL_INTERVAL_SECS
-  ├── AzurePoller     — Azure DevOps REST API
-  └── GitHubPoller    — GitHub REST API (or webhooks if hosted)
+  ├── AzureAlerter    — Azure DevOps REST API (work item updates + comments APIs)
+  └── GitHubAlerter   — GitHub REST API
           │
           ▼
   MongoDB notifications collection
           │
           ▼
   Notifier
-    ├── macOS: osascript / terminal-notifier
+    ├── macOS: osascript
     └── Terminal: print to stdout if TTY attached
 ```
 
-**Polling**: Run as part of the existing Go daemon — a new `alert_poller.go` that spawns `backend/alert_poller.py` via the IPC bridge, similar to how the scheduler works.
+**Polling**: `backend/alert_poller.py` runs as a subprocess launched by the Go daemon. Each source tracks `last_checked` per user in the MongoDB `alert_state` collection.
 
-**State tracking**: Each integration stores `last_checked` timestamp (like learning delta) in MongoDB `alert_state` collection keyed by `source`.
+**Azure alerter detail** (`backend/alerters/azure_alerter.py`):
+- Uses `AzureDevOpsClient.get_my_work_items(changed_after=last_checked)` for delta fetches
+- Per-item updates API (`_apis/wit/workitems/{id}/updates`) classifies assigned vs state-change events
+- Per-item comments API (`_apis/wit/workItems/{id}/comments?api-version=7.1-preview.3`) for new comments
+- Skips own comments via `AZURE_EMAIL` / `EMAIL` env var (falls back to Azure profile API)
+- First-run guard: assigned + state-change polls skip silently when `last_checked` is None
 
-### Configuration (`.env` keys to add)
+### Configuration
 
 ```
 ALERT_ENABLED=true
 ALERT_POLL_INTERVAL_SECS=300        # Poll every 5 minutes
-ALERT_JIRA_ENABLED=true
-ALERT_AZURE_ENABLED=true
 ALERT_GITHUB_ENABLED=true
+ALERT_AZURE_ENABLED=true
 ALERT_NOTIFY_ASSIGNED=true
 ALERT_NOTIFY_COMMENTS=true
 ALERT_NOTIFY_STATUS_CHANGES=true
+ALERT_NOTIFY_REVIEW_REQUESTED=true  # GitHub only
+# Optional: filter own Azure comments
+# AZURE_EMAIL=you@yourorg.com
 ```
 
-### Implementation Files (To Create)
+### Implementation Files
 
 ```
 backend/
-  ├── alert_poller.py         — Main async poller, coordinates all sources
-  ├── alert_notifier.py       — OS + terminal notification delivery
+  ├── alert_poller.py         — Main async poller; _poll_github() + _poll_azure()
+  ├── alert_notifier.py       — macOS osascript + terminal notifications
   ├── alerters/
-  │   ├── jira_alerter.py     — Jira polling logic
-  │   ├── azure_alerter.py    — Azure DevOps polling logic
-  │   └── github_alerter.py   — GitHub polling logic
-  └── db/mongo_alerts.py      — MongoAlertsStore (notifications + alert_state)
-
-devtrack-bin/
-  ├── alert_poller.go         — Launches alert_poller.py, manages lifecycle
-  └── cli_alerts.go           — `devtrack alerts` CLI commands
+  │   ├── github_alerter.py   — GitHub assigned/comments/review-requests ✅
+  │   ├── azure_alerter.py    — Azure DevOps assigned/comments/state-changes ✅
+  │   └── jira_alerter.py     — Jira polling logic (planned)
+  └── db/mongo_alerts.py      — MongoAlertsStore: notifications + alert_state collections
 ```
 
 ---

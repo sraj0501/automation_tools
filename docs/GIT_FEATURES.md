@@ -22,9 +22,13 @@ The biggest friction with DevTrack's git features is remembering to type `devtra
 
 ### One-Time Setup
 
-Add to `~/.zshrc` or `~/.bashrc`:
+Add the `devtrack` binary to your `PATH` and then add one line to `~/.zshrc` (or `~/.bashrc`):
 
 ```bash
+# 1. Add the binary to PATH (if not already on it)
+export PATH="$HOME/.local/bin:$PATH"
+
+# 2. Install the git() interceptor
 eval "$(devtrack shell-init)"
 ```
 
@@ -34,12 +38,9 @@ Reload your shell:
 source ~/.zshrc    # or ~/.bashrc
 ```
 
-That single line installs **two** shell functions:
+That `eval` installs a **`git()`** shell function that intercepts `git commit`, `git history`, and `git messages` for DevTrack workspaces. Everything else (`git push`, `git pull`, `git status`, …) is passed straight through to the real git binary — completely unaffected.
 
-- **`git()`** — intercepts `git commit`, `git history`, and `git messages` for DevTrack workspaces.
-- **`devtrack()`** — a thin wrapper around the binary that automatically re-evals `shell-init` after `devtrack start`, `devtrack restart`, or `devtrack enable-git`, keeping the `git()` function up to date without any manual steps.
-
-After the one-time `eval`, the setup is **self-maintaining**: running `devtrack restart` (e.g. after rebuilding the binary) silently refreshes the shell functions in the current session. No need to open a new terminal or re-run `eval "$(devtrack shell-init)"` again.
+> **Note on the devtrack() wrapper:** Earlier versions of `shell-init` also installed a `devtrack()` wrapper function. This wrapper has been removed to avoid a zsh alias conflict. The binary is now called directly by name; make sure it is on your `PATH` as shown above.
 
 ### Opt Repos In
 
@@ -53,6 +54,8 @@ devtrack enable-git
 This sets `devtrack.enabled = true` in the repo's `.git/config`. From now on `git commit` in that repo goes through DevTrack.
 
 To undo: `devtrack disable-git`
+
+> **Auto enable-git on start:** When you run `devtrack start`, DevTrack automatically sets `devtrack.enabled = true` in the git config of all workspaces that are enabled in `workspaces.yaml`. You do not need to run `devtrack enable-git` manually for repos that are already listed there.
 
 **Option B — workspaces.yaml (automatic)**
 
@@ -69,14 +72,24 @@ If either check passes and the command is `commit`, `history`, or `messages`, th
 
 ### Bypass DevTrack for One Command
 
+Set `GIT_NO_DEVTRACK=1` to skip the interceptor for a single command:
+
 ```bash
 GIT_NO_DEVTRACK=1 git commit -m "skip devtrack this time"
 ```
 
-Or call the real git explicitly:
+Or call the real git binary directly:
 
 ```bash
 command git commit -m "message"
+```
+
+To disable interception for an entire repo permanently:
+
+```bash
+git config devtrack.enabled false
+# or
+devtrack disable-git
 ```
 
 ### After Setup

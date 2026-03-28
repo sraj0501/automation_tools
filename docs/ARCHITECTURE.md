@@ -4,6 +4,59 @@ Complete overview of DevTrack's system design, components, and data flow.
 
 ---
 
+## Client-Server Architecture
+
+DevTrack is explicitly a **client-server tool** with two independently deployable components:
+
+| Component | Technology | Size | Role |
+|---|---|---|---|
+| **`devtrack` binary** | Pure Go | ~5 MB | Client / daemon — git monitoring, scheduling, CLI |
+| **Python backend** | Python + uv | separate | Server — AI, NLP, integrations, reports, Telegram |
+
+The Go binary contains **no embedded Python**. The Python backend is set up separately and can run as a local subprocess, a Docker container, or a remote server.
+
+### Server Modes
+
+| Mode | Config | Use case |
+|---|---|---|
+| **managed** (default) | `DEVTRACK_SERVER_MODE=managed` | Local dev — daemon spawns the Python backend as a subprocess |
+| **external** | `DEVTRACK_SERVER_MODE=external` + `DEVTRACK_SERVER_URL=http://...` | Docker container or cloud-hosted Python server |
+
+```bash
+# managed mode (default — no extra config needed)
+devtrack start         # daemon starts Python bridge automatically
+
+# external mode — Python server runs separately
+DEVTRACK_SERVER_MODE=external
+DEVTRACK_SERVER_URL=http://localhost:8089
+devtrack start         # daemon connects to the external server
+```
+
+### Docker Option
+
+A `Dockerfile.server` ships with the repo to containerize the Python backend:
+
+```bash
+# Build and run the Python backend container
+docker build -f Dockerfile.server -t devtrack-server .
+docker run -p 8089:8089 --env-file .env devtrack-server
+
+# Or use docker compose (starts Python backend + MongoDB + Redis)
+docker compose up
+```
+
+The Go binary on the host then connects via `DEVTRACK_SERVER_MODE=external`.
+
+### `devtrack install`
+
+Running `devtrack install` prints setup instructions for the client-server architecture — it does **not** extract or bundle Python. Use the printed instructions to set up the Python backend in whichever mode suits your environment.
+
+### Binary Releases
+
+GitHub Releases contain only the Go binary (~5 MB, no Python). Users set up the Python backend separately following the [Installation Guide](INSTALLATION.md).
+
+---
+
 ## High-Level Architecture
 
 ```

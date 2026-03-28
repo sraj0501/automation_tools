@@ -10,7 +10,6 @@ button. On first run it seeds the seen-set silently to avoid flooding.
 """
 
 import asyncio
-import json
 import logging
 import os
 import re
@@ -49,25 +48,17 @@ logger = logging.getLogger(__name__)
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _seen_file() -> Path:
-    data_dir = os.getenv("DATA_DIR", "Data")
-    path = Path(data_dir) / "azure" / "seen_assignments.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    return path
+_PLATFORM = "azure"
 
 
 def _load_seen() -> set:
-    f = _seen_file()
-    if f.exists():
-        try:
-            return set(json.loads(f.read_text()))
-        except Exception:
-            pass
-    return set()
+    from backend.db.platform_store import load_seen_events
+    return load_seen_events(_PLATFORM)
 
 
 def _save_seen(seen: set) -> None:
-    _seen_file().write_text(json.dumps(sorted(seen)))
+    from backend.db.platform_store import mark_events_seen
+    mark_events_seen(_PLATFORM, {str(k) for k in seen})
 
 
 def _h(text: str) -> str:

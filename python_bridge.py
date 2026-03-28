@@ -177,6 +177,24 @@ except ImportError as e:
     workspace_router_available = False
     WorkspaceRouter = None
 
+# Import runtime-narrative for structured observability (graceful degradation)
+try:
+    from runtime_narrative import story as _story, stage as _stage
+    _narrative_available = True
+    logger.debug("runtime-narrative available: structured failure reporting enabled")
+except ImportError:
+    from contextlib import contextmanager
+
+    @contextmanager
+    def _story(name, **kwargs):
+        yield
+
+    @contextmanager
+    def _stage(name):
+        yield
+
+    _narrative_available = False
+
 
 class DevTrackBridge:
     """Main bridge between Go daemon and Python AI layer"""
@@ -363,7 +381,20 @@ class DevTrackBridge:
         # Send acknowledgment
         ack = create_ack_message(msg.id)
         self.ipc_client.send_message(ack)
-        
+
+        # Auto-link commit to active work session (non-fatal)
+        commit_hash = data.get('commit_hash', '')
+        if commit_hash:
+            try:
+                from backend.work_tracker.session_store import WorkSessionStore
+                _store = WorkSessionStore()
+                _active = _store.get_active_session()
+                if _active:
+                    _store.append_commit(_active['id'], commit_hash)
+                    logger.info(f"📎 Commit {commit_hash[:12]} linked to work session #{_active['id']}")
+            except Exception as _e:
+                logger.debug(f"Work session commit link failed (non-fatal): {_e}")
+
         # Parse commit message with NLP if available
         commit_msg = data.get('commit_message', '')
         repo_path = data.get('repo_path', '')
@@ -539,14 +570,31 @@ class DevTrackBridge:
         self.ipc_client.send_message(ack)
         
         # Phase 3 Implementation: TUI + NLP + Ollama Enhancement
-        
+
+        # Check for an active work session — pre-fill ticket and skip time prompt
+        _active_session = None
+        _session_ticket_ref = ""
+        try:
+            from backend.work_tracker.session_store import WorkSessionStore
+            _session_store = WorkSessionStore()
+            _active_session = _session_store.get_active_session()
+            if _active_session:
+                _session_ticket_ref = _active_session.get("ticket_ref") or ""
+                logger.info(f"🟢 Active work session #{_active_session['id']}"
+                            + (f" (ticket: {_session_ticket_ref})" if _session_ticket_ref else ""))
+        except Exception as _e:
+            logger.debug(f"Work session check failed (non-fatal): {_e}")
+
         # Step 1: Prompt user for work update via TUI
         user_input = None
         if self.tui:
             try:
                 context = {
                     "interval_mins": interval_mins,
-                    "trigger_count": data.get('trigger_count', 0)
+                    "trigger_count": data.get('trigger_count', 0),
+                    # When a session is active, pre-fill ticket and hide time prompt
+                    "active_session": _active_session is not None,
+                    "session_ticket_ref": _session_ticket_ref,
                 }
                 response = self.tui.prompt_work_update(context)
                 
@@ -719,6 +767,11 @@ class DevTrackBridge:
             ticket_id = parsed.ticket_id or ticket_id
             status = parsed.status or status
             time_spent = parsed.time_spent or time_spent
+
+        # Pre-fill ticket from active work session when NLP didn't extract one
+        if not ticket_id and _session_ticket_ref:
+            ticket_id = _session_ticket_ref
+            logger.info(f"📎 Ticket pre-filled from active session: {ticket_id}")
 
         # Add category prefix if enhanced
         if enhanced and enhanced.category and enhanced.category != "other":

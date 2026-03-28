@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -20,7 +22,7 @@ func NewCLI() (*CLI, error) {
 	// For status/help commands, we don't need a full daemon
 	if len(os.Args) > 1 {
 		cmd := os.Args[1]
-		if cmd == "help" || cmd == "version" || cmd == "commit-queue" || cmd == "commits" || cmd == "queue" || cmd == "telegram-status" || cmd == "azure-check" || cmd == "gitlab-check" || cmd == "github-check" || cmd == "workspace" || cmd == "shell-init" || cmd == "is-workspace" || cmd == "enable-git" || cmd == "disable-git" {
+		if cmd == "help" || cmd == "version" || cmd == "commit-queue" || cmd == "commits" || cmd == "queue" || cmd == "telegram-status" || cmd == "azure-check" || cmd == "gitlab-check" || cmd == "github-check" || cmd == "workspace" || cmd == "shell-init" || cmd == "is-workspace" || cmd == "enable-git" || cmd == "disable-git" || cmd == "launchd-install" || cmd == "launchd-uninstall" || cmd == "autostart-install" || cmd == "autostart-uninstall" || cmd == "autostart-status" || cmd == "alerts" {
 			return &CLI{}, nil
 		}
 	}
@@ -184,6 +186,24 @@ func (cli *CLI) Execute() error {
 		return cli.handleEnableGit()
 	case "disable-git":
 		return cli.handleDisableGit()
+	case "launchd-install":
+		return cli.handleLaunchdInstall()
+	case "launchd-uninstall":
+		return cli.handleLaunchdUninstall()
+	case "autostart-install":
+		return cli.handleAutostartInstall()
+	case "autostart-uninstall":
+		return cli.handleAutostartUninstall()
+	case "autostart-status":
+		return cli.handleAutostartStatus()
+	case "alerts":
+		return cli.handleAlerts()
+	case "work":
+		return cli.handleWork()
+	case "server-tui":
+		return cli.handleServerTUI()
+	case "admin-start":
+		return cli.handleAdminStart()
 	case "help":
 		cli.printUsage()
 		return nil
@@ -256,6 +276,8 @@ func (cli *CLI) handleStart() error {
 	fmt.Printf("   PID: %d\n", cmd.Process.Pid)
 	fmt.Printf("   Log: %s\n", logPath)
 	fmt.Println("\nUse 'devtrack status' to check status")
+
+	enableGitForWorkspaces()
 
 	return nil
 }
@@ -646,8 +668,9 @@ func (cli *CLI) handleLogs() error {
 // handleVersion shows version information
 func (cli *CLI) handleVersion() error {
 	fmt.Println("DevTrack - Developer Automation Tools")
-	fmt.Printf("Version: %s\n", GetDevTrackVersion())
-	fmt.Printf("Build date: %s\n", GetDevTrackBuildDate())
+	fmt.Printf("Version:    %s\n", Version)
+	fmt.Printf("Commit:     %s\n", GitCommit)
+	fmt.Printf("Built:      %s\n", BuildTime)
 	fmt.Println()
 	fmt.Println("Components:")
 	fmt.Println("  • Git monitoring (go-git)")
@@ -1452,6 +1475,54 @@ func (cli *CLI) handleGitHubView() error {
 	return nil
 }
 
+// handleAlerts shows ticket alert notifications or marks them as read.
+//
+// Usage:
+//
+//	devtrack alerts           — show unread notifications (last 24h)
+//	devtrack alerts --all     — show all notifications
+//	devtrack alerts --clear   — mark all as read
+func (cli *CLI) handleAlerts() error {
+	config, _ := LoadEnvConfig()
+	projectRoot := ""
+	if config != nil {
+		projectRoot = config.ProjectRoot
+	}
+	if projectRoot == "" {
+		projectRoot = os.Getenv("PROJECT_ROOT")
+	}
+
+	// Build uv run python -m backend.alert_poller [flags]
+	uvArgs := []string{"run", "--directory", projectRoot, "python", "-m", "backend.alert_poller"}
+
+	// Forward flags: --all, --clear (default is --show)
+	showFlag := true
+	for _, arg := range os.Args[2:] {
+		switch arg {
+		case "--all":
+			uvArgs = append(uvArgs, "--show", "--all")
+			showFlag = false
+		case "--clear":
+			uvArgs = append(uvArgs, "--clear")
+			showFlag = false
+		}
+	}
+	if showFlag {
+		uvArgs = append(uvArgs, "--show")
+	}
+
+	cmd := exec.Command("uv", uvArgs...)
+	if projectRoot != "" {
+		cmd.Dir = projectRoot
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // handleWorkspace dispatches workspace subcommands
 func (cli *CLI) handleWorkspace() error {
 	subCmd := ""
@@ -1465,14 +1536,21 @@ func (cli *CLI) handleWorkspace() error {
 		return wc.List()
 	case "add":
 		if len(os.Args) < 5 {
-			fmt.Println("Usage: devtrack workspace add <name> <path> [pm_platform]")
+			fmt.Println("Usage: devtrack workspace add <name> <path> [--pm azure|gitlab|github|jira|none]")
 			return fmt.Errorf("missing arguments")
 		}
 		name := os.Args[3]
 		path := os.Args[4]
 		pmPlatform := ""
-		if len(os.Args) > 5 {
-			pmPlatform = os.Args[5]
+		addArgs := os.Args[5:]
+		for i := 0; i < len(addArgs); i++ {
+			if addArgs[i] == "--pm" && i+1 < len(addArgs) {
+				pmPlatform = addArgs[i+1]
+				i++
+			} else if !strings.HasPrefix(addArgs[i], "--") {
+				// backwards-compatible: bare positional platform arg
+				pmPlatform = addArgs[i]
+			}
 		}
 		return wc.Add(name, path, pmPlatform)
 	case "remove":
@@ -1499,7 +1577,7 @@ func (cli *CLI) handleWorkspace() error {
 		fmt.Printf("Unknown workspace subcommand: %s\n", subCmd)
 		fmt.Println("Usage:")
 		fmt.Println("  devtrack workspace list                         List configured workspaces")
-		fmt.Println("  devtrack workspace add <name> <path> [platform] Add a workspace")
+		fmt.Println("  devtrack workspace add <name> <path> [--pm azure|gitlab|github|jira|none]  Add a workspace")
 		fmt.Println("  devtrack workspace remove <name>                Remove a workspace")
 		fmt.Println("  devtrack workspace enable <name>                Enable a workspace")
 		fmt.Println("  devtrack workspace disable <name>               Disable a workspace")
@@ -1726,6 +1804,21 @@ func (cli *CLI) handleIsWorkspace() error {
 	return nil
 }
 
+// enableGitForWorkspaces sets devtrack.enabled=true in all enabled workspaces.
+// Called automatically on `devtrack start` so users never need to run enable-git manually.
+func enableGitForWorkspaces() {
+	cfg, err := LoadWorkspacesConfig()
+	if err != nil || cfg == nil {
+		return
+	}
+	for _, ws := range cfg.GetEnabledWorkspaces() {
+		cmd := exec.Command("git", "-C", ws.Path, "config", "--local", "devtrack.enabled", "true")
+		if err := cmd.Run(); err == nil {
+			fmt.Printf("  ✓ Git integration enabled: %s\n", ws.Name)
+		}
+	}
+}
+
 // handleEnableGit sets git config devtrack.enabled=true in the current repo,
 // opting it into DevTrack shell integration without editing workspaces.yaml.
 func (cli *CLI) handleEnableGit() error {
@@ -1758,6 +1851,581 @@ func (cli *CLI) handleDisableGit() error {
 	fmt.Println("  'git commit' will use standard git (even if this repo is in workspaces.yaml).")
 	fmt.Println()
 	fmt.Println("  To re-enable: devtrack enable-git")
+	return nil
+}
+
+// launchdPlistTemplatePath returns the path to the bundled plist template.
+// It searches relative to the running binary (supports both the dev tree and
+// an installed binary whose configs dir lives beside it).
+func launchdPlistTemplatePath() (string, error) {
+	// 1. Try PROJECT_ROOT env var (set by daemon, set in .env, or by user)
+	projectRoot := os.Getenv("PROJECT_ROOT")
+	if projectRoot == "" {
+		// 2. Walk up from binary looking for Data/configs/dev.devtrack.plist
+		execPath, err := os.Executable()
+		if err != nil {
+			execPath = os.Args[0]
+		}
+		execPath, _ = filepath.Abs(execPath)
+		dir := filepath.Dir(execPath)
+		for i := 0; i < 6; i++ {
+			candidate := filepath.Join(dir, "Data", "configs", "dev.devtrack.plist")
+			if _, err := os.Stat(candidate); err == nil {
+				// dir is the project root
+				projectRoot = dir
+				break
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+	}
+	if projectRoot == "" {
+		return "", fmt.Errorf("cannot determine project root: set PROJECT_ROOT or run from the DevTrack directory")
+	}
+	tmplPath := filepath.Join(projectRoot, "Data", "configs", "dev.devtrack.plist")
+	if _, err := os.Stat(tmplPath); err != nil {
+		return "", fmt.Errorf("plist template not found at %s: %w", tmplPath, err)
+	}
+	return tmplPath, nil
+}
+
+// handleLaunchdInstall installs the launchd plist to ~/Library/LaunchAgents
+// and loads it with launchctl so DevTrack auto-starts on login.
+func (cli *CLI) handleLaunchdInstall() error {
+	// Resolve project root (used as WorkingDirectory and in env paths)
+	projectRoot := os.Getenv("PROJECT_ROOT")
+	if projectRoot == "" {
+		config, _ := LoadEnvConfig()
+		if config != nil {
+			projectRoot = config.ProjectRoot
+		}
+	}
+	if projectRoot == "" {
+		// Derive from the binary location
+		execPath, err := os.Executable()
+		if err != nil {
+			execPath = os.Args[0]
+		}
+		execPath, _ = filepath.Abs(execPath)
+		dir := filepath.Dir(execPath)
+		for i := 0; i < 6; i++ {
+			if _, err := os.Stat(filepath.Join(dir, "Data", "configs", "dev.devtrack.plist")); err == nil {
+				projectRoot = dir
+				break
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+	}
+	if projectRoot == "" {
+		return fmt.Errorf("cannot determine PROJECT_ROOT; set it in .env or as an environment variable")
+	}
+	projectRoot, _ = filepath.Abs(projectRoot)
+
+	// Resolve the DevTrack binary path
+	binaryPath, err := os.Executable()
+	if err != nil {
+		binaryPath = os.Args[0]
+	}
+	binaryPath, _ = filepath.Abs(binaryPath)
+
+	// Read the plist template
+	tmplPath, err := launchdPlistTemplatePath()
+	if err != nil {
+		return err
+	}
+	tmplData, err := os.ReadFile(tmplPath)
+	if err != nil {
+		return fmt.Errorf("failed to read plist template: %w", err)
+	}
+
+	// Substitute placeholders
+	plistContent := strings.ReplaceAll(string(tmplData), "DEVTRACK_BINARY_PLACEHOLDER", binaryPath)
+	plistContent = strings.ReplaceAll(plistContent, "PROJECT_ROOT_PLACEHOLDER", projectRoot)
+
+	// Determine destination: ~/Library/LaunchAgents/dev.devtrack.plist
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("cannot determine home directory: %w", err)
+	}
+	launchAgentsDir := filepath.Join(homeDir, "Library", "LaunchAgents")
+	if err := os.MkdirAll(launchAgentsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create LaunchAgents directory: %w", err)
+	}
+	destPath := filepath.Join(launchAgentsDir, "dev.devtrack.plist")
+
+	// Unload first if already loaded (ignore errors — it may not be loaded yet)
+	_ = exec.Command("launchctl", "unload", destPath).Run()
+
+	// Write the plist
+	if err := os.WriteFile(destPath, []byte(plistContent), 0644); err != nil {
+		return fmt.Errorf("failed to write plist to %s: %w", destPath, err)
+	}
+
+	// Load with launchctl
+	loadCmd := exec.Command("launchctl", "load", destPath)
+	loadCmd.Stdout = os.Stdout
+	loadCmd.Stderr = os.Stderr
+	if err := loadCmd.Run(); err != nil {
+		return fmt.Errorf("launchctl load failed: %w\nPlist installed at %s — load it manually with: launchctl load %s", err, destPath, destPath)
+	}
+
+	fmt.Println("DevTrack launchd service installed.")
+	fmt.Printf("  Plist:   %s\n", destPath)
+	fmt.Printf("  Binary:  %s\n", binaryPath)
+	fmt.Printf("  Root:    %s\n", projectRoot)
+	fmt.Println()
+	fmt.Println("DevTrack will now start automatically at login.")
+	fmt.Println("Use 'devtrack status' to verify it is running.")
+	fmt.Println("Use 'devtrack launchd-uninstall' to remove auto-start.")
+	return nil
+}
+
+// handleLaunchdUninstall unloads and removes the launchd plist.
+func (cli *CLI) handleLaunchdUninstall() error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("cannot determine home directory: %w", err)
+	}
+	plistPath := filepath.Join(homeDir, "Library", "LaunchAgents", "dev.devtrack.plist")
+
+	if _, err := os.Stat(plistPath); os.IsNotExist(err) {
+		fmt.Println("DevTrack launchd service is not installed.")
+		return nil
+	}
+
+	// Unload
+	unloadCmd := exec.Command("launchctl", "unload", plistPath)
+	unloadCmd.Stdout = os.Stdout
+	unloadCmd.Stderr = os.Stderr
+	if err := unloadCmd.Run(); err != nil {
+		fmt.Printf("Warning: launchctl unload returned an error: %v\n", err)
+		fmt.Println("Proceeding to remove plist anyway...")
+	}
+
+	// Remove plist
+	if err := os.Remove(plistPath); err != nil {
+		return fmt.Errorf("failed to remove plist %s: %w", plistPath, err)
+	}
+
+	fmt.Println("DevTrack launchd service removed.")
+	fmt.Printf("  Removed: %s\n", plistPath)
+	fmt.Println()
+	fmt.Println("DevTrack will no longer start automatically at login.")
+	fmt.Println("The running daemon (if any) was not stopped — use 'devtrack stop' to stop it.")
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// OS-agnostic autostart (detectOSType / handleAutostart*)
+// ---------------------------------------------------------------------------
+
+// osType enumerates the autostart mechanisms we support.
+type osType string
+
+const (
+	osDarwin      osType = "darwin"
+	osLinuxSystemd osType = "linux-systemd"
+	osWSLSystemd  osType = "wsl-systemd"
+	osWSLNoSystemd osType = "wsl-nosystemd"
+)
+
+// detectOSType returns the appropriate autostart mechanism for the current OS.
+func detectOSType() osType {
+	switch runtime.GOOS {
+	case "darwin":
+		return osDarwin
+	case "linux":
+		if isWSL() {
+			if hasSystemd() {
+				return osWSLSystemd
+			}
+			return osWSLNoSystemd
+		}
+		if hasSystemd() {
+			return osLinuxSystemd
+		}
+		// Linux without systemd — fall back to profile-based (same as WSL-nosystemd)
+		return osWSLNoSystemd
+	default:
+		return osDarwin // best guess for unknown OS
+	}
+}
+
+// isWSL returns true when running inside Windows Subsystem for Linux.
+func isWSL() bool {
+	data, err := os.ReadFile("/proc/version")
+	if err != nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(string(data)), "microsoft")
+}
+
+// hasSystemd returns true when systemd is the active init system.
+func hasSystemd() bool {
+	// Most reliable: private systemd runtime directory.
+	if _, err := os.Stat("/run/systemd/private"); err == nil {
+		return true
+	}
+	// Check PID-1 comm.
+	if data, err := os.ReadFile("/proc/1/comm"); err == nil {
+		if strings.TrimSpace(string(data)) == "systemd" {
+			return true
+		}
+	}
+	// Fall back to pidof.
+	if err := exec.Command("pidof", "systemd").Run(); err == nil {
+		return true
+	}
+	return false
+}
+
+// resolveProjectRootForAutostart returns the project root, trying PROJECT_ROOT
+// env var first and then walking up from the binary.
+func resolveProjectRootForAutostart() (string, error) {
+	projectRoot := os.Getenv("PROJECT_ROOT")
+	if projectRoot == "" {
+		config, _ := LoadEnvConfig()
+		if config != nil {
+			projectRoot = config.ProjectRoot
+		}
+	}
+	if projectRoot == "" {
+		execPath, err := os.Executable()
+		if err != nil {
+			execPath = os.Args[0]
+		}
+		execPath, _ = filepath.Abs(execPath)
+		dir := filepath.Dir(execPath)
+		for i := 0; i < 6; i++ {
+			if _, err := os.Stat(filepath.Join(dir, "Data", "configs")); err == nil {
+				projectRoot = dir
+				break
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+	}
+	if projectRoot == "" {
+		return "", fmt.Errorf("cannot determine PROJECT_ROOT; set it in .env or as an environment variable")
+	}
+	abs, _ := filepath.Abs(projectRoot)
+	return abs, nil
+}
+
+// installSystemdService writes the unit file and enables + starts it.
+func installSystemdService(projectRoot, binaryPath, envFilePath string) error {
+	tmplPath := filepath.Join(projectRoot, "Data", "configs", "dev.devtrack.service")
+	tmplData, err := os.ReadFile(tmplPath)
+	if err != nil {
+		return fmt.Errorf("systemd service template not found at %s: %w", tmplPath, err)
+	}
+
+	svcContent := strings.ReplaceAll(string(tmplData), "DEVTRACK_BINARY_PLACEHOLDER", binaryPath)
+	svcContent = strings.ReplaceAll(svcContent, "PROJECT_ROOT_PLACEHOLDER", projectRoot)
+	svcContent = strings.ReplaceAll(svcContent, "DEVTRACK_ENV_FILE_PLACEHOLDER", envFilePath)
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("cannot determine home directory: %w", err)
+	}
+	svcDir := filepath.Join(homeDir, ".config", "systemd", "user")
+	if err := os.MkdirAll(svcDir, 0755); err != nil {
+		return fmt.Errorf("failed to create systemd user directory: %w", err)
+	}
+	destPath := filepath.Join(svcDir, "devtrack.service")
+	if err := os.WriteFile(destPath, []byte(svcContent), 0644); err != nil {
+		return fmt.Errorf("failed to write service file: %w", err)
+	}
+
+	for _, args := range [][]string{
+		{"--user", "daemon-reload"},
+		{"--user", "enable", "devtrack"},
+		{"--user", "start", "devtrack"},
+	} {
+		cmd := exec.Command("systemctl", args...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("systemctl %s failed: %w", strings.Join(args, " "), err)
+		}
+	}
+
+	fmt.Println("DevTrack systemd user service installed.")
+	fmt.Printf("  Unit:    %s\n", destPath)
+	fmt.Printf("  Binary:  %s\n", binaryPath)
+	fmt.Printf("  Root:    %s\n", projectRoot)
+	fmt.Println()
+	fmt.Println("DevTrack will now start automatically at login.")
+	fmt.Println("Use 'devtrack status' to verify it is running.")
+	fmt.Println("Use 'devtrack autostart-uninstall' to remove auto-start.")
+	return nil
+}
+
+// uninstallSystemdService stops, disables, and removes the unit file.
+func uninstallSystemdService() error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("cannot determine home directory: %w", err)
+	}
+	svcPath := filepath.Join(homeDir, ".config", "systemd", "user", "devtrack.service")
+
+	if _, err := os.Stat(svcPath); os.IsNotExist(err) {
+		fmt.Println("DevTrack systemd user service is not installed.")
+		return nil
+	}
+
+	for _, args := range [][]string{
+		{"--user", "stop", "devtrack"},
+		{"--user", "disable", "devtrack"},
+	} {
+		cmd := exec.Command("systemctl", args...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("Warning: systemctl %s returned an error: %v\n", strings.Join(args, " "), err)
+		}
+	}
+
+	if err := os.Remove(svcPath); err != nil {
+		return fmt.Errorf("failed to remove service file %s: %w", svcPath, err)
+	}
+
+	// Reload so systemd forgets the unit.
+	_ = exec.Command("systemctl", "--user", "daemon-reload").Run()
+
+	fmt.Println("DevTrack systemd user service removed.")
+	fmt.Printf("  Removed: %s\n", svcPath)
+	fmt.Println()
+	fmt.Println("DevTrack will no longer start automatically at login.")
+	fmt.Println("The running daemon (if any) was not stopped — use 'devtrack stop' to stop it.")
+	return nil
+}
+
+// profileShellFile returns the preferred shell profile path for the current
+// user (~/.zshrc if it exists, otherwise ~/.bashrc).
+func profileShellFile() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("cannot determine home directory: %w", err)
+	}
+	zshrc := filepath.Join(homeDir, ".zshrc")
+	if _, err := os.Stat(zshrc); err == nil {
+		return zshrc, nil
+	}
+	return filepath.Join(homeDir, ".bashrc"), nil
+}
+
+const (
+	autostartMarkerBegin = "# DevTrack auto-start"
+	autostartMarkerEnd   = "# End DevTrack auto-start"
+)
+
+// installProfileAutostart appends a startup block to the shell profile.
+func installProfileAutostart(binaryPath, envFilePath string) error {
+	profilePath, err := profileShellFile()
+	if err != nil {
+		return err
+	}
+
+	// Read existing profile to check for idempotency.
+	existing := ""
+	if data, err := os.ReadFile(profilePath); err == nil {
+		existing = string(data)
+	}
+	if strings.Contains(existing, autostartMarkerBegin) {
+		fmt.Printf("DevTrack auto-start block already present in %s\n", profilePath)
+		fmt.Println("Use 'devtrack autostart-uninstall' first if you want to reinstall.")
+		return nil
+	}
+
+	block := fmt.Sprintf("\n%s\nDEVTRACK_ENV_FILE=%s %s start 2>/dev/null || true\n%s\n",
+		autostartMarkerBegin, envFilePath, binaryPath, autostartMarkerEnd)
+
+	f, err := os.OpenFile(profilePath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open %s: %w", profilePath, err)
+	}
+	defer f.Close()
+	if _, err := f.WriteString(block); err != nil {
+		return fmt.Errorf("failed to write to %s: %w", profilePath, err)
+	}
+
+	fmt.Println("DevTrack auto-start block added.")
+	fmt.Printf("  Profile: %s\n", profilePath)
+	fmt.Printf("  Binary:  %s\n", binaryPath)
+	fmt.Println()
+	fmt.Println("DevTrack will start automatically when a new shell session opens.")
+	fmt.Printf("Re-source now:  source %s\n", profilePath)
+	fmt.Println("Use 'devtrack autostart-uninstall' to remove auto-start.")
+	return nil
+}
+
+// uninstallProfileAutostart removes the startup block from the shell profile.
+func uninstallProfileAutostart() error {
+	profilePath, err := profileShellFile()
+	if err != nil {
+		return err
+	}
+
+	data, err := os.ReadFile(profilePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("No shell profile found — nothing to remove.")
+			return nil
+		}
+		return fmt.Errorf("failed to read %s: %w", profilePath, err)
+	}
+
+	content := string(data)
+	if !strings.Contains(content, autostartMarkerBegin) {
+		fmt.Printf("DevTrack auto-start block not found in %s\n", profilePath)
+		return nil
+	}
+
+	// Remove the block between markers (inclusive).
+	scanner := bufio.NewScanner(strings.NewReader(content))
+	var lines []string
+	inBlock := false
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.Contains(line, autostartMarkerBegin) {
+			inBlock = true
+			continue
+		}
+		if inBlock {
+			if strings.Contains(line, autostartMarkerEnd) {
+				inBlock = false
+			}
+			continue
+		}
+		lines = append(lines, line)
+	}
+
+	newContent := strings.Join(lines, "\n")
+	// Trim trailing blank lines added by the removal.
+	newContent = strings.TrimRight(newContent, "\n") + "\n"
+
+	if err := os.WriteFile(profilePath, []byte(newContent), 0644); err != nil {
+		return fmt.Errorf("failed to write %s: %w", profilePath, err)
+	}
+
+	fmt.Println("DevTrack auto-start block removed.")
+	fmt.Printf("  Profile: %s\n", profilePath)
+	fmt.Println()
+	fmt.Println("DevTrack will no longer start automatically on new shell sessions.")
+	return nil
+}
+
+// handleAutostartInstall installs the OS-appropriate auto-start mechanism.
+func (cli *CLI) handleAutostartInstall() error {
+	projectRoot, err := resolveProjectRootForAutostart()
+	if err != nil {
+		return err
+	}
+
+	binaryPath, err := os.Executable()
+	if err != nil {
+		binaryPath = os.Args[0]
+	}
+	binaryPath, _ = filepath.Abs(binaryPath)
+
+	envFilePath := os.Getenv("DEVTRACK_ENV_FILE")
+	if envFilePath == "" {
+		envFilePath = filepath.Join(projectRoot, ".env")
+	}
+	envFilePath, _ = filepath.Abs(envFilePath)
+
+	switch detectOSType() {
+	case osDarwin:
+		return cli.handleLaunchdInstall()
+	case osLinuxSystemd, osWSLSystemd:
+		return installSystemdService(projectRoot, binaryPath, envFilePath)
+	case osWSLNoSystemd:
+		return installProfileAutostart(binaryPath, envFilePath)
+	default:
+		return cli.handleLaunchdInstall()
+	}
+}
+
+// handleAutostartUninstall removes the OS-appropriate auto-start mechanism.
+func (cli *CLI) handleAutostartUninstall() error {
+	switch detectOSType() {
+	case osDarwin:
+		return cli.handleLaunchdUninstall()
+	case osLinuxSystemd, osWSLSystemd:
+		return uninstallSystemdService()
+	case osWSLNoSystemd:
+		return uninstallProfileAutostart()
+	default:
+		return cli.handleLaunchdUninstall()
+	}
+}
+
+// handleAutostartStatus shows the status of the OS-appropriate auto-start mechanism.
+func (cli *CLI) handleAutostartStatus() error {
+	ot := detectOSType()
+	switch ot {
+	case osDarwin:
+		fmt.Println("Auto-start mechanism: launchd (macOS)")
+		fmt.Println()
+		cmd := exec.Command("launchctl", "list")
+		out, err := cmd.Output()
+		if err != nil {
+			fmt.Println("launchctl list failed — launchd may not be available.")
+		} else {
+			found := false
+			for _, line := range strings.Split(string(out), "\n") {
+				if strings.Contains(line, "dev.devtrack") {
+					fmt.Printf("  %s\n", strings.TrimSpace(line))
+					found = true
+				}
+			}
+			if !found {
+				fmt.Println("  Service not registered (devtrack autostart-install to add it).")
+			}
+		}
+
+	case osLinuxSystemd, osWSLSystemd:
+		label := "Linux"
+		if ot == osWSLSystemd {
+			label = "WSL"
+		}
+		fmt.Printf("Auto-start mechanism: systemd user service (%s)\n", label)
+		fmt.Println()
+		cmd := exec.Command("systemctl", "--user", "status", "devtrack")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		_ = cmd.Run() // non-zero exit when stopped is normal
+
+	case osWSLNoSystemd:
+		fmt.Println("Auto-start mechanism: shell profile (WSL without systemd)")
+		fmt.Println()
+		profilePath, err := profileShellFile()
+		if err != nil {
+			return err
+		}
+		data, _ := os.ReadFile(profilePath)
+		if strings.Contains(string(data), autostartMarkerBegin) {
+			fmt.Printf("  Block present in: %s\n", profilePath)
+		} else {
+			fmt.Printf("  Block NOT present in: %s\n", profilePath)
+			fmt.Println("  Run 'devtrack autostart-install' to add it.")
+		}
+		fmt.Println()
+		// Also show daemon status.
+		return cli.handleStatus()
+	}
+
 	return nil
 }
 
@@ -1837,6 +2505,14 @@ func (cli *CLI) printUsage() {
 	fmt.Println("  devtrack github-sync --full            Explicit full resync")
 	fmt.Println("  devtrack github-sync --hours 24        Only issues updated in last 24h (merges)")
 	fmt.Println()
+	fmt.Println("TICKET ALERTS (polls GitHub for events relevant to you):")
+	fmt.Println("  devtrack alerts          Show unread notifications (last 24h)")
+	fmt.Println("  devtrack alerts --all    Show all notifications (no time filter)")
+	fmt.Println("  devtrack alerts --clear  Mark all notifications as read")
+	fmt.Println("  Configure in .env: ALERT_ENABLED, ALERT_POLL_INTERVAL_SECS,")
+	fmt.Println("                     ALERT_GITHUB_ENABLED, ALERT_NOTIFY_ASSIGNED,")
+	fmt.Println("                     ALERT_NOTIFY_COMMENTS, ALERT_NOTIFY_REVIEW_REQUESTED")
+	fmt.Println()
 	fmt.Println("PM AGENT (via Telegram bot):")
 	fmt.Println("  /plan <problem>    Decompose a problem into Epic → Story → Task hierarchy")
 	fmt.Println("                     Platform picker → LLM preview → confirm to create items")
@@ -1880,6 +2556,28 @@ func (cli *CLI) printUsage() {
 	fmt.Println("  devtrack workspace enable <name>                 Enable a workspace")
 	fmt.Println("  devtrack workspace disable <name>                Disable a workspace")
 	fmt.Println("  devtrack workspace reload                         Signal daemon to reload workspaces.yaml")
+	fmt.Println()
+	fmt.Println("AUTO-START (OS-aware):")
+	fmt.Println("  devtrack autostart-install    Install auto-start for this OS and enable it")
+	fmt.Println("                                  macOS        → launchd LaunchAgent (~/Library/LaunchAgents)")
+	fmt.Println("                                  Linux/systemd → systemd user service (~/.config/systemd/user)")
+	fmt.Println("                                  WSL/systemd  → systemd user service (~/.config/systemd/user)")
+	fmt.Println("                                  WSL (no systemd) → shell profile block (~/.zshrc / ~/.bashrc)")
+	fmt.Println("  devtrack autostart-uninstall  Remove auto-start for this OS")
+	fmt.Println("  devtrack autostart-status     Show auto-start status for this OS")
+	fmt.Println()
+	fmt.Println("MACOS AUTO-START (launchd, legacy aliases):")
+	fmt.Println("  devtrack launchd-install    Install plist to ~/Library/LaunchAgents and load it")
+	fmt.Println("                              DevTrack will start automatically at login")
+	fmt.Println("  devtrack launchd-uninstall  Unload and remove the launchd plist")
+	fmt.Println()
+	fmt.Println("SERVER TUI / ADMIN CONSOLE (CS-2 / CS-3):")
+	fmt.Println("  devtrack server-tui    Open Textual process monitor for all DevTrack server processes")
+	fmt.Println("                           ↑↓ / j k  navigate   r restart   s start   x stop")
+	fmt.Println("                           l         toggle log pane for selected process")
+	fmt.Println("                           q         quit")
+	fmt.Println("  devtrack admin-start   Start Admin Console web UI  (default: http://localhost:8090/admin/)")
+	fmt.Println("                           ADMIN_PORT, ADMIN_USERNAME, ADMIN_PASSWORD must be set in .env")
 	fmt.Println()
 	fmt.Println("INFO COMMANDS:")
 	fmt.Println("  devtrack logs          Show recent log entries")
