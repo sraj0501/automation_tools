@@ -39,10 +39,7 @@ archives:
       - goos: windows
         formats: [zip]
     files:
-      - README.md
       - LICENSE
-      - .env_sample
-      - docs/INSTALLATION.md
 
 checksum:
   name_template: "checksums.txt"
