@@ -30,7 +30,8 @@ jobs:
         id: version
         run: |
           # Get latest tag (default to v0.0.0 if none)
-          LATEST=$(git tag --sort=-version:refname | grep '^v' | head -1 || echo "v0.0.0")
+          LATEST=$(git tag --sort=-version:refname | grep '^v' | head -1)
+          [ -z "$LATEST" ] && LATEST="v0.0.0"
           echo "Latest tag: $LATEST"
 
           # Strip leading 'v'
