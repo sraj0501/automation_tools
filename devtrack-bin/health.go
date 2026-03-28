@@ -14,21 +14,18 @@ import (
 
 // HealthMonitor periodically checks all services and records results
 type HealthMonitor struct {
-	db             *Database
-	ipcServer      *IPCServer
-	checkInterval  time.Duration
-	stopCh         chan struct{}
-	running        bool
-	mu             sync.Mutex
+	db            *Database
+	checkInterval time.Duration
+	stopCh        chan struct{}
+	running       bool
+	mu            sync.Mutex
 
 	// Process PIDs to monitor
-	pythonBridgePID int
-	webhookPID      int
-	telegramPID     int
+	webhookPID  int
+	telegramPID int
 
 	// Auto-restart callbacks
-	restartPython  func() error
-	restartWebhook func() error
+	restartWebhook  func() error
 	restartTelegram func() error
 
 	// Restart tracking
@@ -37,22 +34,14 @@ type HealthMonitor struct {
 }
 
 // NewHealthMonitor creates a new health monitor
-func NewHealthMonitor(db *Database, ipcServer *IPCServer) *HealthMonitor {
+func NewHealthMonitor(db *Database) *HealthMonitor {
 	return &HealthMonitor{
 		db:              db,
-		ipcServer:       ipcServer,
 		checkInterval:   time.Duration(GetHealthCheckIntervalSecs()) * time.Second,
 		stopCh:          make(chan struct{}),
 		restartCounts:   make(map[string][]time.Time),
 		maxRestartsHour: GetHealthMaxRestartsPerHour(),
 	}
-}
-
-// SetPythonPID sets the Python bridge PID to monitor
-func (hm *HealthMonitor) SetPythonPID(pid int) {
-	hm.mu.Lock()
-	defer hm.mu.Unlock()
-	hm.pythonBridgePID = pid
 }
 
 // SetWebhookPID sets the webhook server PID to monitor
@@ -70,10 +59,9 @@ func (hm *HealthMonitor) SetTelegramPID(pid int) {
 }
 
 // SetRestartCallbacks sets the functions to call when auto-restart is needed
-func (hm *HealthMonitor) SetRestartCallbacks(restartPython, restartWebhook func() error) {
+func (hm *HealthMonitor) SetRestartCallbacks(_, restartWebhook func() error) {
 	hm.mu.Lock()
 	defer hm.mu.Unlock()
-	hm.restartPython = restartPython
 	hm.restartWebhook = restartWebhook
 }
 
@@ -128,8 +116,7 @@ func (hm *HealthMonitor) Stop() {
 
 // RunAllChecks runs all health checks and records results
 func (hm *HealthMonitor) RunAllChecks() {
-	hm.checkIPC()
-	hm.checkPythonBridge()
+	hm.checkPythonHTTP()
 	hm.checkOllama()
 	hm.checkAzureDevOps()
 	hm.checkWebhookServer()
@@ -137,59 +124,28 @@ func (hm *HealthMonitor) RunAllChecks() {
 	hm.checkMongoDB()
 }
 
-// checkIPC checks if the IPC server has connected clients
-func (hm *HealthMonitor) checkIPC() {
+// checkPythonHTTP verifies the Python HTTP server responds to /health.
+func (hm *HealthMonitor) checkPythonHTTP() {
 	start := time.Now()
 	snap := HealthSnapshot{
-		Service:   "ipc",
+		Service:   "python_http",
 		CheckedAt: time.Now(),
 	}
 
-	if hm.ipcServer == nil {
-		snap.Status = "down"
-		snap.Details = `{"error":"ipc server not initialized"}`
-	} else if hm.ipcServer.HasClients() {
+	client := NewHTTPTriggerClient()
+	if client.Ping() {
 		snap.Status = "up"
 		snap.LatencyMs = int(time.Since(start).Milliseconds())
-		clientCount := hm.ipcServer.ClientCount()
-		snap.Details = fmt.Sprintf(`{"clients":%d}`, clientCount)
+		snap.Details = fmt.Sprintf(`{"url":%q,"latency_ms":%d}`, GetServerURL(), snap.LatencyMs)
 	} else {
 		snap.Status = "down"
-		snap.Details = `{"clients":0}`
+		snap.Details = fmt.Sprintf(`{"url":%q,"error":"no response"}`, GetServerURL())
 	}
 
 	hm.recordSnapshot(snap)
 }
 
 // checkPythonBridge checks if the Python bridge process is alive
-func (hm *HealthMonitor) checkPythonBridge() {
-	hm.mu.Lock()
-	pid := hm.pythonBridgePID
-	hm.mu.Unlock()
-
-	snap := HealthSnapshot{
-		Service:   "python_bridge",
-		CheckedAt: time.Now(),
-	}
-
-	if pid == 0 {
-		snap.Status = "down"
-		snap.Details = `{"error":"not started"}`
-	} else if isProcessAlive(pid) {
-		snap.Status = "up"
-		snap.Details = fmt.Sprintf(`{"pid":%d}`, pid)
-	} else {
-		snap.Status = "down"
-		snap.Details = fmt.Sprintf(`{"pid":%d,"error":"process not running"}`, pid)
-		// Attempt auto-restart
-		if GetHealthAutoRestartPython() {
-			hm.tryRestart("python_bridge")
-		}
-	}
-
-	hm.recordSnapshot(snap)
-}
-
 // checkOllama checks if Ollama is reachable
 func (hm *HealthMonitor) checkOllama() {
 	snap := HealthSnapshot{
@@ -391,8 +347,6 @@ func (hm *HealthMonitor) tryRestart(service string) {
 
 	var restartFn func() error
 	switch service {
-	case "python_bridge":
-		restartFn = hm.restartPython
 	case "webhook_server":
 		restartFn = hm.restartWebhook
 	case "telegram_bot":

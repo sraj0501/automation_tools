@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strconv"
 )
 
 // ServerMode defines how the Python backend is managed
@@ -24,10 +26,58 @@ func GetServerMode() ServerMode {
 	return ServerModeManaged
 }
 
-// GetServerURL returns the URL of the Python backend server.
-// Used when DEVTRACK_SERVER_MODE=external to log where the daemon expects the server.
+// GetServerURL returns the base URL of the Python backend server.
+//
+// Resolution order:
+//  1. DEVTRACK_SERVER_URL env var (explicit override)
+//  2. Managed mode default — https://127.0.0.1:<WEBHOOK_PORT>
+//
+// Both managed and external modes now use HTTP, so this always returns a usable URL.
 func GetServerURL() string {
-	return os.Getenv("DEVTRACK_SERVER_URL")
+	if v := os.Getenv("DEVTRACK_SERVER_URL"); v != "" {
+		return v
+	}
+	port := os.Getenv("WEBHOOK_PORT")
+	if port == "" {
+		port = "8089"
+	}
+	scheme := "https"
+	if !IsTLSEnabled() {
+		scheme = "http"
+	}
+	return scheme + "://127.0.0.1:" + port
+}
+
+// IsTLSEnabled reports whether TLS is enabled for the Go↔Python HTTP channel.
+// Defaults to true; set DEVTRACK_TLS=false to disable (dev / Docker environments).
+func IsTLSEnabled() bool {
+	v := os.Getenv("DEVTRACK_TLS")
+	if v == "" {
+		return true // on by default
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return true
+	}
+	return b
+}
+
+// GetTLSCertPath returns the path to the TLS server certificate PEM file.
+// Uses DEVTRACK_TLS_CERT if set, otherwise Data/tls/server.crt under the database dir.
+func GetTLSCertPath() string {
+	if v := os.Getenv("DEVTRACK_TLS_CERT"); v != "" {
+		return v
+	}
+	return filepath.Join(filepath.Dir(GetDatabaseDir()), "tls", "server.crt")
+}
+
+// GetTLSKeyPath returns the path to the TLS private key PEM file.
+// Uses DEVTRACK_TLS_KEY if set, otherwise Data/tls/server.key under the database dir.
+func GetTLSKeyPath() string {
+	if v := os.Getenv("DEVTRACK_TLS_KEY"); v != "" {
+		return v
+	}
+	return filepath.Join(filepath.Dir(GetDatabaseDir()), "tls", "server.key")
 }
 
 // IsExternalServer returns true when the Python backend is managed externally

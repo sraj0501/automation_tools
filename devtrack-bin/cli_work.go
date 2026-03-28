@@ -308,3 +308,37 @@ func (cli *CLI) handleWorkReport() error {
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
+
+// handleServerTUI launches the Textual-based server process monitor.
+// Usage: devtrack server-tui
+func (cli *CLI) handleServerTUI() error {
+	projectRoot := os.Getenv("PROJECT_ROOT")
+	if projectRoot == "" {
+		return fmt.Errorf("PROJECT_ROOT is not set — cannot locate Python backend")
+	}
+	cmd := exec.Command("uv", "run", "--directory", projectRoot, "python", "-m", "backend.server_tui")
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+// handleAdminStart starts the Admin Console web server (CS-3).
+// Usage: devtrack admin-start
+func (cli *CLI) handleAdminStart() error {
+	projectRoot := os.Getenv("PROJECT_ROOT")
+	if projectRoot == "" {
+		return fmt.Errorf("PROJECT_ROOT is not set — cannot locate Python backend")
+	}
+	adminPort := os.Getenv("ADMIN_PORT")
+	if adminPort == "" {
+		adminPort = "8090"
+	}
+	fmt.Printf("Starting Admin Console on http://localhost:%s/admin/\n", adminPort)
+	fmt.Println("Press Ctrl+C to stop.")
+	cmd := exec.Command("uv", "run", "--directory", projectRoot, "python", "-m", "backend.admin")
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}

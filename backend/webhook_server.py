@@ -1,8 +1,12 @@
 """
-DevTrack Webhook Receiver
+DevTrack Webhook + Trigger Server (CS-1)
 
-Lightweight FastAPI server for receiving webhook events from Azure DevOps,
-GitHub, and Jira. Spawned by the Go daemon as a separate process.
+FastAPI server that handles both inbound webhook events (Azure DevOps, GitHub,
+GitLab, Jira) AND outbound trigger calls from the Go daemon (commit_trigger,
+timer_trigger, and the rest of the IPC message vocabulary).
+
+Communication with Go is over HTTPS (mutual cert-pinning on the Go side).
+All /trigger/* endpoints require the X-DevTrack-API-Key header.
 
 Usage: python -m backend.webhook_server
 """
@@ -249,11 +253,11 @@ class TriggerProcessor:
         except Exception as e:
             logger.debug(f"Work session check failed: {e}")
 
-        # Attempt Telegram nudge (non-fatal — Telegram may not be configured)
+        # Attempt Telegram nudge (non-fatal)
         telegram_sent = False
         try:
-            from backend.telegram.notifier import send_work_reminder
-            send_work_reminder(
+            from backend.telegram.notifier import send_work_reminder as _tg_reminder
+            _tg_reminder(
                 interval_mins=interval_mins,
                 trigger_count=trigger_count,
                 active_session=active_session,
@@ -263,13 +267,34 @@ class TriggerProcessor:
             telegram_sent = True
             logger.info("✓ Work reminder sent via Telegram")
         except Exception:
-            # Telegram not configured or notifier not yet implemented — that's fine
             logger.debug("Telegram reminder unavailable (non-fatal)")
+
+        # Attempt Slack nudge (non-fatal)
+        slack_sent = False
+        try:
+            from backend.slack.notifier import send_work_reminder as _slack_reminder
+            slack_sent = _slack_reminder(
+                interval_mins=interval_mins,
+                trigger_count=trigger_count,
+                active_session=active_session,
+                pm_platform=pm_platform,
+                workspace_name=workspace_name,
+            )
+            if slack_sent:
+                logger.info("✓ Work reminder sent via Slack")
+        except Exception:
+            logger.debug("Slack reminder unavailable (non-fatal)")
+
+        channels = []
+        if telegram_sent:
+            channels.append("telegram")
+        if slack_sent:
+            channels.append("slack")
 
         return {
             "status": "accepted",
             "trigger_count": trigger_count,
-            "prompt_channel": "telegram" if telegram_sent else "none",
+            "prompt_channel": ",".join(channels) if channels else "none",
             "active_session": active_session is not None,
         }
 
@@ -297,6 +322,19 @@ def _cfg_bool(key: str, default: bool = False) -> bool:
         return config.get_bool(key, default)
     val = os.getenv(key, "").lower().strip()
     return val in ("true", "1", "yes", "on") if val else default
+
+
+async def _verify_trigger_key(request: Request) -> None:
+    """Validate X-DevTrack-API-Key on all /trigger/* endpoints.
+
+    Skipped when DEVTRACK_API_KEY is not set (dev/testing mode).
+    """
+    expected = os.environ.get("DEVTRACK_API_KEY", "")
+    if not expected:
+        return  # auth not configured — allow all (dev mode)
+    key = request.headers.get("X-DevTrack-API-Key", "")
+    if not key or key != expected:
+        raise HTTPException(status_code=403, detail="Invalid or missing X-DevTrack-API-Key")
 
 
 async def _verify_azure_basic_auth(request: Request) -> None:
@@ -635,68 +673,105 @@ async def status() -> dict:
 
 
 # ---------------------------------------------------------------------------
-# HTTP trigger endpoints (CS-1: Go → HTTP → Python when external mode)
+# HTTP trigger endpoints (CS-1: Go → HTTPS → Python, all modes)
+# All endpoints require X-DevTrack-API-Key (when DEVTRACK_API_KEY is set).
 # ---------------------------------------------------------------------------
 
 @app.post("/trigger/commit")
-async def http_commit_trigger(request: Request) -> dict:
-    """
-    Receives a commit trigger from the Go daemon (external/remote mode).
-    Payload matches CommitTriggerData from devtrack-bin/ipc.go.
-    """
+async def http_commit_trigger(
+    request: Request,
+    _auth: None = Depends(_verify_trigger_key),
+) -> dict:
+    """Commit trigger from Go daemon. Payload matches CommitTriggerData."""
     data = await request.json()
     result = await asyncio.to_thread(TriggerProcessor.get().process_commit, data)
     return {"status": "ok", **result}
 
 
 @app.post("/trigger/timer")
-async def http_timer_trigger(request: Request) -> dict:
-    """
-    Receives a timer trigger from the Go daemon (external/remote mode).
-    Payload matches TimerTriggerData from devtrack-bin/ipc.go.
-    """
+async def http_timer_trigger(
+    request: Request,
+    _auth: None = Depends(_verify_trigger_key),
+) -> dict:
+    """Timer trigger from Go daemon. Payload matches TimerTriggerData."""
     data = await request.json()
     result = await asyncio.to_thread(TriggerProcessor.get().process_timer, data)
     return result
+
+
+@app.post("/trigger/workspace_reload")
+async def http_workspace_reload(
+    request: Request,
+    _auth: None = Depends(_verify_trigger_key),
+) -> dict:
+    """Reload workspace router after workspaces.yaml is modified."""
+    try:
+        TriggerProcessor.get()._init_components()
+        logger.info("Workspace router reloaded")
+    except Exception as e:
+        logger.warning(f"Workspace reload failed: {e}")
+    return {"status": "ok", "message": "workspace router reloaded"}
+
+
+@app.post("/trigger/shutdown")
+async def http_shutdown(
+    _auth: None = Depends(_verify_trigger_key),
+) -> dict:
+    """Graceful shutdown — daemon is stopping."""
+    logger.info("Shutdown signal received from Go daemon")
+    # Schedule actual process exit after the response is sent
+    import threading
+    threading.Timer(0.5, lambda: os.kill(os.getpid(), signal.SIGTERM)).start()
+    return {"status": "ok"}
+
+
+@app.post("/trigger/ping")
+async def http_ping(
+    _auth: None = Depends(_verify_trigger_key),
+) -> dict:
+    """Liveness check used by Go health monitor."""
+    return {"status": "ok", "pong": True}
+
+
+@app.post("/trigger/work_session_start")
+async def http_work_session_start(
+    request: Request,
+    _auth: None = Depends(_verify_trigger_key),
+) -> dict:
+    """Notifies Python that a work session has started in Go."""
+    data = await request.json()
+    session_id = data.get("session_id")
+    ticket_ref = data.get("ticket_ref", "")
+    logger.info(f"Work session #{session_id} started (ticket={ticket_ref})")
+    return {"status": "ok", "session_id": session_id}
+
+
+@app.post("/trigger/work_session_stop")
+async def http_work_session_stop(
+    request: Request,
+    _auth: None = Depends(_verify_trigger_key),
+) -> dict:
+    """Notifies Python that a work session has stopped in Go."""
+    data = await request.json()
+    session_id = data.get("session_id")
+    logger.info(f"Work session #{session_id} stopped")
+    return {"status": "ok", "session_id": session_id}
 
 
 # ---------------------------------------------------------------------------
 # Startup
 # ---------------------------------------------------------------------------
 
-async def _connect_ipc() -> None:
-    """Attempt to connect to Go daemon IPC on startup."""
-    global _handler
-    try:
-        from backend.ipc_client import IPCClient
-        host = _cfg("IPC_HOST", "127.0.0.1")
-        port = int(_cfg("IPC_PORT", "35893"))
-        client = IPCClient(host, port)
-        client.connect()
-        handler = _get_handler()
-        handler.ipc_client = client
-        logger.info(f"Connected to IPC server at {host}:{port}")
-    except Exception as e:
-        logger.warning(f"Could not connect to IPC server: {e} (running standalone)")
-
-
 @app.on_event("startup")
 async def on_startup() -> None:
-    logger.info("DevTrack Webhook Server starting")
-    await _connect_ipc()
-    # Pre-warm TriggerProcessor so first request doesn't pay init cost
+    logger.info("DevTrack Webhook + Trigger Server starting (CS-1 HTTP mode)")
+    # Pre-warm TriggerProcessor so the first trigger request doesn't pay init cost
     await asyncio.to_thread(TriggerProcessor.get)
 
 
 @app.on_event("shutdown")
 async def on_shutdown() -> None:
-    handler = _get_handler()
-    if handler.ipc_client:
-        try:
-            handler.ipc_client.close()
-        except Exception:
-            pass
-    logger.info("DevTrack Webhook Server stopped")
+    logger.info("DevTrack Webhook + Trigger Server stopped")
 
 
 def main() -> None:
@@ -706,12 +781,29 @@ def main() -> None:
     host = _cfg("WEBHOOK_HOST", "0.0.0.0")
     port = int(_cfg("WEBHOOK_PORT", "8089"))
 
-    logger.info(f"Starting webhook server on {host}:{port}")
+    # TLS: Go passes DEVTRACK_TLS_CERT / DEVTRACK_TLS_KEY via the subprocess env.
+    # If TLS is enabled and both paths are present, start uvicorn with SSL.
+    tls_enabled = os.environ.get("DEVTRACK_TLS", "true").lower() not in ("false", "0", "no")
+    cert_path = os.environ.get("DEVTRACK_TLS_CERT", "")
+    key_path = os.environ.get("DEVTRACK_TLS_KEY", "")
+
+    ssl_kwargs: dict = {}
+    if tls_enabled and cert_path and key_path:
+        if os.path.exists(cert_path) and os.path.exists(key_path):
+            ssl_kwargs = {"ssl_certfile": cert_path, "ssl_keyfile": key_path}
+            logger.info(f"TLS enabled — cert: {cert_path}")
+        else:
+            logger.warning("TLS cert/key paths set but files not found — starting without TLS")
+
+    scheme = "https" if ssl_kwargs else "http"
+    logger.info(f"Starting {scheme} server on {host}:{port}")
+
     uvicorn.run(
         "backend.webhook_server:app",
         host=host,
         port=port,
         log_level="info",
+        **ssl_kwargs,
     )
 
 

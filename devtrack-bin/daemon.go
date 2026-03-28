@@ -15,20 +15,20 @@ import (
 
 // Daemon manages the background process lifecycle
 type Daemon struct {
-	monitor       *IntegratedMonitor
-	config        *Config
-	pidFile       string
-	logFile       string
-	ctx           context.Context
-	cancel        context.CancelFunc
-	isRunning     bool
-	pythonBridge      *exec.Cmd
-	webhookServer     *exec.Cmd
-	telegramBot       *exec.Cmd
-	assignmentPoller  *exec.Cmd
-	gitlabPoller      *exec.Cmd
-	startTime     time.Time
-	healthMonitor *HealthMonitor
+	monitor          *IntegratedMonitor
+	config           *Config
+	pidFile          string
+	logFile          string
+	ctx              context.Context
+	cancel           context.CancelFunc
+	isRunning        bool
+	webhookServer    *exec.Cmd
+	telegramBot      *exec.Cmd
+	slackBot         *exec.Cmd
+	assignmentPoller *exec.Cmd
+	gitlabPoller     *exec.Cmd
+	startTime        time.Time
+	healthMonitor    *HealthMonitor
 }
 
 // DaemonStatus represents the current daemon state
@@ -111,22 +111,34 @@ func (d *Daemon) Start() error {
 		return fmt.Errorf("failed to start monitoring: %w", err)
 	}
 
-	// Start Python bridge AFTER IPC server is ready
-	if err := d.startPythonBridge(); err != nil {
-		log.Printf("Warning: Failed to start Python bridge: %v", err)
-		log.Println("IPC functionality will be limited")
+	// Generate TLS cert before starting any Python subprocess
+	if IsTLSEnabled() {
+		if err := d.generateTLSCert(); err != nil {
+			log.Printf("Warning: TLS cert generation failed (%v) — disabling TLS", err)
+			// Force TLS off so subsequent HTTP client builds don't fail
+			os.Setenv("DEVTRACK_TLS", "false")
+		}
 	}
 
-	// Start webhook server if enabled
+	// Start webhook server (primary Python process in CS-1)
 	if err := d.startWebhookServer(); err != nil {
 		log.Printf("Warning: Failed to start webhook server: %v", err)
-		log.Println("Webhook functionality will be unavailable")
+		log.Println("HTTP trigger functionality will be unavailable")
+	} else {
+		// Wait up to 10 s for the Python HTTP server to become healthy
+		d.waitForPythonHTTP(10)
 	}
 
 	// Start Telegram bot if enabled
 	if err := d.startTelegramBot(); err != nil {
 		log.Printf("Warning: Failed to start Telegram bot: %v", err)
 		log.Println("Telegram remote control will be unavailable")
+	}
+
+	// Start Slack bot if enabled
+	if err := d.startSlackBot(); err != nil {
+		log.Printf("Warning: Failed to start Slack bot: %v", err)
+		log.Println("Slack remote control will be unavailable")
 	}
 
 	// Start Azure assignment poller if enabled
@@ -144,17 +156,14 @@ func (d *Daemon) Start() error {
 	log.Println("✓ Daemon started successfully")
 
 	// Start health monitor
-	hm := NewHealthMonitor(d.monitor.database, d.monitor.ipcServer)
-	if d.pythonBridge != nil && d.pythonBridge.Process != nil {
-		hm.SetPythonPID(d.pythonBridge.Process.Pid)
-	}
+	hm := NewHealthMonitor(d.monitor.database)
 	if d.webhookServer != nil && d.webhookServer.Process != nil {
 		hm.SetWebhookPID(d.webhookServer.Process.Pid)
 	}
 	if d.telegramBot != nil && d.telegramBot.Process != nil {
 		hm.SetTelegramPID(d.telegramBot.Process.Pid)
 	}
-	hm.SetRestartCallbacks(d.restartPythonBridge, d.restartWebhookServer)
+	hm.SetRestartCallbacks(nil, d.restartWebhookServer)
 	hm.SetTelegramRestartCallback(d.restartTelegramBot)
 	hm.Start()
 	d.healthMonitor = hm
@@ -194,6 +203,14 @@ func (d *Daemon) Stop() error {
 		}
 	}
 
+	// Stop Slack bot
+	if d.slackBot != nil {
+		log.Println("Stopping Slack bot...")
+		if err := d.slackBot.Process.Kill(); err != nil {
+			log.Printf("Warning: error stopping Slack bot: %v", err)
+		}
+	}
+
 	// Stop Azure assignment poller
 	if d.assignmentPoller != nil {
 		d.assignmentPoller.Process.Kill()
@@ -209,14 +226,6 @@ func (d *Daemon) Stop() error {
 		log.Println("Stopping webhook server...")
 		if err := d.webhookServer.Process.Kill(); err != nil {
 			log.Printf("Warning: error stopping webhook server: %v", err)
-		}
-	}
-
-	// Stop Python bridge
-	if d.pythonBridge != nil {
-		log.Println("Stopping Python bridge...")
-		if err := d.pythonBridge.Process.Kill(); err != nil {
-			log.Printf("Warning: error stopping Python bridge: %v", err)
 		}
 	}
 
@@ -380,13 +389,22 @@ func (d *Daemon) setupSignalHandlers() {
 				}
 
 			case syscall.SIGHUP:
-				// Reload configuration
+				// Reload configuration and workspaces
 				log.Println("Reloading configuration...")
 				if config, err := LoadConfig(); err == nil {
 					d.config = config
 					log.Println("✓ Configuration reloaded")
 				} else {
 					log.Printf("Error reloading config: %v", err)
+				}
+				if d.monitor != nil {
+					d.monitor.ReloadWorkspaces()
+					// Notify Python to reload its workspace router
+					go func() {
+						if err := NewHTTPTriggerClient().SendWorkspaceReload(); err != nil {
+							log.Printf("Could not notify Python of workspace reload: %v", err)
+						}
+					}()
 				}
 
 			case os.Interrupt, syscall.SIGTERM:
@@ -459,71 +477,47 @@ func (d *Daemon) GetLogs(lines int) ([]string, error) {
 	return allLines[len(allLines)-lines:], nil
 }
 
-// startPythonBridge starts the Python bridge process for IPC communication.
-// When DEVTRACK_SERVER_MODE=external the Python backend is managed by the user;
-// this function logs the expected connection point and returns without spawning.
-func (d *Daemon) startPythonBridge() error {
-	if IsExternalServer() {
-		serverURL := GetServerURL()
-		if serverURL == "" {
-			serverURL = "(not set — Python bridge connects via IPC_HOST:IPC_PORT)"
-		}
-		log.Printf("Python backend is externally managed (DEVTRACK_SERVER_MODE=external)")
-		log.Printf("  Expected server: %s", serverURL)
-		log.Println("  Start the Python backend manually before triggering any AI operations.")
-		return nil
+// generateTLSCert generates a self-signed TLS certificate for the Go↔Python channel.
+func (d *Daemon) generateTLSCert() error {
+	certPath := GetTLSCertPath()
+	keyPath := GetTLSKeyPath()
+	log.Printf("Generating TLS cert: %s", certPath)
+	if err := GenerateSelfSignedCert(certPath, keyPath); err != nil {
+		return fmt.Errorf("TLS cert generation: %w", err)
 	}
-
-	// Get python_bridge.py path from centralized config (fails if not found)
-	bridgePath := GetPythonBridgePath()
-
-	// Start Python bridge using uv run to access project dependencies
-	log.Printf("Starting Python bridge: %s", bridgePath)
-
-	var cmd *exec.Cmd
-	projectRoot := os.Getenv("PROJECT_ROOT")
-	if projectRoot != "" {
-		// Use uv run to execute with project dependencies
-		cmd = exec.Command("uv", "run", "--directory", projectRoot, "python", bridgePath)
-		cmd.Dir = projectRoot
-		log.Printf("Using uv environment from: %s", projectRoot)
-	} else {
-		// Fallback to system python3 if PROJECT_ROOT not set
-		cmd = exec.Command("python3", bridgePath)
-		log.Printf("Warning: PROJECT_ROOT not set, using system python3")
-	}
-
-	// Redirect output to daemon log
-	logFile, err := os.OpenFile(d.logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to open log file: %w", err)
-	}
-
-	cmd.Stdout = logFile
-	cmd.Stderr = logFile
-
-	// Start the process
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start Python bridge: %w", err)
-	}
-
-	d.pythonBridge = cmd
-	log.Printf("✓ Python bridge started (PID: %d)", cmd.Process.Pid)
-
-	// Give it a moment to connect to IPC server
-	time.Sleep(time.Second)
-
+	// Expose paths so subprocesses pick them up
+	os.Setenv("DEVTRACK_TLS_CERT", certPath)
+	os.Setenv("DEVTRACK_TLS_KEY", keyPath)
+	log.Println("✓ TLS cert generated")
 	return nil
 }
 
-// startWebhookServer starts the webhook server process if WEBHOOK_ENABLED=true
+// waitForPythonHTTP polls /health on the Python server until it responds
+// or the timeout (in seconds) elapses.
+func (d *Daemon) waitForPythonHTTP(timeoutSecs int) {
+	client := NewHTTPTriggerClient()
+	deadline := time.Now().Add(time.Duration(timeoutSecs) * time.Second)
+	for time.Now().Before(deadline) {
+		if client.Ping() {
+			log.Println("✓ Python HTTP server is ready")
+			return
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	log.Printf("Warning: Python HTTP server did not respond within %ds — triggers may fail until it starts", timeoutSecs)
+}
+
+// startWebhookServer starts the Python webhook/trigger server.
+// In CS-1 this is the primary Python process; python_bridge.py is no longer spawned.
+// When DEVTRACK_SERVER_MODE=external the server is managed by the user.
 func (d *Daemon) startWebhookServer() error {
-	if !IsWebhookEnabled() {
-		log.Println("Webhook server disabled (WEBHOOK_ENABLED is not true)")
+	if IsExternalServer() {
+		log.Printf("Python backend is externally managed (DEVTRACK_SERVER_MODE=external)")
+		log.Printf("  Expected server: %s", GetServerURL())
 		return nil
 	}
 
-	log.Println("Starting webhook server...")
+	log.Println("Starting Python server (webhook + triggers)...")
 
 	var cmd *exec.Cmd
 	projectRoot := os.Getenv("PROJECT_ROOT")
@@ -534,6 +528,12 @@ func (d *Daemon) startWebhookServer() error {
 		cmd = exec.Command("python3", "-m", "backend.webhook_server")
 	}
 
+	// Pass TLS cert paths so uvicorn starts with TLS enabled
+	cmd.Env = append(os.Environ(),
+		"DEVTRACK_TLS_CERT="+GetTLSCertPath(),
+		"DEVTRACK_TLS_KEY="+GetTLSKeyPath(),
+	)
+
 	// Redirect output to daemon log
 	logFile, err := os.OpenFile(d.logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -543,35 +543,16 @@ func (d *Daemon) startWebhookServer() error {
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 
-	// Start the process
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start webhook server: %w", err)
+		return fmt.Errorf("failed to start Python server: %w", err)
 	}
 
 	d.webhookServer = cmd
-	log.Printf("✓ Webhook server started (PID: %d)", cmd.Process.Pid)
+	log.Printf("✓ Python server started (PID: %d)", cmd.Process.Pid)
 
 	return nil
 }
 
-// restartPythonBridge restarts the Python bridge process
-func (d *Daemon) restartPythonBridge() error {
-	// Kill old process if still around
-	if d.pythonBridge != nil && d.pythonBridge.Process != nil {
-		d.pythonBridge.Process.Kill()
-		d.pythonBridge.Process.Wait()
-	}
-
-	if err := d.startPythonBridge(); err != nil {
-		return err
-	}
-
-	// Update health monitor PID
-	if d.healthMonitor != nil && d.pythonBridge != nil && d.pythonBridge.Process != nil {
-		d.healthMonitor.SetPythonPID(d.pythonBridge.Process.Pid)
-	}
-	return nil
-}
 
 // restartWebhookServer restarts the webhook server process
 func (d *Daemon) restartWebhookServer() error {
@@ -726,6 +707,43 @@ func (d *Daemon) restartTelegramBot() error {
 	if d.healthMonitor != nil && d.telegramBot != nil && d.telegramBot.Process != nil {
 		d.healthMonitor.SetTelegramPID(d.telegramBot.Process.Pid)
 	}
+	return nil
+}
+
+// startSlackBot starts the Slack bot process if SLACK_ENABLED=true
+func (d *Daemon) startSlackBot() error {
+	if !IsSlackEnabled() {
+		log.Println("Slack bot disabled (SLACK_ENABLED is not true)")
+		return nil
+	}
+
+	// Kill any stale bot process from a previous run
+	exec.Command("pkill", "-f", "backend.slack").Run() //nolint
+
+	log.Println("Starting Slack bot...")
+
+	var cmd *exec.Cmd
+	projectRoot := os.Getenv("PROJECT_ROOT")
+	if projectRoot != "" {
+		cmd = exec.Command("uv", "run", "--directory", projectRoot, "python", "-m", "backend.slack")
+		cmd.Dir = projectRoot
+	} else {
+		cmd = exec.Command("python3", "-m", "backend.slack")
+	}
+
+	logFile, err := os.OpenFile(d.logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open log file for Slack bot: %w", err)
+	}
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start Slack bot: %w", err)
+	}
+
+	d.slackBot = cmd
+	log.Printf("✓ Slack bot started (PID: %d)", cmd.Process.Pid)
 	return nil
 }
 

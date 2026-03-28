@@ -20,7 +20,7 @@ DevTrack is a **client-server tool**. The Go binary (`devtrack`) is a lean daemo
 - **Learns your communication style** from Teams messages and writes updates in your voice
 - **Runs 100% locally** — Ollama for AI, SQLite for storage, no cloud required
 - **Works offline** — queues everything and syncs when connectivity returns
-- **Remote-controllable** via a Telegram bot on your phone
+- **Remote-controllable** via a Telegram bot or Slack slash command (`/devtrack`) on your phone or desktop
 - **OS-aware auto-start** — one command installs the right mechanism for your OS: launchd on macOS, systemd user service on Linux/WSL with systemd, or a shell profile block on WSL without systemd
 - **Ticket Alerter** — polls GitHub, Azure DevOps, and Jira for assigned issues, new comments, review requests, and status changes; delivers macOS OS notifications and terminal output
 
@@ -44,6 +44,7 @@ DevTrack is a **client-server tool**. The Go binary (`devtrack`) is a lean daemo
 | Connect GitHub | [GitHub Guide](docs/GITHUB.md) |
 | Monitor multiple repos | [Multi-Repo Guide](docs/MULTI_REPO.md) |
 | Use the Telegram bot | [Telegram Bot Setup](docs/TELEGRAM_BOT.md) |
+| Use the Slack bot | [Slack Bot Setup](docs/SLACK_BOT.md) |
 | Use the PM Agent (`/plan`) | [PM Agent Guide](docs/PM_AGENT.md) |
 | Set up AI providers | [LLM Guide](docs/LLM_GUIDE.md) |
 | Enable "Talk Like You" | [Personalization](docs/PERSONALIZATION.md) |
@@ -286,6 +287,78 @@ EOD_REPORT_EMAIL=you@org.com       # recipient for auto EOD reports
 WORK_SESSION_AUTO_STOP_MINUTES=0   # auto-stop after N idle minutes (0 = disabled)
 ```
 
+### Slack Bot
+
+Control DevTrack from any Slack channel with a single slash command:
+
+```
+/devtrack status
+/devtrack logs
+/devtrack trigger
+/devtrack workstart AUTH-42
+/devtrack workstop
+/devtrack workreport
+/devtrack github
+/devtrack gitlab
+/devtrack help
+```
+
+Uses Socket Mode — no public URL or firewall rules required.
+
+**Setup (one time):**
+1. Create a Slack App at [api.slack.com/apps](https://api.slack.com/apps)
+2. Enable **Socket Mode** → get an App-Level Token (`xapp-...`)
+3. Add a slash command `/devtrack`, scopes `chat:write, commands, channels:read`
+4. Install to workspace → get a Bot Token (`xoxb-...`)
+5. Invite the bot: `/invite @devtrack`
+
+```
+# .env
+SLACK_ENABLED=true
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_APP_TOKEN=xapp-...
+SLACK_ALLOWED_CHANNEL_IDS=C123ABC,C456DEF   # leave blank for all channels
+```
+
+The daemon starts the Slack bot subprocess automatically alongside Telegram when `SLACK_ENABLED=true`. The bot also sends proactive work-reminder nudges when the timer fires (same as Telegram).
+
+### Server Management
+
+Two tools for inspecting and controlling the running Python backend — useful in external / Docker mode or when debugging a managed deployment.
+
+#### Server TUI (`devtrack server-tui`)
+
+A Textual-based process monitor that attaches to the running Python backend and shows live process health.
+
+```bash
+devtrack server-tui
+```
+
+Displays `python_bridge`, `webhook_server`, `telegram_bot`, and `alert_poller` with real-time CPU%, memory usage, and status. A health-check bar at the top shows the webhook server and Ollama availability.
+
+Keys: `↑`/`↓` or `j`/`k` to navigate, `r` restart, `s` start, `x` stop, `l` toggle log tail, `q` quit.
+
+#### Admin Console (`devtrack admin-start`)
+
+A lightweight web admin console at `http://localhost:8090/admin/` built with FastAPI + HTMX (no JS build step).
+
+```bash
+devtrack admin-start
+```
+
+Pages:
+- **Dashboard** — process health, live stats, recent activity
+- **Users** — invite/remove users, manage API keys
+- **Server** — LLM provider config, integration toggles
+- **Audit Log** — timestamped record of all admin actions
+
+Auth uses JWT sessions. Credentials are set in `.env`:
+```
+ADMIN_PORT=8090
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=changeme
+```
+
 ### Personalized AI
 
 ```bash
@@ -305,7 +378,7 @@ DevTrack is split into two independently deployable components:
 | `devtrack` binary | Daemon + CLI client | Go 1.20+ | ~5 MB — no Python required to install |
 | Python backend | AI server | Python 3.12+ | Runs as subprocess (managed) or container (external) |
 
-The Go daemon handles git monitoring, cron scheduling, the SQLite database, and the IPC server. The Python backend handles NLP, LLM calls, TUI prompts, project management integrations, Telegram, and report generation. They communicate over a TCP socket (default `127.0.0.1:35893`).
+The Go daemon handles git monitoring, cron scheduling, the SQLite database, and the HTTP trigger client. The Python backend handles NLP, LLM calls, TUI prompts, project management integrations, Telegram, Slack, and report generation. They communicate over HTTPS (Go POSTs triggers to Python; self-signed ECDSA cert generated at startup, cert-pinned in the Go client).
 
 **Server modes** — set in `.env`:
 
@@ -323,9 +396,11 @@ A `Dockerfile.server` is provided for containerising the Python backend.
 | Daemon / CLI | Go 1.20+, fsnotify, robfig/cron, modernc/sqlite |
 | AI backend server | Python 3.12+, uv, spaCy, aiohttp |
 | Local LLM | Ollama (default) — also OpenAI, Anthropic, Groq, LM Studio |
-| Storage | SQLite (triggers/history), ChromaDB (RAG), optional MongoDB |
-| Remote control | Telegram bot via python-telegram-bot |
+| Storage | SQLite (all app state including sync cache + learning data), ChromaDB (RAG), optional MongoDB |
+| Remote control | Telegram bot (python-telegram-bot) · Slack bot (slack-bolt Socket Mode) |
 | PM integrations | Azure DevOps REST API, GitLab REST API, GitHub REST API, Jira REST API |
+| Admin Console | FastAPI + HTMX, JWT auth, port 8090 |
+| Server TUI | Textual (Python TUI framework) |
 | Observability | runtime-narrative — structured story/stage traces; auto-wraps webhook requests and produces failure reports |
 
 ---

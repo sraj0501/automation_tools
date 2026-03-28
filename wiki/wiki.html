@@ -578,6 +578,7 @@ const NAV = [
       { id: 'GITLAB',        label: 'GitLab',          icon: gitlab_icon() },
       { id: 'GITHUB',        label: 'GitHub',          icon: github_icon() },
       { id: 'TELEGRAM_BOT',    label: 'Telegram Bot',    icon: telegram_icon() },
+      { id: 'SLACK_BOT',       label: 'Slack Bot',        icon: '💬' },
       { id: 'PM_AGENT',        label: 'PM Agent',        icon: pm_icon() },
       { id: 'PROJECT_PLANNING',label: 'Project Planning',icon: pm_icon() },
       { id: 'TICKET_ALERTER',  label: 'Ticket Alerter',  icon: bell_icon() },
@@ -596,6 +597,8 @@ const NAV = [
     group: 'System Integration',
     items: [
       { id: 'AUTOSTART',       label: 'Auto-Start',       icon: launch_icon() },
+      { id: 'SERVER_TUI',      label: 'Server TUI',       icon: terminal_icon() },
+      { id: 'ADMIN_CONSOLE',   label: 'Admin Console',    icon: settings_icon() },
     ]
   },
   {
@@ -637,6 +640,166 @@ function bug_icon()      { return svgIcon('<path fill-rule="evenodd" d="M8.257 3
 function map_icon()      { return svgIcon('<path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z"/>'); }
 function bell_icon()     { return svgIcon('<path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z"/>'); }
 function launch_icon()   { return svgIcon('<path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"/>'); }
+
+// ── Inline Content ───────────────────────────────────────────────────────────
+// Pages listed here render inline HTML instead of fetching an external .md file.
+const CONTENT = {
+  SERVER_TUI: `<div class="md-body">
+<h1>Server TUI</h1>
+<p>The Server TUI is a terminal-based process monitor for the DevTrack Python backend. It gives you a live, keyboard-driven view of all server processes and their resource usage — no separate monitoring tool required.</p>
+
+<h2>Launching</h2>
+<pre><code class="language-bash">devtrack server-tui</code></pre>
+<p>Requires <code>PROJECT_ROOT</code> to be set in your <code>.env</code> file so the TUI knows where to find the server processes. The daemon does not need to be running first — the TUI can also be used to start individual processes from cold.</p>
+
+<h2>What It Shows</h2>
+<p>The main panel is a table with one row per server process:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Process</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>webhook_server</code></td><td>FastAPI server on port 8089 — receives HTTPS trigger POSTs from the Go daemon and inbound webhooks from Azure, GitHub, GitLab, and Jira</td></tr>
+<tr><td><code>telegram_bot</code></td><td>Telegram bot polling loop — remote control and mobile access</td></tr>
+<tr><td><code>slack_bot</code></td><td>Slack Socket Mode bot — <code>/devtrack</code> slash command and proactive work reminders (only when <code>SLACK_ENABLED=true</code>)</td></tr>
+<tr><td><code>alert_poller</code></td><td>Background ticket alerter — polls GitHub, Azure DevOps, and Jira for events assigned to you</td></tr>
+</tbody>
+</table></div>
+<p>Each row shows live CPU%, memory usage, current status (<strong>running</strong> / <strong>stopped</strong> / <strong>error</strong>), and the process uptime.</p>
+<p>A <strong>health bar</strong> at the top of the screen shows the aggregate status of the webhook server and Ollama — a quick glance tells you if the two most latency-sensitive services are reachable.</p>
+
+<h2>Keyboard Shortcuts</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Key</th><th>Action</th></tr></thead>
+<tbody>
+<tr><td><code>↑</code> / <code>k</code></td><td>Move selection up</td></tr>
+<tr><td><code>↓</code> / <code>j</code></td><td>Move selection down</td></tr>
+<tr><td><code>r</code></td><td>Restart the selected process</td></tr>
+<tr><td><code>s</code></td><td>Start the selected process (if stopped)</td></tr>
+<tr><td><code>x</code></td><td>Stop the selected process</td></tr>
+<tr><td><code>l</code></td><td>Toggle the log pane — streams the tail of that process's log file</td></tr>
+<tr><td><code>q</code></td><td>Quit the TUI (leaves all server processes running)</td></tr>
+</tbody>
+</table></div>
+
+<h2>Requirements</h2>
+<ul>
+<li><code>PROJECT_ROOT</code> set in <code>.env</code> — the TUI uses this to locate PID files and log directories under <code>Data/</code></li>
+<li>The <code>textual</code> Python package — installed automatically via <code>uv sync</code></li>
+<li>Python backend dependencies present (same virtualenv used by <code>devtrack start</code>)</li>
+</ul>
+
+<blockquote><p><strong>Note:</strong> All server state (PIDs, process metadata) is stored in <code>Data/devtrack.db</code> — the single SQLite database that now holds all DevTrack runtime state. No JSON PID files or separate state files are written.</p></blockquote>
+</div>`,
+
+  ADMIN_CONSOLE: `<div class="md-body">
+<h1>Admin Console</h1>
+<p>The Admin Console is a lightweight web UI for managing DevTrack's Python backend — users, API keys, LLM configuration, and integration credentials — without touching the command line or <code>.env</code> directly. It is built with HTMX + Jinja2 and has no JavaScript build step.</p>
+
+<h2>Launching</h2>
+<pre><code class="language-bash">devtrack admin-start</code></pre>
+<p>Then open <a href="http://localhost:8090/admin/" target="_blank" rel="noopener">http://localhost:8090/admin/</a> in a browser.</p>
+<p>The Admin Console runs on a <strong>separate port (8090)</strong> from the webhook server (8089) so it can be firewall-restricted independently in production deployments.</p>
+
+<h2>Required .env Variables</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>ADMIN_PORT</code></td><td><code>8090</code></td><td>Port the admin server listens on</td></tr>
+<tr><td><code>ADMIN_HOST</code></td><td><code>0.0.0.0</code></td><td>Bind address (<code>127.0.0.1</code> to restrict to localhost)</td></tr>
+<tr><td><code>ADMIN_USERNAME</code></td><td><code>admin</code></td><td>Login username</td></tr>
+<tr><td><code>ADMIN_PASSWORD</code></td><td><code>changeme</code></td><td>Login password — <strong>change before exposing to a network</strong></td></tr>
+<tr><td><code>ADMIN_SECRET_KEY</code></td><td>—</td><td>Secret used to sign JWT session cookies — required, no default</td></tr>
+<tr><td><code>ADMIN_SESSION_HOURS</code></td><td><code>8</code></td><td>Session lifetime in hours before re-login is required</td></tr>
+</tbody>
+</table></div>
+
+<h2>Pages</h2>
+
+<h3>Dashboard</h3>
+<p>Live overview of all server processes (same data as the Server TUI), service health checks (webhook server reachability, Ollama availability), and summary stats — total commits logged, work sessions this week, alerts delivered.</p>
+
+<h3>Users</h3>
+<p>Create and delete DevTrack users. Each user gets an <strong>API key</strong> that clients use to authenticate against the webhook server and REST endpoints. Keys can be rotated from this page without touching <code>.env</code>.</p>
+
+<h3>Server</h3>
+<p>Read-only view of the active LLM provider configuration (which provider is primary, which are fallbacks), and the status of each external integration credential (Azure DevOps, GitHub, GitLab, Jira, Telegram, Slack, MongoDB, Redis). A green tick means the credential is present and the service responded to a ping; red means missing or unreachable.</p>
+
+<h3>Audit Log</h3>
+<p>Timestamped log of every admin action — login, user creation/deletion, key rotation — with the acting username and IP address. Useful for auditing shared team deployments.</p>
+
+<h2>Authentication</h2>
+<p>The console uses a <strong>JWT session cookie</strong>. Credentials are set via <code>ADMIN_USERNAME</code> / <code>ADMIN_PASSWORD</code> in <code>.env</code>. On first login you will be prompted to change the default password if <code>ADMIN_PASSWORD=changeme</code> is still set — the console will refuse to serve any page other than the password-change form until it is updated.</p>
+
+<h2>First-Time Setup</h2>
+<pre><code class="language-bash"># 1. Generate a secret key (any random string, 32+ chars recommended)
+python3 -c "import secrets; print(secrets.token_hex(32))"
+
+# 2. Add to .env
+ADMIN_SECRET_KEY=&lt;output from above&gt;
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=your-secure-password   # change from default
+
+# 3. Start the console
+devtrack admin-start</code></pre>
+
+<h2>Design Notes</h2>
+<ul>
+<li><strong>Dark theme</strong> — matches the DevTrack aesthetic; inherits CSS variables so it respects the system theme.</li>
+<li><strong>No JS build step</strong> — HTMX is loaded from CDN; all interactivity is server-rendered HTML fragments. Works without a bundler.</li>
+<li><strong>Separate from the webhook server</strong> — the admin console and the webhook server (port 8089) are two distinct FastAPI apps. Stopping the admin console does not affect webhook delivery.</li>
+<li><strong>All state in SQLite</strong> — user records, API keys, and audit log entries are stored in <code>Data/devtrack.db</code> alongside all other DevTrack runtime state. No separate database or file is required.</li>
+</ul>
+
+<blockquote><p><strong>Storage note:</strong> All DevTrack state — trigger history, work sessions, sync cache (Azure/GitLab items), learning data (consent, profile, samples), user records, and audit log — now lives in a single SQLite database at <code>Data/devtrack.db</code>. MongoDB remains the primary store when <code>MONGODB_URI</code> is set; SQLite is the always-available local fallback. No migration is needed for a clean install.</p></blockquote>
+</div>`,
+
+  SLACK_BOT: `<div class="md-body">
+<h1>Slack Bot</h1>
+<p>The Slack bot lets you control DevTrack from any Slack channel using a single slash command: <code>/devtrack &lt;subcommand&gt;</code>. It uses <strong>Socket Mode</strong> — no public URL, no firewall rules, no ngrok required.</p>
+
+<h2>Setup</h2>
+<ol>
+<li>Create a Slack App at <a href="https://api.slack.com/apps" target="_blank" rel="noopener">api.slack.com/apps</a></li>
+<li>Enable <strong>Socket Mode</strong> (Settings → Socket Mode) → get an App-Level Token (<code>xapp-...</code>) with the <code>connections:write</code> scope</li>
+<li>Add a slash command <code>/devtrack</code> (any Request URL — Socket Mode ignores it)</li>
+<li>Add Bot Token Scopes: <code>chat:write</code>, <code>commands</code>, <code>channels:read</code></li>
+<li>Install to workspace → get the Bot User OAuth Token (<code>xoxb-...</code>)</li>
+<li>Invite the bot to your channels: <code>/invite @devtrack</code></li>
+</ol>
+
+<h2>Configuration</h2>
+<pre><code class="language-bash">SLACK_ENABLED=true
+SLACK_BOT_TOKEN=xoxb-...          # Bot User OAuth Token
+SLACK_APP_TOKEN=xapp-...          # App-Level Token (Socket Mode)
+SLACK_ALLOWED_CHANNEL_IDS=C123ABC,C456DEF   # leave blank for all channels (dev mode)</code></pre>
+<p>The daemon starts the Slack bot subprocess automatically alongside Telegram when <code>SLACK_ENABLED=true</code>.</p>
+
+<h2>Commands</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Command</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>/devtrack help</code></td><td>List all available subcommands</td></tr>
+<tr><td><code>/devtrack status</code></td><td>Show daemon status (running / stopped)</td></tr>
+<tr><td><code>/devtrack logs</code></td><td>Tail the last 20 lines of the daemon log</td></tr>
+<tr><td><code>/devtrack trigger</code></td><td>Manually fire a timer trigger (same as pressing the prompt)</td></tr>
+<tr><td><code>/devtrack health</code></td><td>Check Python backend and Ollama reachability</td></tr>
+<tr><td><code>/devtrack commits</code></td><td>Show recent commits logged today</td></tr>
+<tr><td><code>/devtrack workstart [ticket]</code></td><td>Start a work session, optionally linked to a ticket</td></tr>
+<tr><td><code>/devtrack workstop</code></td><td>Stop the active work session</td></tr>
+<tr><td><code>/devtrack workadjust &lt;mins&gt;</code></td><td>Override the recorded time for the active/last session</td></tr>
+<tr><td><code>/devtrack workstatus</code></td><td>Show today's sessions and the active timer</td></tr>
+<tr><td><code>/devtrack workreport [--email addr]</code></td><td>Generate the EOD report; optionally email it</td></tr>
+<tr><td><code>/devtrack github</code></td><td>List open GitHub issues/PRs assigned to you</td></tr>
+<tr><td><code>/devtrack gitlab</code></td><td>List open GitLab issues assigned to you</td></tr>
+</tbody>
+</table></div>
+
+<h2>Proactive Notifications</h2>
+<p>When the DevTrack timer fires (every <code>PROMPT_INTERVAL</code> minutes during work hours), the Slack bot sends a work-reminder nudge to all allowed channels — the same nudge Telegram delivers. This is stateless: the notifier uses the bot token directly without requiring the Socket Mode handler to be running.</p>
+
+<h2>Channel Restrictions</h2>
+<p>Set <code>SLACK_ALLOWED_CHANNEL_IDS</code> to a comma-separated list of Slack channel IDs (e.g. <code>C123ABC,C456DEF</code>) to restrict commands and notifications to specific channels. Leave it blank during development to allow all channels.</p>
+</div>`,
+};
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let currentPage = 'home';
@@ -743,6 +906,8 @@ function navigate(id, pushHistory = true) {
 
   if (id === 'home') {
     renderHome();
+  } else if (CONTENT[id]) {
+    renderInlineContent(id);
   } else {
     loadMarkdown(id);
   }
@@ -780,12 +945,15 @@ function renderHome() {
         { id:'GITLAB',          icon:'🦊', title:'GitLab',            desc:'Full CLI and Telegram access; inbound webhooks; issue enrichment on create.' },
         { id:'GITHUB',          icon:'🐙', title:'GitHub',            desc:'Full CLI parity, bidirectional sync, inbound webhooks, Telegram commands, and per-workspace milestone assignment via <code>pm_milestone</code> in workspaces.yaml.' },
         { id:'TELEGRAM_BOT',    icon:'📱', title:'Telegram Bot',      desc:'Control DevTrack remotely from your phone.' },
+        { id:'SLACK_BOT',       icon:'💬', title:'Slack Bot',          desc:'Socket Mode slash command <code>/devtrack &lt;cmd&gt;</code> — no public URL required. Supports all work-session and PM commands plus proactive work-reminder nudges.' },
         { id:'PM_AGENT',        icon:'🗂️', title:'PM Agent',          desc:'AI decomposes problems into Epic → Story → Task hierarchies.' },
         { id:'PROJECT_PLANNING',icon:'📋', title:'AI Project Planning', desc:'<code>/newproject</code> in Telegram: describe requirements, pick team from live roster, AI auto-fetches workloads, generates a full YAML spec with sprints/stories/risks, emails it to the PM for review, and creates everything in the PM tool on approval.' },
         { id:'TICKET_ALERTER',  icon:'🔔', title:'Ticket Alerter',    desc:'Background poller for GitHub, Azure DevOps, and Jira — delivers OS notifications and terminal output when you\'re assigned, mentioned, or a status changes. <code>devtrack alerts</code> to view, <code>devtrack alerts --clear</code> to dismiss.' },
         { id:'WORK_TRACKER',   icon:'⏱️', title:'Work Tracker',      desc:'Automatic session-based time tracking. <code>devtrack work start AUTH-42</code> begins a session; every commit is auto-attached. <code>devtrack work stop</code> records the duration. At end of day, <code>devtrack work report</code> produces an AI narrative summary and optional email.' },
         { id:'PERSONALIZATION', icon:'🎨', title:'Personalization',   desc:'"Talk Like You" — AI that learns your communication style.' },
         { id:'AUTOSTART', icon:'⚙️', title:'Auto-Start',   desc:'Auto-start DevTrack at login — OS-aware. Run <code>devtrack autostart-install</code>: launchd LaunchAgent on macOS, systemd user service on Linux/WSL with systemd, or a shell profile block on WSL without systemd. Uninstall with <code>devtrack autostart-uninstall</code>.' },
+        { id:'SERVER_TUI',    icon:'🖥️', title:'Server TUI',     desc:'Textual process monitor for the Python backend. Shows all server processes (webhook server, Telegram bot, Slack bot, alert poller) with live CPU/MEM/status and a health bar. Navigate with ↑↓, restart with r, toggle logs with l.' },
+        { id:'ADMIN_CONSOLE', icon:'⚙️', title:'Admin Console',  desc:'Web UI at <code>http://localhost:8090/admin/</code> — manage users, API keys, review server health, LLM config, integration credentials, and a full audit log. Run with <code>devtrack admin-start</code>.' },
         { id:'TROUBLESHOOTING', icon:'🔧', title:'Troubleshooting',   desc:'Common problems, error messages, and solutions.' },
       ].map(c => `
         <a class="home-card" href="#${c.id}" onclick="navigate('${c.id}');return false;">
@@ -841,7 +1009,7 @@ cd automation_tools
         { n:'Ticket Alerter',      d:'Polls GitHub, Azure DevOps, and Jira for events relevant to you — assigned issues/PRs/work items, comments on threads you are in, state changes, and review requests. Delivers macOS OS notifications (via osascript) and terminal output. Delta-synced via MongoDB so you never see the same notification twice. Configure with <code>ALERT_ENABLED=true</code>, <code>ALERT_GITHUB_ENABLED=true</code>, <code>ALERT_AZURE_ENABLED=true</code>, <code>ALERT_JIRA_ENABLED=true</code> and the <code>ALERT_*</code> variables in <code>.env</code>.' },
         { n:'OS-Aware Auto-Start', d:'Run <code>devtrack autostart-install</code> — DevTrack detects your OS and picks the right mechanism: launchd LaunchAgent on macOS, systemd user service on Linux/WSL with systemd, or a shell profile block on WSL without systemd. The daemon starts automatically each time you log in — no cron, no manual <code>devtrack start</code> after reboot.' },
         { n:'Offline-First',       d:'Queues everything and syncs when connectivity returns.' },
-        { n:'Remote Control',      d:'Full Telegram bot: status, logs, create items, trigger updates.' },
+        { n:'Remote Control',      d:'Full Telegram bot: status, logs, create items, trigger updates. Plus a Slack bot (<code>/devtrack &lt;cmd&gt;</code>) via Socket Mode — no public URL required.' },
         { n:'Ticket Alerter',      d:'Background poller for GitHub, Azure DevOps, and Jira. Delivers macOS OS notifications and terminal output when tickets are assigned, commented on, or change state. <code>devtrack alerts</code> to view unread. Configurable per-source via <code>ALERT_*</code> env vars.' },
         { n:'AI Project Planning', d:'<code>/newproject</code> in Telegram — describe a project in plain text, pick developers from the live team roster, and let AI auto-fetch each person\'s workload from the PM tool. Generates a full YAML spec (features, stories, sprints, capacity analysis, skill-gap risks), emails it to the PM with an approve/edit link, and creates everything in Azure/GitHub/GitLab on approval.' },
         { n:'Work Session Tracking', d:'<code>devtrack work start [ticket]</code> begins a session timer. Every git commit while the session is active is auto-attached — no manual time entry. <code>devtrack work stop</code> records the auto-measured duration; <code>devtrack work adjust 90</code> overrides it (raw time kept for audit). <code>devtrack work report</code> generates an AI EOD summary with achievements, in-progress items, and what\'s pending tomorrow, plus optional email via MS Graph.' },
@@ -855,6 +1023,15 @@ cd automation_tools
   `;
   addCodeToolbars(content);
   hljs.highlightAll();
+}
+
+// ── Inline Content Renderer ───────────────────────────────────────────────────
+function renderInlineContent(id) {
+  const content = document.getElementById('content');
+  content.innerHTML = CONTENT[id];
+  addCodeToolbars(content);
+  hljs.highlightAll();
+  buildTOC(content);
 }
 
 // ── Load & Render Markdown ────────────────────────────────────────────────────

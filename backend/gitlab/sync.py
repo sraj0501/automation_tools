@@ -2,44 +2,28 @@
 GitLab sync utilities.
 
 Provides a simple sync layer that fetches issues from GitLab
-and reports status. State is stored in Data/gitlab/sync_state.json for
-offline reference and audit trail.
+and reports status. State is persisted in SQLite (devtrack.db) via
+backend.db.platform_store.
 
 No dependency on ProjectManager — designed to work standalone.
 """
 
-import json
 import logging
 import os
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Dict, List, Optional
 
 from backend.gitlab.client import GitLabClient, GitLabIssue
+from backend.db.platform_store import (
+    clear_sync_items,
+    load_sync_items,
+    load_sync_meta,
+    save_sync_items,
+)
 
 logger = logging.getLogger(__name__)
 
-
-def _state_file() -> Path:
-    """Return path to local sync state file."""
-    data_dir = os.getenv("DATA_DIR", "Data")
-    path = Path(data_dir) / "gitlab" / "sync_state.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def _load_state() -> Dict:
-    f = _state_file()
-    if f.exists():
-        try:
-            return json.loads(f.read_text())
-        except Exception:
-            pass
-    return {"last_sync": None, "issues": {}}
-
-
-def _save_state(state: Dict) -> None:
-    _state_file().write_text(json.dumps(state, indent=2, default=str))
+_PLATFORM = "gitlab"
 
 
 # ---------------------------------------------------------------------------
@@ -68,20 +52,22 @@ class GitLabSync:
         if hours is not None:
             # Windowed sync — merge into existing cache
             changed_after = datetime.now(timezone.utc) - timedelta(hours=hours)
-            existing = _load_state().get("issues", {})
+            existing = load_sync_items(_PLATFORM)
             logger.info(f"GitLab sync: windowed mode, last {hours}h (since {changed_after.isoformat()})")
         elif full:
             # Full sync — start fresh
             logger.info("GitLab sync: full mode, clearing existing cache")
+            clear_sync_items(_PLATFORM)
         else:
             # Incremental default: read window from env
             window_hours = int(os.getenv("GITLAB_SYNC_WINDOW_HOURS", "0") or "0")
             if window_hours > 0:
                 changed_after = datetime.now(timezone.utc) - timedelta(hours=window_hours)
-                existing = _load_state().get("issues", {})
+                existing = load_sync_items(_PLATFORM)
                 logger.info(f"GitLab sync: env window {window_hours}h")
             else:
                 logger.info("GitLab sync: full mode (GITLAB_SYNC_WINDOW_HOURS=0)")
+                clear_sync_items(_PLATFORM)
 
         items = await self.client.get_my_issues(
             state="opened",
@@ -115,13 +101,7 @@ class GitLabSync:
         merged = {**existing, **fetched_records}
 
         mode = f"windowed:{hours}h" if hours else ("full" if not existing else f"windowed:{int(os.getenv('GITLAB_SYNC_WINDOW_HOURS', '0'))}h" if changed_after else "full")
-        state = {
-            "last_sync": now,
-            "sync_mode": mode,
-            "base_url": self.client._base_url,
-            "issues": merged,
-        }
-        _save_state(state)
+        save_sync_items(_PLATFORM, merged, now)
         logger.info(f"GitLab sync complete: {len(items)} fetched, {len(merged)} total in cache")
 
         by_state: Dict[str, List[GitLabIssue]] = {}
@@ -134,7 +114,6 @@ class GitLabSync:
             "by_state": {s: len(v) for s, v in by_state.items()},
             "items": items,
             "last_sync": now,
-            "state_file": str(_state_file()),
             "mode": mode,
         }
 
@@ -150,4 +129,7 @@ class GitLabSync:
 
     def get_cached(self) -> Dict:
         """Return locally cached state without hitting the API."""
-        return _load_state()
+        return {
+            "last_sync": load_sync_meta(_PLATFORM),
+            "issues": load_sync_items(_PLATFORM),
+        }

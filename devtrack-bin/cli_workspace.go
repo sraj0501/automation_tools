@@ -1,11 +1,10 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"net"
+	"os"
 	"strings"
-	"time"
+	"syscall"
 )
 
 // WorkspaceCommands handles workspace management commands
@@ -170,58 +169,49 @@ func (wc *WorkspaceCommands) setEnabled(name string, enabled bool) error {
 	return nil
 }
 
-// sendWorkspaceReload sends MsgTypeWorkspaceReload to the daemon (best-effort, not fatal).
-// Called automatically after Add, Remove, Enable, Disable mutations.
+// sendWorkspaceReload notifies the running daemon via SIGHUP (best-effort, not fatal).
+// The SIGHUP handler in daemon.go reloads Go workspaces and POSTs to Python.
 func (wc *WorkspaceCommands) sendWorkspaceReload() {
-	addr := GetIPCAddress()
-	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
+	pid, err := readDaemonPID()
 	if err != nil {
 		fmt.Println("(Daemon not running — changes will take effect on next start.)")
 		return
 	}
-	defer conn.Close()
-	msg := IPCMessage{
-		Type:      MsgTypeWorkspaceReload,
-		Timestamp: time.Now(),
-		ID:        fmt.Sprintf("reload_%d", time.Now().UnixNano()),
-		Data:      make(map[string]interface{}),
-	}
-	data, err := json.Marshal(msg)
-	if err != nil {
+	proc, err := os.FindProcess(pid)
+	if err != nil || proc.Signal(syscall.Signal(0)) != nil {
+		fmt.Println("(Daemon not running — changes will take effect on next start.)")
 		return
 	}
-	data = append(data, '\n')
-	conn.Write(data) //nolint:errcheck // best-effort
+	proc.Signal(syscall.SIGHUP) //nolint:errcheck
 	fmt.Println("Reload signal sent to daemon.")
 }
 
-// Reload sends MsgTypeWorkspaceReload to the running daemon via IPC
+// Reload sends SIGHUP to the running daemon, triggering a workspace config reload.
 func (wc *WorkspaceCommands) Reload() error {
-	addr := GetIPCAddress()
-
-	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
+	pid, err := readDaemonPID()
 	if err != nil {
-		return fmt.Errorf("failed to connect to daemon IPC at %s: %w", addr, err)
+		return fmt.Errorf("daemon not running: %w", err)
 	}
-	defer conn.Close()
-
-	msg := IPCMessage{
-		Type:      MsgTypeWorkspaceReload,
-		Timestamp: time.Now(),
-		ID:        fmt.Sprintf("reload_%d", time.Now().UnixNano()),
-		Data:      make(map[string]interface{}),
-	}
-
-	data, err := json.Marshal(msg)
+	proc, err := os.FindProcess(pid)
 	if err != nil {
-		return fmt.Errorf("failed to marshal reload message: %w", err)
+		return fmt.Errorf("process not found: %w", err)
 	}
-	data = append(data, '\n')
-
-	if _, err := conn.Write(data); err != nil {
-		return fmt.Errorf("failed to send reload message: %w", err)
+	if err := proc.Signal(syscall.SIGHUP); err != nil {
+		return fmt.Errorf("failed to send SIGHUP: %w", err)
 	}
-
 	fmt.Println("Workspace reload signal sent to daemon.")
 	return nil
+}
+
+// readDaemonPID reads the daemon PID from the PID file.
+func readDaemonPID() (int, error) {
+	data, err := os.ReadFile(GetPIDFilePath())
+	if err != nil {
+		return 0, err
+	}
+	var pid int
+	if _, err := fmt.Sscanf(string(data), "%d", &pid); err != nil {
+		return 0, fmt.Errorf("invalid PID: %w", err)
+	}
+	return pid, nil
 }

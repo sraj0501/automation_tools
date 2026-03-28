@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -11,22 +12,40 @@ import (
 	"time"
 )
 
-// HTTPTriggerClient sends trigger events to the Python backend via HTTP POST.
-// Used when DEVTRACK_SERVER_MODE=external and DEVTRACK_SERVER_URL is configured.
-// In managed mode this is never instantiated — IPC is used instead.
+// HTTPTriggerClient sends trigger events to the Python backend via HTTPS POST.
+// Always used — both managed and external modes now communicate over HTTP.
+// When TLS is enabled (default) the client pins the self-signed cert generated
+// at daemon startup so no InsecureSkipVerify is needed.
 type HTTPTriggerClient struct {
 	serverURL  string
 	apiKey     string
 	httpClient *http.Client
 }
 
-// NewHTTPTriggerClient builds a client aimed at DEVTRACK_SERVER_URL.
+// NewHTTPTriggerClient builds a client pointing at GetServerURL().
+// If TLS is enabled it loads the daemon-generated cert from GetTLSCertPath()
+// and uses it as the sole trusted root (cert-pinning).
 func NewHTTPTriggerClient() *HTTPTriggerClient {
+	transport := &http.Transport{}
+
+	if IsTLSEnabled() {
+		pool, err := LoadTLSCertPool(GetTLSCertPath())
+		if err != nil {
+			log.Printf("Warning: could not load TLS cert for HTTP client (%v) — falling back to system roots", err)
+		} else {
+			transport.TLSClientConfig = &tls.Config{
+				RootCAs:    pool,
+				MinVersion: tls.VersionTLS12,
+			}
+		}
+	}
+
 	return &HTTPTriggerClient{
 		serverURL: GetServerURL(),
 		apiKey:    os.Getenv("DEVTRACK_API_KEY"),
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout:   30 * time.Second,
+			Transport: transport,
 		},
 	}
 }
@@ -58,6 +77,36 @@ func (c *HTTPTriggerClient) SendCommitTrigger(data CommitTriggerData) error {
 // SendTimerTrigger POSTs a timer trigger payload to POST /trigger/timer.
 func (c *HTTPTriggerClient) SendTimerTrigger(data TimerTriggerData) error {
 	return c.post("/trigger/timer", data)
+}
+
+// SendWorkspaceReload POSTs a workspace-reload notification to Python.
+func (c *HTTPTriggerClient) SendWorkspaceReload() error {
+	return c.post("/trigger/workspace_reload", map[string]string{"source": "cli"})
+}
+
+// SendShutdown notifies Python to perform a graceful shutdown.
+func (c *HTTPTriggerClient) SendShutdown() error {
+	return c.post("/trigger/shutdown", map[string]string{})
+}
+
+// SendPing checks liveness via /trigger/ping.
+func (c *HTTPTriggerClient) SendPing() error {
+	return c.post("/trigger/ping", map[string]string{})
+}
+
+// SendWorkSessionStart notifies Python that a work session has started.
+func (c *HTTPTriggerClient) SendWorkSessionStart(sessionID int64, ticketRef string) error {
+	return c.post("/trigger/work_session_start", map[string]interface{}{
+		"session_id": sessionID,
+		"ticket_ref": ticketRef,
+	})
+}
+
+// SendWorkSessionStop notifies Python that a work session has ended.
+func (c *HTTPTriggerClient) SendWorkSessionStop(sessionID int64) error {
+	return c.post("/trigger/work_session_stop", map[string]interface{}{
+		"session_id": sessionID,
+	})
 }
 
 func (c *HTTPTriggerClient) post(path string, payload interface{}) error {

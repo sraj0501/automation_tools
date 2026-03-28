@@ -200,6 +200,10 @@ func (cli *CLI) Execute() error {
 		return cli.handleAlerts()
 	case "work":
 		return cli.handleWork()
+	case "server-tui":
+		return cli.handleServerTUI()
+	case "admin-start":
+		return cli.handleAdminStart()
 	case "help":
 		cli.printUsage()
 		return nil
@@ -2566,6 +2570,14 @@ func (cli *CLI) printUsage() {
 	fmt.Println("  devtrack launchd-install    Install plist to ~/Library/LaunchAgents and load it")
 	fmt.Println("                              DevTrack will start automatically at login")
 	fmt.Println("  devtrack launchd-uninstall  Unload and remove the launchd plist")
+	fmt.Println()
+	fmt.Println("SERVER TUI / ADMIN CONSOLE (CS-2 / CS-3):")
+	fmt.Println("  devtrack server-tui    Open Textual process monitor for all DevTrack server processes")
+	fmt.Println("                           ↑↓ / j k  navigate   r restart   s start   x stop")
+	fmt.Println("                           l         toggle log pane for selected process")
+	fmt.Println("                           q         quit")
+	fmt.Println("  devtrack admin-start   Start Admin Console web UI  (default: http://localhost:8090/admin/)")
+	fmt.Println("                           ADMIN_PORT, ADMIN_USERNAME, ADMIN_PASSWORD must be set in .env")
 	fmt.Println()
 	fmt.Println("INFO COMMANDS:")
 	fmt.Println("  devtrack logs          Show recent log entries")

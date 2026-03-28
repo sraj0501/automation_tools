@@ -870,6 +870,12 @@ func IsTelegramEnabled() bool {
 	return strings.EqualFold(val, "true") || val == "1"
 }
 
+// IsSlackEnabled returns whether the Slack bot is enabled
+func IsSlackEnabled() bool {
+	val := os.Getenv("SLACK_ENABLED")
+	return strings.EqualFold(val, "true") || val == "1"
+}
+
 func IsAzurePollerEnabled() bool {
 	val := os.Getenv("AZURE_POLL_ENABLED")
 	return strings.EqualFold(val, "true") || val == "1"
