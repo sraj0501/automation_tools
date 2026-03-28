@@ -14,6 +14,7 @@ Configuration (via .env):
 import logging
 from base64 import b64encode
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -93,6 +94,7 @@ class JiraClient:
         assignee_email: Optional[str] = None,
         status_filter: Optional[List[str]] = None,
         max_results: int = 50,
+        updated_after: Optional[datetime] = None,
     ) -> List[JiraIssue]:
         """Fetch issues assigned to the given user (defaults to configured email).
 
@@ -100,6 +102,7 @@ class JiraClient:
             assignee_email: Filter by this assignee. Uses JIRA_EMAIL from config if None.
             status_filter: Optional list of status names to filter on (e.g. ['In Progress']).
             max_results: Maximum number of issues to return.
+            updated_after: Only return issues updated after this datetime.
         """
         assignee = assignee_email or self._email
         if not assignee:
@@ -111,7 +114,11 @@ class JiraClient:
             statuses = ", ".join(f'"{s}"' for s in status_filter)
             status_clause = f" AND status in ({statuses})"
 
-        jql = f'assignee = "{assignee}"{status_clause} ORDER BY updated DESC'
+        updated_clause = ""
+        if updated_after:
+            updated_clause = f' AND updated >= "{updated_after.strftime("%Y-%m-%d %H:%M")}"'
+
+        jql = f'assignee = "{assignee}"{status_clause}{updated_clause} ORDER BY updated DESC'
         params = {
             "jql": jql,
             "maxResults": max_results,
@@ -121,6 +128,79 @@ class JiraClient:
         if not data:
             return []
         return [self._parse_issue(issue) for issue in data.get("issues", [])]
+
+    def _search(
+        self,
+        jql: str,
+        fields: str = "summary,description,status,assignee,issuetype,priority,labels",
+        max_results: int = 50,
+    ) -> List[JiraIssue]:
+        """Run an arbitrary JQL search and return parsed issues."""
+        params = {"jql": jql, "maxResults": max_results, "fields": fields}
+        data = self._get("/search", params=params)
+        if not data:
+            return []
+        return [self._parse_issue(issue) for issue in data.get("issues", [])]
+
+    def get_issue_comments(self, issue_key: str) -> List[Dict[str, Any]]:
+        """Fetch all comments for an issue.
+
+        Returns a list of comment dicts with keys:
+            id, created, updated, author (dict with emailAddress, displayName), body_text
+        """
+        data = self._get(f"/issue/{issue_key}/comment", params={"orderBy": "created"})
+        if not data:
+            return []
+        comments = data.get("comments", [])
+        result = []
+        for c in comments:
+            author = c.get("author") or {}
+            result.append({
+                "id": c.get("id", ""),
+                "created": c.get("created", ""),
+                "updated": c.get("updated", ""),
+                "author": {
+                    "emailAddress": author.get("emailAddress", ""),
+                    "displayName": author.get("displayName", ""),
+                    "accountId": author.get("accountId", ""),
+                },
+                "body_text": self._extract_description(c.get("body")),
+            })
+        return result
+
+    def get_issue_changelog(self, issue_key: str) -> List[Dict[str, Any]]:
+        """Fetch the changelog for an issue.
+
+        Returns a list of history entry dicts with keys:
+            id, created, author (dict with emailAddress, displayName), items (list of field changes)
+
+        Each item in ``items`` has: field, fromString, toString
+        """
+        data = self._get(f"/issue/{issue_key}/changelog")
+        if not data:
+            return []
+        values = data.get("values", [])
+        result = []
+        for entry in values:
+            author = entry.get("author") or {}
+            items = [
+                {
+                    "field": it.get("field", ""),
+                    "fromString": it.get("fromString", ""),
+                    "toString": it.get("toString", ""),
+                }
+                for it in (entry.get("items") or [])
+            ]
+            result.append({
+                "id": entry.get("id", ""),
+                "created": entry.get("created", ""),
+                "author": {
+                    "emailAddress": author.get("emailAddress", ""),
+                    "displayName": author.get("displayName", ""),
+                },
+                "items": items,
+            })
+        return result
 
     def get_issue(self, issue_key: str) -> Optional[JiraIssue]:
         """Fetch a single issue by key (e.g. PROJ-123)."""

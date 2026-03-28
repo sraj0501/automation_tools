@@ -962,7 +962,7 @@ LEARNING_OUTLOOK_ENABLED=false
 
 ### Ticket Alerter
 
-Polls GitHub and Azure DevOps for events relevant to you (assignments, comments, state changes) and delivers macOS OS notifications and terminal output. Delta-synced via MongoDB so you never see the same notification twice.
+Polls GitHub, Azure DevOps, and Jira for events relevant to you (assignments, comments, state changes) and delivers macOS OS notifications and terminal output. Delta-synced via MongoDB so you never see the same notification twice.
 
 #### ALERT_ENABLED
 
@@ -1002,6 +1002,21 @@ ALERT_GITHUB_ENABLED=true
 
 ```bash
 ALERT_AZURE_ENABLED=true
+```
+
+#### ALERT_JIRA_ENABLED
+
+**What**: Poll Jira for issues newly assigned to you, new comments on your issues, and status changes on your issues
+**Format**: `true` or `false`
+**Default**: `false` (requires `ALERT_ENABLED=true`, `JIRA_URL`, `JIRA_USERNAME`, and `JIRA_API_TOKEN` set)
+
+Events tracked:
+- **Assigned** — issue newly assigned to you (first-run guard: skipped on the very first poll to avoid backfilling old assignments)
+- **Comment** — new comment added to an issue you are assigned to or created
+- **Status change** — issue transitions to a new status (first-run guard: same as assigned)
+
+```bash
+ALERT_JIRA_ENABLED=true
 ```
 
 #### AZURE_EMAIL *(optional)*
@@ -1053,7 +1068,7 @@ ALERT_NOTIFY_STATUS_CHANGES=true
 ALERT_NOTIFY_REVIEW_REQUESTED=true
 ```
 
-See [GitHub Guide](GITHUB.md) and [Azure DevOps Guide](AZURE_DEVOPS.md) for full credential setup.
+See [GitHub Guide](GITHUB.md), [Azure DevOps Guide](AZURE_DEVOPS.md), and the Jira section in this file for full credential setup.
 
 ---
 

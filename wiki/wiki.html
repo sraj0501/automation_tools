@@ -577,8 +577,11 @@ const NAV = [
       { id: 'AZURE_DEVOPS',  label: 'Azure DevOps',    icon: azure_icon() },
       { id: 'GITLAB',        label: 'GitLab',          icon: gitlab_icon() },
       { id: 'GITHUB',        label: 'GitHub',          icon: github_icon() },
-      { id: 'TELEGRAM_BOT',  label: 'Telegram Bot',    icon: telegram_icon() },
-      { id: 'PM_AGENT',      label: 'PM Agent',        icon: pm_icon() },
+      { id: 'TELEGRAM_BOT',    label: 'Telegram Bot',    icon: telegram_icon() },
+      { id: 'PM_AGENT',        label: 'PM Agent',        icon: pm_icon() },
+      { id: 'PROJECT_PLANNING',label: 'Project Planning',icon: pm_icon() },
+      { id: 'TICKET_ALERTER',  label: 'Ticket Alerter',  icon: bell_icon() },
+      { id: 'WORK_TRACKER',    label: 'Work Tracker',    icon: '⏱️' },
     ]
   },
   {
@@ -632,6 +635,7 @@ function offline_icon()  { return svgIcon('<path fill-rule="evenodd" d="M5.05 3.
 function advanced_icon() { return svgIcon('<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>'); }
 function bug_icon()      { return svgIcon('<path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>'); }
 function map_icon()      { return svgIcon('<path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z"/>'); }
+function bell_icon()     { return svgIcon('<path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z"/>'); }
 function launch_icon()   { return svgIcon('<path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"/>'); }
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -777,6 +781,9 @@ function renderHome() {
         { id:'GITHUB',          icon:'🐙', title:'GitHub',            desc:'Full CLI parity, bidirectional sync, inbound webhooks, Telegram commands, and per-workspace milestone assignment via <code>pm_milestone</code> in workspaces.yaml.' },
         { id:'TELEGRAM_BOT',    icon:'📱', title:'Telegram Bot',      desc:'Control DevTrack remotely from your phone.' },
         { id:'PM_AGENT',        icon:'🗂️', title:'PM Agent',          desc:'AI decomposes problems into Epic → Story → Task hierarchies.' },
+        { id:'PROJECT_PLANNING',icon:'📋', title:'AI Project Planning', desc:'<code>/newproject</code> in Telegram: describe requirements, pick team from live roster, AI auto-fetches workloads, generates a full YAML spec with sprints/stories/risks, emails it to the PM for review, and creates everything in the PM tool on approval.' },
+        { id:'TICKET_ALERTER',  icon:'🔔', title:'Ticket Alerter',    desc:'Background poller for GitHub, Azure DevOps, and Jira — delivers OS notifications and terminal output when you\'re assigned, mentioned, or a status changes. <code>devtrack alerts</code> to view, <code>devtrack alerts --clear</code> to dismiss.' },
+        { id:'WORK_TRACKER',   icon:'⏱️', title:'Work Tracker',      desc:'Automatic session-based time tracking. <code>devtrack work start AUTH-42</code> begins a session; every commit is auto-attached. <code>devtrack work stop</code> records the duration. At end of day, <code>devtrack work report</code> produces an AI narrative summary and optional email.' },
         { id:'PERSONALIZATION', icon:'🎨', title:'Personalization',   desc:'"Talk Like You" — AI that learns your communication style.' },
         { id:'AUTOSTART', icon:'⚙️', title:'Auto-Start',   desc:'Auto-start DevTrack at login — OS-aware. Run <code>devtrack autostart-install</code>: launchd LaunchAgent on macOS, systemd user service on Linux/WSL with systemd, or a shell profile block on WSL without systemd. Uninstall with <code>devtrack autostart-uninstall</code>.' },
         { id:'TROUBLESHOOTING', icon:'🔧', title:'Troubleshooting',   desc:'Common problems, error messages, and solutions.' },
@@ -791,22 +798,35 @@ function renderHome() {
 
     <div class="quick-start-box">
       <h3>5-Minute Setup</h3>
-      <pre><code class="language-bash">git clone https://github.com/yourusername/automation_tools.git
-cd automation_tools
+      <p style="margin:0 0 .75rem;font-size:.9rem;opacity:.8;">Option 1 — Download binary + set up Python backend (recommended)</p>
+      <pre><code class="language-bash"># macOS / Linux — download the lean ~5 MB Go binary (no Python included)
+curl -L https://github.com/sraj0501/automation_tools/releases/latest/download/devtrack_$(uname -s)_$(uname -m).tar.gz | tar xz
+sudo mv devtrack /usr/local/bin/
+
+# Print setup instructions for the Python backend (managed or external mode)
+devtrack install
+
+# Follow the printed instructions, then:
 cp .env_sample .env
 nano .env            # set PROJECT_ROOT, DEVTRACK_WORKSPACE, DATA_DIR
 
-uv sync
-uv run python -m spacy download en_core_web_sm
-cd devtrack-bin && go build -o devtrack . && mv devtrack ~/.local/bin/
-cd ..
-
-devtrack start
+devtrack start       # spawns Python backend automatically (managed mode)
 devtrack status
 
 # Optional: type 'git commit' instead of 'devtrack git commit'
 echo 'eval "$(devtrack shell-init)"' >> ~/.zshrc && source ~/.zshrc
 devtrack enable-git   # opt this repo in</code></pre>
+      <p style="margin:.75rem 0 .25rem;font-size:.9rem;opacity:.8;">Option 2 — Docker (Python backend in a container)</p>
+      <pre><code class="language-bash">git clone https://github.com/sraj0501/automation_tools.git
+cd automation_tools
+docker compose up               # starts Python server + MongoDB + Redis
+# In .env: DEVTRACK_SERVER_MODE=external  DEVTRACK_SERVER_URL=http://localhost:8089
+devtrack start</code></pre>
+      <p style="margin:.75rem 0 .25rem;font-size:.9rem;opacity:.8;">Option 3 — Build from source (developers)</p>
+      <pre><code class="language-bash">git clone https://github.com/sraj0501/automation_tools.git
+cd automation_tools
+./setup_local.sh</code></pre>
+      <p style="margin:.5rem 0 0;font-size:.85rem;opacity:.7;">All releases: <a href="https://github.com/sraj0501/automation_tools/releases" target="_blank">github.com/sraj0501/automation_tools/releases</a> — Go binary only; Python backend set up separately.</p>
     </div>
 
     <div class="feature-list">
@@ -818,10 +838,13 @@ devtrack enable-git   # opt this repo in</code></pre>
         { n:'Immediate PM Sync',   d:'Selecting a ticket posts a comment with the commit hash, message, and time spent — instantly, with your confirmation. No background daemon guessing required. Auto-comments, transitions states, and creates missing items in Azure/GitLab/GitHub. New issues include commit hash and message in the description and are auto-assigned to the authenticated user.' },
         { n:'Richer AI Messages',  d:'In the commit refinement loop, pressing <kbd>E</kbd> to enhance gives the AI double the normal token allowance for that call, producing more detailed and thorough commit messages.' },
         { n:'Personalized AI',     d:'Learns your style from Teams messages and writes in your voice.' },
-        { n:'Ticket Alerter',      d:'Polls GitHub and Azure DevOps for events relevant to you — assigned issues/PRs/work items, comments on threads you are in, state changes, and review requests. Delivers macOS OS notifications (via osascript) and terminal output. Delta-synced via MongoDB so you never see the same notification twice. Configure with <code>ALERT_ENABLED=true</code>, <code>ALERT_GITHUB_ENABLED=true</code>, <code>ALERT_AZURE_ENABLED=true</code> and the <code>ALERT_*</code> variables in <code>.env</code>.' },
+        { n:'Ticket Alerter',      d:'Polls GitHub, Azure DevOps, and Jira for events relevant to you — assigned issues/PRs/work items, comments on threads you are in, state changes, and review requests. Delivers macOS OS notifications (via osascript) and terminal output. Delta-synced via MongoDB so you never see the same notification twice. Configure with <code>ALERT_ENABLED=true</code>, <code>ALERT_GITHUB_ENABLED=true</code>, <code>ALERT_AZURE_ENABLED=true</code>, <code>ALERT_JIRA_ENABLED=true</code> and the <code>ALERT_*</code> variables in <code>.env</code>.' },
         { n:'OS-Aware Auto-Start', d:'Run <code>devtrack autostart-install</code> — DevTrack detects your OS and picks the right mechanism: launchd LaunchAgent on macOS, systemd user service on Linux/WSL with systemd, or a shell profile block on WSL without systemd. The daemon starts automatically each time you log in — no cron, no manual <code>devtrack start</code> after reboot.' },
         { n:'Offline-First',       d:'Queues everything and syncs when connectivity returns.' },
         { n:'Remote Control',      d:'Full Telegram bot: status, logs, create items, trigger updates.' },
+        { n:'Ticket Alerter',      d:'Background poller for GitHub, Azure DevOps, and Jira. Delivers macOS OS notifications and terminal output when tickets are assigned, commented on, or change state. <code>devtrack alerts</code> to view unread. Configurable per-source via <code>ALERT_*</code> env vars.' },
+        { n:'AI Project Planning', d:'<code>/newproject</code> in Telegram — describe a project in plain text, pick developers from the live team roster, and let AI auto-fetch each person\'s workload from the PM tool. Generates a full YAML spec (features, stories, sprints, capacity analysis, skill-gap risks), emails it to the PM with an approve/edit link, and creates everything in Azure/GitHub/GitLab on approval.' },
+        { n:'Work Session Tracking', d:'<code>devtrack work start [ticket]</code> begins a session timer. Every git commit while the session is active is auto-attached — no manual time entry. <code>devtrack work stop</code> records the auto-measured duration; <code>devtrack work adjust 90</code> overrides it (raw time kept for audit). <code>devtrack work report</code> generates an AI EOD summary with achievements, in-progress items, and what\'s pending tomorrow, plus optional email via MS Graph.' },
       ].map((f, i) => `
         <div class="feature-item">
           <div class="feature-dot">${i+1}</div>

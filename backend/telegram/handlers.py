@@ -21,6 +21,7 @@ MAX_MSG_LEN = 4096
 # Module-level pending stores for multi-step flows
 _PENDING_GITLAB_CREATES: dict = {}  # chat_id -> title
 _PENDING_PLANS: dict = {}           # chat_id -> {"problem": str, "plan": ..., "platform": str}
+_PENDING_PROJECTS: dict = {}        # chat_id -> ProjectDraft state for /newproject flow
 
 
 def _devtrack_bin() -> str:
@@ -76,6 +77,20 @@ def register_handlers(app: Application, bot: "DevTrackBot"):
     app.add_handler(CallbackQueryHandler(_on_plan_platform_selected, pattern=r"^plan_platform:"))
     app.add_handler(CallbackQueryHandler(_on_plan_confirmed, pattern=r"^plan_confirm:"))
     app.add_handler(CallbackQueryHandler(_on_plan_cancelled, pattern=r"^plan_cancel:"))
+    # AI Project Planning
+    app.add_handler(CommandHandler("newproject", _make_handler(bot, _cmd_newproject)))
+    app.add_handler(CallbackQueryHandler(_on_newproject_platform, pattern=r"^np_platform:"))
+    app.add_handler(CallbackQueryHandler(_on_newproject_member_toggle, pattern=r"^np_member:"))
+    app.add_handler(CallbackQueryHandler(_on_newproject_members_done, pattern=r"^np_done:"))
+    app.add_handler(CallbackQueryHandler(_on_newproject_approve, pattern=r"^np_approve:"))
+    app.add_handler(CallbackQueryHandler(_on_newproject_revise, pattern=r"^np_revise:"))
+    app.add_handler(CallbackQueryHandler(_on_newproject_cancel, pattern=r"^np_cancel:"))
+    # Work session tracking
+    app.add_handler(CommandHandler("workstart", _make_handler(bot, _cmd_workstart)))
+    app.add_handler(CommandHandler("workstop", _make_handler(bot, _cmd_workstop)))
+    app.add_handler(CommandHandler("workadjust", _make_handler(bot, _cmd_workadjust)))
+    app.add_handler(CommandHandler("workstatus", _make_handler(bot, _cmd_workstatus)))
+    app.add_handler(CommandHandler("workreport", _make_handler(bot, _cmd_workreport)))
 
 
 def _make_handler(bot: "DevTrackBot", handler_fn):
@@ -1377,3 +1392,707 @@ async def _on_plan_cancelled(update: Update, context: ContextTypes.DEFAULT_TYPE)
     except Exception:
         pass
     await query.edit_message_text("Plan cancelled.")
+
+
+# ---------------------------------------------------------------------------
+# AI Project Planning (/newproject)
+# ---------------------------------------------------------------------------
+
+def _np_review_url(spec_id: str) -> str:
+    """Build the web review URL for a spec."""
+    base = os.getenv("SPEC_REVIEW_BASE_URL", "").rstrip("/")
+    if not base:
+        return ""
+    return f"{base}/spec/{spec_id}/review"
+
+
+async def _cmd_newproject(update: Update, context: ContextTypes.DEFAULT_TYPE, bot):
+    """Handle /newproject — start the AI project planning flow.
+
+    The PM provides requirements in plain text; the bot walks through:
+    platform selection → team member picker → AI generation → approval.
+    """
+    chat_id = update.effective_chat.id
+    _PENDING_PROJECTS[chat_id] = {"stage": "awaiting_platform"}
+
+    buttons = [
+        [InlineKeyboardButton("Azure DevOps", callback_data=f"np_platform:azure|{chat_id}")],
+        [InlineKeyboardButton("GitHub", callback_data=f"np_platform:github|{chat_id}")],
+        [InlineKeyboardButton("GitLab", callback_data=f"np_platform:gitlab|{chat_id}")],
+        [InlineKeyboardButton("Cancel", callback_data=f"np_cancel:{chat_id}")],
+    ]
+    await update.message.reply_text(
+        "*New AI Project Plan*\n\n"
+        "Which PM platform should sprints/stories be created in?",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(buttons),
+    )
+
+
+async def _on_newproject_platform(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Callback: platform selected → ask for requirements text."""
+    query = update.callback_query
+    await query.answer()
+    try:
+        payload, chat_id_str = query.data.split(":", 1)[1].split("|", 1)
+        platform = payload
+        chat_id = int(chat_id_str)
+    except Exception:
+        await query.edit_message_text("Invalid state. Run /newproject again.")
+        return
+
+    pending = _PENDING_PROJECTS.get(chat_id)
+    if not pending:
+        await query.edit_message_text("Session expired. Run /newproject again.")
+        return
+
+    pending["platform"] = platform
+    pending["stage"] = "awaiting_requirements"
+
+    await query.edit_message_text(
+        f"Platform: *{platform}*\n\n"
+        "Please describe the project in plain text. Include:\n"
+        "• What needs to be built\n"
+        "• Deadline (e.g. 'by July 31')\n"
+        "• Your email address for the spec review\n"
+        "• Any key constraints or requirements\n\n"
+        "Just send a message with all the details:",
+        parse_mode="Markdown",
+    )
+
+    # Register a one-shot message handler for this chat
+    context.user_data["np_awaiting_text"] = chat_id
+    context.application.add_handler(
+        _make_np_text_handler(chat_id),
+        group=99,
+    )
+
+
+def _make_np_text_handler(target_chat_id: int):
+    """Create a MessageHandler that captures the next text message for this chat."""
+    from telegram.ext import MessageHandler, filters
+
+    async def handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        if update.effective_chat.id != target_chat_id:
+            return
+        if not update.message or not update.message.text:
+            return
+        # Remove this handler after first use
+        ctx.application.remove_handler(handler, group=99)
+        await _handle_np_requirements(update, ctx, target_chat_id)
+
+    return MessageHandler(filters.TEXT & ~filters.COMMAND, handler)
+
+
+async def _handle_np_requirements(update: Update, context, chat_id: int):
+    """Process the requirements text and show the team member picker."""
+    pending = _PENDING_PROJECTS.get(chat_id)
+    if not pending:
+        return
+
+    text = update.message.text
+    pending["requirements"] = text
+    pending["stage"] = "awaiting_team_selection"
+    pending["selected_members"] = []
+
+    # Parse deadline and PM email from free text
+    _extract_deadline_and_email(pending, text)
+
+    platform = pending.get("platform", "azure")
+    await update.message.reply_text(f"Fetching team from *{platform}*...", parse_mode="Markdown")
+
+    try:
+        from backend.project_spec.developer_roster import DeveloperRoster
+        roster = DeveloperRoster()
+        members = await roster.list_team_members(platform)
+        pending["available_members"] = [m.to_dict() for m in members]
+    except Exception as e:
+        logger.warning(f"newproject: failed to fetch team: {e}")
+        pending["available_members"] = []
+        members = []
+
+    if not members:
+        await update.message.reply_text(
+            "Could not fetch team members from the platform. "
+            "Please enter developer names and emails manually (one per line, format: Name, email@org.com):\n\n"
+            "Or send /skip to proceed with an empty team."
+        )
+        pending["stage"] = "awaiting_manual_team"
+        return
+
+    await _show_member_picker(update.message, chat_id, pending)
+
+
+def _extract_deadline_and_email(pending: dict, text: str) -> None:
+    """Parse deadline date and PM email from free-text requirements."""
+    import re
+    # Extract email
+    email_match = re.search(r'[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}', text)
+    if email_match:
+        pending["pm_email"] = email_match.group(0)
+
+    # Extract deadline via dateparser
+    try:
+        import dateparser
+        # Look for date-like phrases
+        date_patterns = [
+            r'by\s+(\w+ \d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?)',
+            r'deadline[:\s]+([A-Za-z]+ \d{1,2}(?:,?\s+\d{4})?)',
+            r'(\d{4}-\d{2}-\d{2})',
+        ]
+        for pattern in date_patterns:
+            m = re.search(pattern, text, re.IGNORECASE)
+            if m:
+                parsed = dateparser.parse(m.group(1))
+                if parsed:
+                    pending["deadline"] = parsed.date().isoformat()
+                    break
+    except Exception:
+        pass
+
+
+async def _show_member_picker(message, chat_id: int, pending: dict) -> None:
+    """Display the inline keyboard multi-select for team members."""
+    members = pending.get("available_members", [])
+    selected = set(pending.get("selected_members", []))
+
+    buttons = []
+    for m in members:
+        uid = m.get("platform_user_id", m.get("email", ""))
+        name = m.get("name") or uid
+        checkmark = "✅ " if uid in selected else ""
+        buttons.append([InlineKeyboardButton(
+            f"{checkmark}{name}",
+            callback_data=f"np_member:{uid}|{chat_id}",
+        )])
+
+    buttons.append([
+        InlineKeyboardButton("✓ Done — Generate Spec", callback_data=f"np_done:{chat_id}"),
+        InlineKeyboardButton("✗ Cancel", callback_data=f"np_cancel:{chat_id}"),
+    ])
+
+    await message.reply_text(
+        "Select team members for this project (tap to toggle ✅):",
+        reply_markup=InlineKeyboardMarkup(buttons),
+    )
+
+
+async def _on_newproject_member_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Callback: toggle a developer's selection."""
+    query = update.callback_query
+    await query.answer()
+    try:
+        payload, chat_id_str = query.data.split(":", 1)[1].split("|", 1)
+        uid = payload
+        chat_id = int(chat_id_str)
+    except Exception:
+        return
+
+    pending = _PENDING_PROJECTS.get(chat_id)
+    if not pending:
+        await query.edit_message_text("Session expired. Run /newproject again.")
+        return
+
+    selected = pending.setdefault("selected_members", [])
+    if uid in selected:
+        selected.remove(uid)
+    else:
+        selected.append(uid)
+
+    # Rebuild buttons to reflect new selection
+    members = pending.get("available_members", [])
+    selected_set = set(selected)
+    buttons = []
+    for m in members:
+        m_uid = m.get("platform_user_id", m.get("email", ""))
+        name = m.get("name") or m_uid
+        checkmark = "✅ " if m_uid in selected_set else ""
+        buttons.append([InlineKeyboardButton(
+            f"{checkmark}{name}",
+            callback_data=f"np_member:{m_uid}|{chat_id}",
+        )])
+    buttons.append([
+        InlineKeyboardButton("✓ Done — Generate Spec", callback_data=f"np_done:{chat_id}"),
+        InlineKeyboardButton("✗ Cancel", callback_data=f"np_cancel:{chat_id}"),
+    ])
+    await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(buttons))
+
+
+async def _on_newproject_members_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Callback: team selection complete → generate spec."""
+    query = update.callback_query
+    await query.answer()
+    try:
+        chat_id = int(query.data.split(":", 1)[1])
+    except Exception:
+        return
+
+    pending = _PENDING_PROJECTS.get(chat_id)
+    if not pending:
+        await query.edit_message_text("Session expired. Run /newproject again.")
+        return
+
+    selected_ids = set(pending.get("selected_members", []))
+    all_members = pending.get("available_members", [])
+    selected_devs_raw = [m for m in all_members if m.get("platform_user_id", m.get("email")) in selected_ids]
+
+    if not selected_devs_raw:
+        await query.edit_message_text("No developers selected. Run /newproject again.")
+        return
+
+    await query.edit_message_text(
+        f"Selected {len(selected_devs_raw)} developer(s).\n"
+        "Analyzing workloads and generating spec... this may take a moment."
+    )
+
+    platform = pending.get("platform", "azure")
+    requirements = pending.get("requirements", "")
+    pm_email = pending.get("pm_email", "")
+    deadline_str = pending.get("deadline")
+
+    try:
+        from datetime import date
+        from backend.project_spec.developer_roster import Developer
+        from backend.project_spec.workload_analyzer import WorkloadAnalyzer
+        from backend.project_spec.spec_generator import SpecGenerator
+        from backend.project_spec.spec_store import SpecStore
+        from backend.project_spec.spec_emailer import SpecEmailer
+
+        developers = [Developer.from_dict(d) for d in selected_devs_raw]
+        deadline = date.fromisoformat(deadline_str) if deadline_str else None
+
+        analyzer = WorkloadAnalyzer()
+        workload = await analyzer.analyze(developers, platform, deadline=deadline)
+
+        review_base = os.getenv("SPEC_REVIEW_BASE_URL", "")
+        generator = SpecGenerator()
+        spec = await generator.generate(
+            requirements=requirements,
+            developers=developers,
+            workload=workload,
+            deadline=deadline,
+            platform=platform,
+            pm_email=pm_email,
+            review_base_url=review_base,
+        )
+
+        if not spec:
+            await query.message.reply_text(
+                "AI generation failed. Please check LLM provider config and try again."
+            )
+            _PENDING_PROJECTS.pop(chat_id, None)
+            return
+
+        store = SpecStore()
+        spec_id = await store.save(spec)
+        pending["spec_id"] = spec_id
+        pending["stage"] = "awaiting_approval"
+
+        # Send email to PM
+        emailer = SpecEmailer()
+        sent = await emailer.send_draft(spec)
+        email_note = f"\nSpec also emailed to *{pm_email}*." if sent and pm_email else ""
+
+        # Show truncated preview in Telegram
+        ca = spec.capacity_analysis or {}
+        on_track = "✅ On track" if ca.get("on_track") else "⚠️ At risk"
+        risks = ca.get("risks", [])
+        risk_lines = "\n".join(
+            f"  • [{r.get('severity', '?').upper()}] {r.get('message', '')}"
+            for r in risks[:3]
+        )
+        project_name = (spec.project or {}).get("name", "Project")
+        num_stories = sum(len(f.get("stories", [])) for f in spec.features)
+        review_url = spec.review_url
+
+        preview = (
+            f"*{project_name}*\n"
+            f"Sprints: {len(spec.sprints)} | Stories: {num_stories} | {on_track}\n"
+        )
+        if risk_lines:
+            preview += f"\nRisks:\n{risk_lines}\n"
+        if review_url:
+            preview += f"\n[Review & edit full spec]({review_url})"
+        preview += email_note
+
+        buttons = [
+            [InlineKeyboardButton("✅ Approve & Create", callback_data=f"np_approve:{chat_id}")],
+            [InlineKeyboardButton("✏️ Request Changes", callback_data=f"np_revise:{chat_id}")],
+            [InlineKeyboardButton("✗ Cancel", callback_data=f"np_cancel:{chat_id}")],
+        ]
+        await query.message.reply_text(
+            preview,
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(buttons),
+            disable_web_page_preview=True,
+        )
+
+    except Exception as e:
+        logger.exception(f"newproject generation error: {e}")
+        await query.message.reply_text(f"Error during spec generation: {e}")
+        _PENDING_PROJECTS.pop(chat_id, None)
+
+
+async def _on_newproject_approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Callback: PM approved — create all PM artifacts."""
+    query = update.callback_query
+    await query.answer()
+    try:
+        chat_id = int(query.data.split(":", 1)[1])
+    except Exception:
+        return
+
+    pending = _PENDING_PROJECTS.get(chat_id)
+    if not pending or not pending.get("spec_id"):
+        await query.edit_message_text("Session expired. Run /newproject again.")
+        return
+
+    spec_id = pending["spec_id"]
+    await query.edit_message_text("Approved! Creating sprints and stories in your PM tool...")
+
+    try:
+        from backend.project_spec.spec_store import SpecStore
+        from backend.project_spec.project_creator import ProjectCreator
+
+        store = SpecStore()
+        spec = await store.load(spec_id)
+        if not spec:
+            await query.message.reply_text("Could not load spec. It may have expired.")
+            return
+
+        progress_msgs = []
+
+        async def on_progress(msg: str) -> None:
+            progress_msgs.append(msg)
+
+        creator = ProjectCreator(on_progress=on_progress)
+        results = await creator.create(spec)
+
+        await store.update_status(spec_id, "approved")
+        _PENDING_PROJECTS.pop(chat_id, None)
+
+        n_sprints = len(results.get("sprints", []))
+        n_stories = len(results.get("stories", []))
+        errors = results.get("errors", [])
+
+        summary = f"*Done!* Created {n_sprints} sprint(s) and {n_stories} story/stories."
+        if errors:
+            summary += f"\n\n⚠️ {len(errors)} error(s):\n" + "\n".join(f"• {e}" for e in errors[:5])
+
+        await query.message.reply_text(summary, parse_mode="Markdown")
+
+    except Exception as e:
+        logger.exception(f"newproject creation error: {e}")
+        await query.message.reply_text(f"Error creating PM items: {e}")
+        _PENDING_PROJECTS.pop(chat_id, None)
+
+
+async def _on_newproject_revise(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Callback: PM requests changes — prompt for feedback text."""
+    query = update.callback_query
+    await query.answer()
+    try:
+        chat_id = int(query.data.split(":", 1)[1])
+    except Exception:
+        return
+
+    pending = _PENDING_PROJECTS.get(chat_id)
+    if not pending:
+        await query.edit_message_text("Session expired. Run /newproject again.")
+        return
+
+    pending["stage"] = "awaiting_revision_feedback"
+    await query.edit_message_text(
+        "What changes would you like to the spec? Please describe them in a message:"
+    )
+
+    # Register one-shot text handler for revision feedback
+    context.application.add_handler(
+        _make_np_revision_handler(chat_id),
+        group=99,
+    )
+
+
+def _make_np_revision_handler(target_chat_id: int):
+    """Capture the next text message as revision feedback for this chat."""
+    from telegram.ext import MessageHandler, filters
+
+    async def handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        if update.effective_chat.id != target_chat_id:
+            return
+        if not update.message or not update.message.text:
+            return
+        ctx.application.remove_handler(handler, group=99)
+        await _handle_np_revision(update, ctx, target_chat_id)
+
+    return MessageHandler(filters.TEXT & ~filters.COMMAND, handler)
+
+
+async def _handle_np_revision(update: Update, context, chat_id: int):
+    """Apply PM feedback and regenerate the spec."""
+    pending = _PENDING_PROJECTS.get(chat_id)
+    if not pending or not pending.get("spec_id"):
+        return
+
+    feedback = update.message.text
+    spec_id = pending["spec_id"]
+
+    await update.message.reply_text("Applying changes and regenerating spec...")
+
+    try:
+        from backend.project_spec.spec_store import SpecStore
+        from backend.project_spec.spec_generator import SpecGenerator
+        from backend.project_spec.spec_emailer import SpecEmailer
+
+        store = SpecStore()
+        spec = await store.load(spec_id)
+        if not spec:
+            await update.message.reply_text("Could not load spec.")
+            return
+
+        generator = SpecGenerator()
+        updated = await generator.revise(spec, feedback)
+        if not updated:
+            await update.message.reply_text("Revision failed. Please try again.")
+            return
+
+        new_id = await store.save(updated)
+        pending["spec_id"] = new_id
+        pending["stage"] = "awaiting_approval"
+
+        emailer = SpecEmailer()
+        await emailer.send_draft(updated)
+
+        project_name = (updated.project or {}).get("name", "Project")
+        review_url = updated.review_url
+        msg = f"*Updated spec for {project_name}*"
+        if review_url:
+            msg += f"\n[Review full spec]({review_url})"
+
+        buttons = [
+            [InlineKeyboardButton("✅ Approve & Create", callback_data=f"np_approve:{chat_id}")],
+            [InlineKeyboardButton("✏️ Request More Changes", callback_data=f"np_revise:{chat_id}")],
+            [InlineKeyboardButton("✗ Cancel", callback_data=f"np_cancel:{chat_id}")],
+        ]
+        await update.message.reply_text(
+            msg,
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(buttons),
+            disable_web_page_preview=True,
+        )
+
+    except Exception as e:
+        logger.exception(f"newproject revision error: {e}")
+        await update.message.reply_text(f"Error during revision: {e}")
+
+
+async def _on_newproject_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Callback: PM cancelled the project planning flow."""
+    query = update.callback_query
+    await query.answer()
+    try:
+        chat_id = int(query.data.split(":", 1)[1])
+        _PENDING_PROJECTS.pop(chat_id, None)
+    except Exception:
+        pass
+    await query.edit_message_text("Project planning cancelled.")
+
+
+# ---------------------------------------------------------------------------
+# Work session Telegram commands
+# ---------------------------------------------------------------------------
+
+async def _cmd_workstart(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "DevTrackBot"):
+    """/workstart [ticket-ref] — start a work session."""
+    import asyncio
+    ticket_ref = " ".join(context.args) if context.args else ""
+    try:
+        from backend.work_tracker.session_store import WorkSessionStore
+        store = WorkSessionStore()
+        active = await asyncio.to_thread(store.get_active_session)
+        if active:
+            msg = f"⚠️ A session is already active (ID {active['id']}"
+            if active.get("ticket_ref"):
+                msg += f", ticket: {active['ticket_ref']}"
+            msg += ").\nUse /workstop first."
+            await update.message.reply_text(msg)
+            return
+
+        from backend.config import database_path
+        import sqlite3
+        conn = sqlite3.connect(str(database_path()))
+        cur = conn.execute(
+            "INSERT INTO work_sessions (started_at, ticket_ref, commits) VALUES (datetime('now'), ?, '[]')",
+            (ticket_ref,),
+        )
+        session_id = cur.lastrowid
+        conn.commit()
+        conn.close()
+
+        msg = f"✅ Work session started (ID {session_id})"
+        if ticket_ref:
+            msg += f" for *{ticket_ref}*"
+        msg += "\nUse /workstop when you're done."
+        await update.message.reply_text(msg, parse_mode="Markdown")
+    except Exception as e:
+        await update.message.reply_text(f"Error starting session: {e}")
+
+
+async def _cmd_workstop(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "DevTrackBot"):
+    """/workstop — stop the active work session."""
+    import asyncio
+    from datetime import datetime, timezone
+    try:
+        from backend.work_tracker.session_store import WorkSessionStore
+        store = WorkSessionStore()
+        active = await asyncio.to_thread(store.get_active_session)
+        if not active:
+            await update.message.reply_text("No active session found.")
+            return
+
+        await asyncio.to_thread(store.end_session, active["id"])
+
+        started_at = active.get("started_at", "")
+        duration_str = ""
+        try:
+            start = datetime.fromisoformat(started_at)
+            elapsed = int((datetime.now(timezone.utc).replace(tzinfo=None) - start).total_seconds() / 60)
+            h, m = divmod(max(0, elapsed), 60)
+            duration_str = f"{h}h {m}m" if h else f"{m}m"
+        except Exception:
+            pass
+
+        msg = f"✅ Session {active['id']} stopped."
+        if duration_str:
+            msg += f" Duration: *{duration_str}*"
+        if active.get("ticket_ref"):
+            msg += f" (ticket: {active['ticket_ref']})"
+        msg += "\nUse `/workadjust <minutes>` to correct the time."
+        await update.message.reply_text(msg, parse_mode="Markdown")
+    except Exception as e:
+        await update.message.reply_text(f"Error stopping session: {e}")
+
+
+async def _cmd_workadjust(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "DevTrackBot"):
+    """/workadjust <minutes> — override time on the active or last session."""
+    import asyncio
+    if not context.args or not context.args[0].isdigit():
+        await update.message.reply_text("Usage: /workadjust <minutes>  (e.g. /workadjust 90)")
+        return
+    minutes = int(context.args[0])
+    try:
+        from backend.work_tracker.session_store import WorkSessionStore
+        from datetime import date
+        store = WorkSessionStore()
+
+        active = await asyncio.to_thread(store.get_active_session)
+        if active:
+            target_id = active["id"]
+        else:
+            today = date.today().isoformat()
+            sessions = await asyncio.to_thread(store.get_sessions_for_date, today)
+            if not sessions:
+                await update.message.reply_text("No session found to adjust.")
+                return
+            target_id = sessions[-1]["id"]
+
+        await asyncio.to_thread(store.adjust_time, target_id, minutes)
+        h, m = divmod(minutes, 60)
+        dur_str = f"{h}h {m}m" if h else f"{m}m"
+        await update.message.reply_text(
+            f"✅ Session {target_id} time adjusted to *{dur_str}*.\n"
+            "_Auto-measured time is preserved in DB for audit._",
+            parse_mode="Markdown",
+        )
+    except Exception as e:
+        await update.message.reply_text(f"Error adjusting session: {e}")
+
+
+async def _cmd_workstatus(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "DevTrackBot"):
+    """/workstatus — show active session and today's completed sessions."""
+    import asyncio
+    from datetime import date, datetime, timezone
+    try:
+        from backend.work_tracker.session_store import WorkSessionStore
+        store = WorkSessionStore()
+        active = await asyncio.to_thread(store.get_active_session)
+        today = date.today().isoformat()
+        sessions = await asyncio.to_thread(store.get_sessions_for_date, today)
+
+        lines = []
+        if active:
+            started_at = active.get("started_at", "")
+            elapsed_str = ""
+            try:
+                start = datetime.fromisoformat(started_at)
+                elapsed = int((datetime.now(timezone.utc).replace(tzinfo=None) - start).total_seconds() / 60)
+                h, m = divmod(max(0, elapsed), 60)
+                elapsed_str = f"{h}h {m}m" if h else f"{m}m"
+            except Exception:
+                pass
+            line = f"🟢 *Active* (ID {active['id']}) — running {elapsed_str}"
+            if active.get("ticket_ref"):
+                line += f"\n   Ticket: {active['ticket_ref']}"
+            lines.append(line)
+        else:
+            lines.append("⚪ No active session.")
+
+        completed = [s for s in sessions if s.get("ended_at")]
+        if completed:
+            lines.append(f"\n*Today ({len(completed)} session(s)):*")
+            total = 0
+            for s in completed:
+                dur = WorkSessionStore.effective_duration(s)
+                total += dur
+                h, m = divmod(dur, 60)
+                dur_str = f"{h}h {m}m" if h else f"{m}m"
+                adj = " ✏️" if s.get("adjusted_minutes") is not None else ""
+                ticket = s.get("ticket_ref") or "(no ticket)"
+                lines.append(f"  • {dur_str}{adj}  {ticket}")
+            th, tm = divmod(total, 60)
+            lines.append(f"  Total: *{th}h {tm}m*" if th else f"  Total: *{tm}m*")
+
+        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+    except Exception as e:
+        await update.message.reply_text(f"Error loading work status: {e}")
+
+
+async def _cmd_workreport(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "DevTrackBot"):
+    """/workreport [--email addr] — generate EOD report inline; optionally email it."""
+    import asyncio
+    from datetime import date
+
+    email_to = None
+    if context.args:
+        args = context.args
+        for i, arg in enumerate(args):
+            if arg == "--email" and i + 1 < len(args):
+                email_to = args[i + 1]
+                break
+            elif "@" in arg:
+                email_to = arg
+                break
+
+    await update.message.reply_text("⏳ Generating EOD report…")
+    try:
+        from backend.work_tracker.eod_report_generator import EODReportGenerator
+        generator = EODReportGenerator(include_ai=True)
+        report = await generator.generate(date.today().isoformat())
+
+        text = report.as_text()
+        # Telegram max message length is 4096; truncate gracefully
+        if len(text) > 3800:
+            text = text[:3800] + "\n…(truncated)"
+
+        await update.message.reply_text(f"```\n{text}\n```", parse_mode="Markdown")
+
+        if email_to:
+            from backend.work_tracker.eod_emailer import EODEmailer
+            emailer = EODEmailer()
+            sent = await emailer.send(report, email_to)
+            if sent:
+                await update.message.reply_text(f"✅ Report emailed to {email_to}")
+            else:
+                await update.message.reply_text(f"⚠️ Could not send email to {email_to} — check server logs.")
+    except Exception as e:
+        await update.message.reply_text(f"Error generating report: {e}")

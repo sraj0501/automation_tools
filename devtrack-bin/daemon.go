@@ -459,8 +459,21 @@ func (d *Daemon) GetLogs(lines int) ([]string, error) {
 	return allLines[len(allLines)-lines:], nil
 }
 
-// startPythonBridge starts the Python bridge process for IPC communication
+// startPythonBridge starts the Python bridge process for IPC communication.
+// When DEVTRACK_SERVER_MODE=external the Python backend is managed by the user;
+// this function logs the expected connection point and returns without spawning.
 func (d *Daemon) startPythonBridge() error {
+	if IsExternalServer() {
+		serverURL := GetServerURL()
+		if serverURL == "" {
+			serverURL = "(not set — Python bridge connects via IPC_HOST:IPC_PORT)"
+		}
+		log.Printf("Python backend is externally managed (DEVTRACK_SERVER_MODE=external)")
+		log.Printf("  Expected server: %s", serverURL)
+		log.Println("  Start the Python backend manually before triggering any AI operations.")
+		return nil
+	}
+
 	// Get python_bridge.py path from centralized config (fails if not found)
 	bridgePath := GetPythonBridgePath()
 

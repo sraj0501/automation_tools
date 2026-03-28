@@ -84,7 +84,7 @@ func (wc *WorkspaceCommands) Add(name, path, pmPlatform string) error {
 	}
 
 	fmt.Printf("Added workspace %q (%s)\n", name, path)
-	fmt.Println("Run 'devtrack workspace reload' to apply changes to the running daemon.")
+	wc.sendWorkspaceReload()
 	return nil
 }
 
@@ -120,7 +120,7 @@ func (wc *WorkspaceCommands) Remove(name string) error {
 	}
 
 	fmt.Printf("Removed workspace %q\n", name)
-	fmt.Println("Run 'devtrack workspace reload' to apply changes to the running daemon.")
+	wc.sendWorkspaceReload()
 	return nil
 }
 
@@ -166,8 +166,33 @@ func (wc *WorkspaceCommands) setEnabled(name string, enabled bool) error {
 		state = "disabled"
 	}
 	fmt.Printf("Workspace %q %s\n", name, state)
-	fmt.Println("Run 'devtrack workspace reload' to apply changes to the running daemon.")
+	wc.sendWorkspaceReload()
 	return nil
+}
+
+// sendWorkspaceReload sends MsgTypeWorkspaceReload to the daemon (best-effort, not fatal).
+// Called automatically after Add, Remove, Enable, Disable mutations.
+func (wc *WorkspaceCommands) sendWorkspaceReload() {
+	addr := GetIPCAddress()
+	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
+	if err != nil {
+		fmt.Println("(Daemon not running — changes will take effect on next start.)")
+		return
+	}
+	defer conn.Close()
+	msg := IPCMessage{
+		Type:      MsgTypeWorkspaceReload,
+		Timestamp: time.Now(),
+		ID:        fmt.Sprintf("reload_%d", time.Now().UnixNano()),
+		Data:      make(map[string]interface{}),
+	}
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return
+	}
+	data = append(data, '\n')
+	conn.Write(data) //nolint:errcheck // best-effort
+	fmt.Println("Reload signal sent to daemon.")
 }
 
 // Reload sends MsgTypeWorkspaceReload to the running daemon via IPC

@@ -25,6 +25,15 @@ func main() {
 			return
 		}
 
+		// devtrack install — extract bundled Python backend + run uv sync
+		if cmd == "install" {
+			if err := RunInstall(); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+
 		// Handle test commands (but not CLI commands that start with "test-")
 		if strings.HasPrefix(cmd, "test-") && cmd != "test-response" {
 			RunDemo()
@@ -47,7 +56,14 @@ func main() {
 			cmd == "workspace" ||
 			cmd == "shell-init" || cmd == "is-workspace" || cmd == "enable-git" || cmd == "disable-git" ||
 			cmd == "launchd-install" || cmd == "launchd-uninstall" ||
-		cmd == "alerts" {
+			cmd == "alerts" ||
+			cmd == "work" ||
+			cmd == "github-check" || cmd == "github-list" || cmd == "github-sync" ||
+			cmd == "github-view" || cmd == "github-create" ||
+			cmd == "gitlab-check" || cmd == "gitlab-list" || cmd == "gitlab-sync" ||
+			cmd == "gitlab-view" || cmd == "gitlab-create" ||
+			cmd == "jira-check" || cmd == "jira-list" || cmd == "jira-view" ||
+			cmd == "newproject" {
 			cli, err := NewCLI()
 			if err != nil {
 				fmt.Printf("Error initializing CLI: %v\n", err)

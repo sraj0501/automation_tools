@@ -124,6 +124,22 @@ type ReportRecord struct {
 	CreatedAt      time.Time
 }
 
+// WorkSessionRecord represents an active or completed work session
+type WorkSessionRecord struct {
+	ID              int64
+	StartedAt       string
+	EndedAt         *string
+	TicketRef       string
+	RepoPath        string
+	WorkspaceName   string
+	Description     string
+	Commits         string // JSON array of commit hashes
+	DurationMinutes *int
+	AdjustedMinutes *int
+	AutoStopped     bool
+	CreatedAt       string
+}
+
 // NewDatabase creates a new database connection
 func NewDatabase() (*Database, error) {
 	// Get database path
@@ -311,6 +327,24 @@ func (d *Database) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_deferred_commits_status ON deferred_commits(status);
 	CREATE INDEX IF NOT EXISTS idx_health_snapshots_service ON health_snapshots(service);
 	CREATE INDEX IF NOT EXISTS idx_health_snapshots_checked ON health_snapshots(checked_at);
+
+	-- Work sessions table: tracks active and completed work sessions for EOD reporting
+	CREATE TABLE IF NOT EXISTS work_sessions (
+		id               INTEGER PRIMARY KEY AUTOINCREMENT,
+		started_at       TEXT NOT NULL,
+		ended_at         TEXT,
+		ticket_ref       TEXT,
+		repo_path        TEXT,
+		workspace_name   TEXT,
+		description      TEXT,
+		commits          TEXT DEFAULT '[]',
+		duration_minutes INTEGER,
+		adjusted_minutes INTEGER,
+		auto_stopped     INTEGER DEFAULT 0,
+		created_at       TEXT NOT NULL DEFAULT (datetime('now'))
+	);
+	CREATE INDEX IF NOT EXISTS idx_work_sessions_started ON work_sessions(started_at);
+	CREATE INDEX IF NOT EXISTS idx_work_sessions_ended ON work_sessions(ended_at);
 	`
 
 	_, err := d.db.Exec(schema)
@@ -1334,4 +1368,192 @@ func (d *Database) CleanOldHealthSnapshots(retentionDays int) error {
 	}
 
 	return nil
+}
+
+// InsertWorkSession starts a new work session and returns its ID
+func (d *Database) InsertWorkSession(ticketRef, repoPath, workspaceName string) (int64, error) {
+	query := `
+		INSERT INTO work_sessions (started_at, ticket_ref, repo_path, workspace_name, commits)
+		VALUES (datetime('now'), ?, ?, ?, '[]')
+	`
+	result, err := d.db.Exec(query, ticketRef, repoPath, workspaceName)
+	if err != nil {
+		return 0, fmt.Errorf("failed to insert work session: %w", err)
+	}
+	return result.LastInsertId()
+}
+
+// EndWorkSession marks a session as ended and stores the auto-measured duration
+func (d *Database) EndWorkSession(id int64, endedAt string, durationMins int) error {
+	query := `
+		UPDATE work_sessions
+		SET ended_at = ?, duration_minutes = ?
+		WHERE id = ?
+	`
+	_, err := d.db.Exec(query, endedAt, durationMins, id)
+	if err != nil {
+		return fmt.Errorf("failed to end work session %d: %w", id, err)
+	}
+	return nil
+}
+
+// AdjustWorkSessionTime sets the user-overridden time for a session.
+// The original auto-measured duration_minutes is preserved for audit purposes.
+func (d *Database) AdjustWorkSessionTime(id int64, adjustedMins int) error {
+	query := `UPDATE work_sessions SET adjusted_minutes = ? WHERE id = ?`
+	_, err := d.db.Exec(query, adjustedMins, id)
+	if err != nil {
+		return fmt.Errorf("failed to adjust work session %d: %w", id, err)
+	}
+	return nil
+}
+
+// GetActiveWorkSession returns the first session where ended_at IS NULL, or nil if none
+func (d *Database) GetActiveWorkSession() (*WorkSessionRecord, error) {
+	query := `
+		SELECT id, started_at, ended_at, ticket_ref, repo_path, workspace_name,
+		       description, commits, duration_minutes, adjusted_minutes, auto_stopped, created_at
+		FROM work_sessions
+		WHERE ended_at IS NULL
+		ORDER BY started_at DESC
+		LIMIT 1
+	`
+	row := d.db.QueryRow(query)
+	return scanWorkSession(row)
+}
+
+// GetWorkSessionsForDate returns all sessions that started on the given date (YYYY-MM-DD)
+func (d *Database) GetWorkSessionsForDate(date string) ([]WorkSessionRecord, error) {
+	query := `
+		SELECT id, started_at, ended_at, ticket_ref, repo_path, workspace_name,
+		       description, commits, duration_minutes, adjusted_minutes, auto_stopped, created_at
+		FROM work_sessions
+		WHERE date(started_at) = ?
+		ORDER BY started_at ASC
+	`
+	rows, err := d.db.Query(query, date)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query work sessions for %s: %w", date, err)
+	}
+	defer rows.Close()
+
+	var sessions []WorkSessionRecord
+	for rows.Next() {
+		s, err := scanWorkSessionRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		sessions = append(sessions, *s)
+	}
+	return sessions, rows.Err()
+}
+
+// AppendCommitToSession adds a commit hash to the JSON commits array of a session
+func (d *Database) AppendCommitToSession(sessionID int64, commitHash string) error {
+	// Read current commits array
+	var commitsJSON string
+	err := d.db.QueryRow("SELECT commits FROM work_sessions WHERE id = ?", sessionID).Scan(&commitsJSON)
+	if err != nil {
+		return fmt.Errorf("failed to read commits for session %d: %w", sessionID, err)
+	}
+
+	// Parse, append, re-serialize
+	var commits []string
+	if commitsJSON != "" && commitsJSON != "[]" {
+		// Simple JSON array unmarshal via encoding/json is unavailable without import;
+		// we do a lightweight string manipulation instead to avoid import churn.
+		// Strip leading [ and trailing ], split on comma-quote boundaries.
+		inner := commitsJSON[1 : len(commitsJSON)-1]
+		if inner != "" {
+			for _, part := range splitJSONStringArray(inner) {
+				commits = append(commits, part)
+			}
+		}
+	}
+	commits = append(commits, commitHash)
+
+	newJSON := buildJSONStringArray(commits)
+	_, err = d.db.Exec("UPDATE work_sessions SET commits = ? WHERE id = ?", newJSON, sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to append commit to session %d: %w", sessionID, err)
+	}
+	return nil
+}
+
+// scanWorkSession scans a *sql.Row into a WorkSessionRecord
+func scanWorkSession(row *sql.Row) (*WorkSessionRecord, error) {
+	var s WorkSessionRecord
+	var autoStopped int
+	err := row.Scan(
+		&s.ID, &s.StartedAt, &s.EndedAt, &s.TicketRef, &s.RepoPath,
+		&s.WorkspaceName, &s.Description, &s.Commits,
+		&s.DurationMinutes, &s.AdjustedMinutes, &autoStopped, &s.CreatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan work session: %w", err)
+	}
+	s.AutoStopped = autoStopped == 1
+	return &s, nil
+}
+
+// scanWorkSessionRow scans a *sql.Rows row into a WorkSessionRecord
+func scanWorkSessionRow(rows *sql.Rows) (*WorkSessionRecord, error) {
+	var s WorkSessionRecord
+	var autoStopped int
+	err := rows.Scan(
+		&s.ID, &s.StartedAt, &s.EndedAt, &s.TicketRef, &s.RepoPath,
+		&s.WorkspaceName, &s.Description, &s.Commits,
+		&s.DurationMinutes, &s.AdjustedMinutes, &autoStopped, &s.CreatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan work session row: %w", err)
+	}
+	s.AutoStopped = autoStopped == 1
+	return &s, nil
+}
+
+// splitJSONStringArray splits the inner content of a JSON string array
+// e.g. `"abc","def"` → ["abc", "def"]
+func splitJSONStringArray(inner string) []string {
+	var result []string
+	i := 0
+	for i < len(inner) {
+		if inner[i] == '"' {
+			j := i + 1
+			for j < len(inner) && inner[j] != '"' {
+				if inner[j] == '\\' {
+					j++
+				}
+				j++
+			}
+			if j < len(inner) {
+				result = append(result, inner[i+1:j])
+				i = j + 1
+			} else {
+				break
+			}
+		} else {
+			i++
+		}
+	}
+	return result
+}
+
+// buildJSONStringArray serializes a []string as a JSON array of quoted strings
+func buildJSONStringArray(items []string) string {
+	if len(items) == 0 {
+		return "[]"
+	}
+	out := "["
+	for idx, item := range items {
+		out += `"` + item + `"`
+		if idx < len(items)-1 {
+			out += ","
+		}
+	}
+	out += "]"
+	return out
 }

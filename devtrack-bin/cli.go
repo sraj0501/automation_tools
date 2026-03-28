@@ -198,6 +198,8 @@ func (cli *CLI) Execute() error {
 		return cli.handleAutostartStatus()
 	case "alerts":
 		return cli.handleAlerts()
+	case "work":
+		return cli.handleWork()
 	case "help":
 		cli.printUsage()
 		return nil
@@ -662,8 +664,9 @@ func (cli *CLI) handleLogs() error {
 // handleVersion shows version information
 func (cli *CLI) handleVersion() error {
 	fmt.Println("DevTrack - Developer Automation Tools")
-	fmt.Printf("Version: %s\n", GetDevTrackVersion())
-	fmt.Printf("Build date: %s\n", GetDevTrackBuildDate())
+	fmt.Printf("Version:    %s\n", Version)
+	fmt.Printf("Commit:     %s\n", GitCommit)
+	fmt.Printf("Built:      %s\n", BuildTime)
 	fmt.Println()
 	fmt.Println("Components:")
 	fmt.Println("  • Git monitoring (go-git)")
@@ -1529,14 +1532,21 @@ func (cli *CLI) handleWorkspace() error {
 		return wc.List()
 	case "add":
 		if len(os.Args) < 5 {
-			fmt.Println("Usage: devtrack workspace add <name> <path> [pm_platform]")
+			fmt.Println("Usage: devtrack workspace add <name> <path> [--pm azure|gitlab|github|jira|none]")
 			return fmt.Errorf("missing arguments")
 		}
 		name := os.Args[3]
 		path := os.Args[4]
 		pmPlatform := ""
-		if len(os.Args) > 5 {
-			pmPlatform = os.Args[5]
+		addArgs := os.Args[5:]
+		for i := 0; i < len(addArgs); i++ {
+			if addArgs[i] == "--pm" && i+1 < len(addArgs) {
+				pmPlatform = addArgs[i+1]
+				i++
+			} else if !strings.HasPrefix(addArgs[i], "--") {
+				// backwards-compatible: bare positional platform arg
+				pmPlatform = addArgs[i]
+			}
 		}
 		return wc.Add(name, path, pmPlatform)
 	case "remove":
@@ -1563,7 +1573,7 @@ func (cli *CLI) handleWorkspace() error {
 		fmt.Printf("Unknown workspace subcommand: %s\n", subCmd)
 		fmt.Println("Usage:")
 		fmt.Println("  devtrack workspace list                         List configured workspaces")
-		fmt.Println("  devtrack workspace add <name> <path> [platform] Add a workspace")
+		fmt.Println("  devtrack workspace add <name> <path> [--pm azure|gitlab|github|jira|none]  Add a workspace")
 		fmt.Println("  devtrack workspace remove <name>                Remove a workspace")
 		fmt.Println("  devtrack workspace enable <name>                Enable a workspace")
 		fmt.Println("  devtrack workspace disable <name>               Disable a workspace")

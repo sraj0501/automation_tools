@@ -43,6 +43,10 @@ const (
 
 	// Workspace management
 	MsgTypeWorkspaceReload MessageType = "workspace_reload"
+
+	// Work session tracking
+	MsgTypeWorkSessionStart MessageType = "work_session_start"
+	MsgTypeWorkSessionStop  MessageType = "work_session_stop"
 )
 
 // IPCMessage represents a message sent between Go and Python

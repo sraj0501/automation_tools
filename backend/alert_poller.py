@@ -131,6 +131,32 @@ async def _poll_azure(
     return notifications
 
 
+async def _poll_jira(
+    store,
+    user_id: str,
+) -> List[Dict[str, Any]]:
+    """Run one poll cycle for Jira and return new notification dicts."""
+    from backend.alerters.jira_alerter import JiraAlerter
+
+    last_checked: Optional[datetime] = None
+    if user_id and store.is_available():
+        last_checked = await store.load_last_checked(user_id, "jira")
+
+    notifications: List[Dict[str, Any]] = []
+    async with JiraAlerter() as alerter:
+        if not alerter.is_configured():
+            logger.debug("Jira alerter: not configured, skipping")
+            return []
+        notifications = await alerter.poll(last_checked=last_checked)
+
+    # Persist last_checked timestamp
+    if user_id and store.is_available() and notifications is not None:
+        now = datetime.now(tz=timezone.utc)
+        await store.save_last_checked(user_id, "jira", now)
+
+    return notifications
+
+
 async def _run_one_cycle(store, user_id: str) -> List[Dict[str, Any]]:
     """Run a single poll cycle across all enabled sources."""
     if not _is_enabled():
@@ -152,6 +178,13 @@ async def _run_one_cycle(store, user_id: str) -> List[Dict[str, Any]]:
             all_notifications.extend(azure_notifs)
         except Exception as e:
             logger.warning(f"Azure poll failed: {e}")
+
+    if cfg.get_bool("ALERT_JIRA_ENABLED", True):
+        try:
+            jira_notifs = await _poll_jira(store, user_id)
+            all_notifications.extend(jira_notifs)
+        except Exception as e:
+            logger.warning(f"Jira poll failed: {e}")
 
     # Persist to MongoDB and deliver notifications
     new_notifications = []

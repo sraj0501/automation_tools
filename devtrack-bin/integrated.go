@@ -405,6 +405,10 @@ func (im *IntegratedMonitor) handleTrigger(event TriggerEvent) {
 	var ipcMsg IPCMessage
 	var triggerRecord TriggerRecord
 
+	// Typed payload vars — populated inside the switch, used for both HTTP and IPC routing
+	var commitData *CommitTriggerData
+	var timerData *TimerTriggerData
+
 	switch event.Type {
 	case TriggerTypeCommit:
 		if commit, ok := event.Data.(CommitInfo); ok {
@@ -418,8 +422,7 @@ func (im *IntegratedMonitor) handleTrigger(event TriggerEvent) {
 				fmt.Printf("Workspace: %s (%s)\n", event.WorkspaceName, event.PMPlatform)
 			}
 
-			// Create IPC message for commit trigger
-			ipcMsg = CreateCommitTriggerMessage(CommitTriggerData{
+			cd := CommitTriggerData{
 				RepoPath:        event.RepoPath,
 				CommitHash:      commit.Hash,
 				CommitMessage:   commit.Message,
@@ -434,9 +437,10 @@ func (im *IntegratedMonitor) handleTrigger(event TriggerEvent) {
 				PMIterationPath: event.PMIterationPath,
 				PMAreaPath:      event.PMAreaPath,
 				PMMilestone:     event.PMMilestone,
-			})
+			}
+			commitData = &cd
+			ipcMsg = CreateCommitTriggerMessage(cd)
 
-			// Prepare database record
 			triggerRecord = TriggerRecord{
 				TriggerType:   "commit",
 				Timestamp:     event.Timestamp,
@@ -458,14 +462,13 @@ func (im *IntegratedMonitor) handleTrigger(event TriggerEvent) {
 				fmt.Printf("Interval:   %d minutes\n", interval)
 			}
 
-			// Create IPC message for timer trigger
 			triggerCount := 0
 			intervalMins := im.config.Settings.PromptInterval
 			if count, ok := data["trigger_count"].(int); ok {
 				triggerCount = count
 			}
 
-			timerData := TimerTriggerData{
+			td := TimerTriggerData{
 				Timestamp:    event.Timestamp.Format(time.RFC3339),
 				IntervalMins: intervalMins,
 				TriggerCount: triggerCount,
@@ -475,18 +478,18 @@ func (im *IntegratedMonitor) handleTrigger(event TriggerEvent) {
 			lastWS := im.lastActiveWorkspace
 			im.lastActiveWorkspaceMu.Unlock()
 			if lastWS != nil {
-				timerData.WorkspaceName   = lastWS.workspaceName
-				timerData.PMPlatform      = lastWS.pmPlatform
-				timerData.PMProject       = lastWS.pmProject
-				timerData.PMAssignee      = lastWS.pmAssignee
-				timerData.PMIterationPath = lastWS.pmIterationPath
-				timerData.PMAreaPath      = lastWS.pmAreaPath
-				timerData.PMMilestone     = lastWS.pmMilestone
+				td.WorkspaceName   = lastWS.workspaceName
+				td.PMPlatform      = lastWS.pmPlatform
+				td.PMProject       = lastWS.pmProject
+				td.PMAssignee      = lastWS.pmAssignee
+				td.PMIterationPath = lastWS.pmIterationPath
+				td.PMAreaPath      = lastWS.pmAreaPath
+				td.PMMilestone     = lastWS.pmMilestone
 			}
 
-			ipcMsg = CreateTimerTriggerMessage(timerData)
+			timerData = &td
+			ipcMsg = CreateTimerTriggerMessage(td)
 
-			// Prepare database record
 			triggerRecord = TriggerRecord{
 				TriggerType: "timer",
 				Timestamp:   event.Timestamp,
@@ -506,32 +509,56 @@ func (im *IntegratedMonitor) handleTrigger(event TriggerEvent) {
 		}
 	}
 
-	// Send IPC message to Python (with store-and-forward)
-	if im.messageQueue != nil {
-		if err := im.messageQueue.SendOrQueue(ipcMsg); err != nil {
-			log.Printf("Failed to send/queue IPC message: %v", err)
-		} else if im.ipcServer.HasClients() {
-			log.Println("✓ Sent trigger to Python via IPC")
-		} else {
-			log.Println("✓ Trigger queued for delivery when Python reconnects")
+	// Route trigger to Python backend.
+	// external mode → HTTP POST to DEVTRACK_SERVER_URL  (remote or local server)
+	// managed mode  → TCP IPC to local Python subprocess (default, Rule 0)
+	if IsExternalServer() {
+		httpClient := NewHTTPTriggerClient()
+		var sendErr error
+		switch {
+		case commitData != nil:
+			sendErr = httpClient.SendCommitTrigger(*commitData)
+		case timerData != nil:
+			sendErr = httpClient.SendTimerTrigger(*timerData)
 		}
-	} else if im.ipcServer != nil {
-		if err := im.ipcServer.SendMessage(ipcMsg); err != nil {
-			log.Printf("Failed to send IPC message: %v", err)
-		} else {
-			log.Println("✓ Sent trigger to Python via IPC")
+		if sendErr != nil {
+			log.Printf("Warning: HTTP trigger failed (%v) — trigger not delivered", sendErr)
+		}
+	} else {
+		// Managed mode: send via IPC with store-and-forward queue
+		if im.messageQueue != nil {
+			if err := im.messageQueue.SendOrQueue(ipcMsg); err != nil {
+				log.Printf("Failed to send/queue IPC message: %v", err)
+			} else if im.ipcServer.HasClients() {
+				log.Println("✓ Sent trigger to Python via IPC")
+			} else {
+				log.Println("✓ Trigger queued for delivery when Python reconnects")
+			}
+		} else if im.ipcServer != nil {
+			if err := im.ipcServer.SendMessage(ipcMsg); err != nil {
+				log.Printf("Failed to send IPC message: %v", err)
+			} else {
+				log.Println("✓ Sent trigger to Python via IPC")
+			}
 		}
 	}
 
 	fmt.Println()
 	fmt.Println("📝 What happens next:")
-	fmt.Println("   1. Python receives trigger via IPC")
-	fmt.Println("   2. Prompt user: 'What did you work on?'")
-	fmt.Println("   3. Parse text with NLP (spaCy)")
-	fmt.Println("   4. Match to existing tasks (semantic matching)")
-	fmt.Println("   5. Update Azure DevOps / GitHub / JIRA")
-	fmt.Println("   6. Logged to SQLite database ✓")
-	fmt.Println("   7. Generate email report at EOD")
+	if IsExternalServer() {
+		fmt.Println("   1. Python server receives trigger via HTTP")
+		fmt.Println("   2. NLP parse → PM sync (Azure / GitHub / GitLab / Jira)")
+		fmt.Println("   3. Timer triggers → Telegram prompt sent to developer")
+		fmt.Println("   4. Logged to SQLite database ✓")
+	} else {
+		fmt.Println("   1. Python receives trigger via IPC")
+		fmt.Println("   2. Prompt user: 'What did you work on?'")
+		fmt.Println("   3. Parse text with NLP (spaCy)")
+		fmt.Println("   4. Match to existing tasks (semantic matching)")
+		fmt.Println("   5. Update Azure DevOps / GitHub / JIRA")
+		fmt.Println("   6. Logged to SQLite database ✓")
+		fmt.Println("   7. Generate email report at EOD")
+	}
 	fmt.Println()
 	fmt.Println("⏳ Waiting for next event...")
 	fmt.Println()

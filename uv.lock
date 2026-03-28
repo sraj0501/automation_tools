@@ -33,6 +33,7 @@ dependencies = [
     { name = "python-levenshtein" },
     { name = "python-telegram-bot" },
     { name = "requests" },
+    { name = "runtime-narrative" },
     { name = "sentence-transformers" },
     { name = "spacy" },
 ]
@@ -81,6 +82,7 @@ requires-dist = [
     { name = "python-levenshtein", specifier = ">=0.21.0" },
     { name = "python-telegram-bot", specifier = ">=22.7" },
     { name = "requests", specifier = ">=2.32.3" },
+    { name = "runtime-narrative", specifier = ">=0.1.0" },
     { name = "sentence-transformers", specifier = ">=2.2.0" },
     { name = "spacy", specifier = ">=3.7.0" },
 ]
@@ -2835,6 +2837,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/6d/61/21b8c41f68e60c8cc3b2e25644f0e3681926020f11d06ab0b78e3c6bbff1/rpds_py-0.30.0-cp313-cp313t-musllinux_1_2_x86_64.whl", hash = "sha256:4c5f36a861bc4b7da6516dbdf302c55313afa09b81931e8280361a4f6c9a2d27", size = 555806, upload-time = "2025-11-30T20:23:22.488Z" },
     { url = "https://files.pythonhosted.org/packages/f9/39/7e067bb06c31de48de3eb200f9fc7c58982a4d3db44b07e73963e10d3be9/rpds_py-0.30.0-cp313-cp313t-win32.whl", hash = "sha256:3d4a69de7a3e50ffc214ae16d79d8fbb0922972da0356dcf4d0fdca2878559c6", size = 211341, upload-time = "2025-11-30T20:23:24.449Z" },
     { url = "https://files.pythonhosted.org/packages/0a/4d/222ef0b46443cf4cf46764d9c630f3fe4abaa7245be9417e56e9f52b8f65/rpds_py-0.30.0-cp313-cp313t-win_amd64.whl", hash = "sha256:f14fc5df50a716f7ece6a80b6c78bb35ea2ca47c499e422aa4463455dd96d56d", size = 225768, upload-time = "2025-11-30T20:23:25.908Z" },
+]
+
+[[package]]
+name = "runtime-narrative"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/7f/1f/8db8040a213c29ab52b1a5075831dc888ed9328ac3c440b55fdc5d36bddd/runtime_narrative-0.1.0.tar.gz", hash = "sha256:30766660c6177df2eda862f0d29d6146c45930d1c5cd4215bf877e19645624b9", size = 13631, upload-time = "2026-03-21T17:18:26.405Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bf/18/1d7d32f82c9d3ae7ee9102edd07899ffe753e604620761e51d44e38582d5/runtime_narrative-0.1.0-py3-none-any.whl", hash = "sha256:d9501aa8e0176086f842cce455dca2a46df126319f3a541d20ec109231a25e6d", size = 15513, upload-time = "2026-03-21T17:18:24.756Z" },
 ]
 
 [[package]]

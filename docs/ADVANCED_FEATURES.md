@@ -29,6 +29,44 @@ print(gen.format_report(report, 'terminal'))
 - Top projects by update count (last 30 days)
 - Unsynced updates, log entries
 
+## Structured Observability (runtime-narrative)
+
+DevTrack integrates the [`runtime-narrative`](https://pypi.org/project/runtime-narrative/) package for structured, story-scoped observability. When installed (included in `uv sync`), it wraps key pipeline steps in named stories and stages so that failures produce rich, structured diagnostics rather than raw tracebacks.
+
+### Where it is used
+
+| Component | Story name | What it wraps |
+|-----------|-----------|---------------|
+| FastAPI webhook server | `webhook.<source>` | Every inbound webhook request (Azure DevOps, GitHub, Jira, GitLab) |
+| `python_bridge.py` handlers | `commit_trigger`, `timer_trigger` | Commit and timer event processing pipelines |
+
+### Graceful degradation
+
+Both integration points import `_story` and `_stage` context managers with a `try/except` fallback:
+
+```python
+try:
+    from runtime_narrative import story as _story, stage as _stage
+except ImportError:
+    from contextlib import asynccontextmanager, contextmanager
+    @asynccontextmanager
+    async def _story(name, **kw): yield
+    @contextmanager
+    def _stage(name, **kw): yield
+```
+
+If `runtime-narrative` is not installed, all behaviour is identical — no errors, no missing logs, just no structured stories.
+
+### Configuration
+
+DevTrack uses `failure_diagnostics="lean"` throughout, which produces concise failure reports without including sensitive values (tokens, passwords, URLs with credentials) in the structured output.
+
+### Installation
+
+`runtime-narrative` is listed in `pyproject.toml` dependencies and installed automatically by `uv sync`. No additional steps are required.
+
+---
+
 ## Future Work
 
 - **Dashboard**: Web UI for analytics (planned)

@@ -34,6 +34,13 @@
 | [MULTI_REPO.md](MULTI_REPO.md) | Monitor multiple repos, each routed to its own PM platform via workspaces.yaml |
 | [PM_AGENT.md](PM_AGENT.md) | AI decomposition of problems into Epic → Story → Task hierarchies |
 
+### Productivity
+| Guide | What it covers |
+|-------|---------------|
+| [TICKET_ALERTER.md](TICKET_ALERTER.md) | Background poller for GitHub, Azure DevOps, and Jira — OS + terminal notifications |
+| [PROJECT_PLANNING.md](PROJECT_PLANNING.md) | AI project planning via `/newproject` — spec generation, team workloads, approval flow |
+| [WORK_TRACKER.md](WORK_TRACKER.md) | Automatic session-based time tracking + AI EOD report with email delivery |
+
 ### Remote Control
 | Guide | What it covers |
 |-------|---------------|

@@ -1,6 +1,8 @@
 # Installation Guide
 
-DevTrack is a native Go binary with a Python backend. No Docker required for local use.
+DevTrack is a **client-server tool**: the Go binary (`devtrack`) acts as the local daemon/client, and the Python backend is the server that handles AI, NLP, integrations, and reports. The two components are set up separately.
+
+The GitHub release binary is a lean ~5 MB pure-Go executable — it contains **no embedded Python**. Set up the Python backend using one of the options below.
 
 ---
 
@@ -77,7 +79,7 @@ uv run python -m spacy download en_core_web_sm
 
 ```bash
 cd devtrack-bin
-go build -o devtrack .
+go build -o devtrack .     # simple go build — no bundle step
 mkdir -p ~/.local/bin
 cp devtrack ~/.local/bin/
 cp devtrack ..          # also keep a copy in project root
@@ -134,6 +136,44 @@ devtrack enable-git      # sets git config devtrack.enabled=true
 After this, `git commit` in that repo runs the full DevTrack AI enhancement flow. To undo: `devtrack disable-git`. Repos listed in `workspaces.yaml` are intercepted automatically — no `enable-git` needed.
 
 See [Git Features](GIT_FEATURES.md) for details.
+
+---
+
+## Option B — Docker (Python Backend in a Container)
+
+If you prefer to run the Python backend in Docker (e.g., to keep Python dependencies off the host), use the included `Dockerfile.server`:
+
+```bash
+# Build the Python backend image
+docker build -f Dockerfile.server -t devtrack-server .
+
+# Run it (exposes port 8089 by default)
+docker run -p 8089:8089 --env-file .env devtrack-server
+
+# Or start everything (Python server + MongoDB + Redis) with compose
+docker compose up
+```
+
+Then configure the Go binary to connect to it as an external server:
+
+```bash
+# In .env
+DEVTRACK_SERVER_MODE=external
+DEVTRACK_SERVER_URL=http://localhost:8089
+```
+
+Start the daemon as usual — it will connect to the Docker container instead of spawning a subprocess:
+
+```bash
+devtrack start
+devtrack status
+```
+
+---
+
+## `devtrack install`
+
+Running `devtrack install` prints setup instructions for configuring the Python backend in your chosen mode (managed subprocess, external server, or Docker). It does **not** extract or embed Python — the binary is pure Go.
 
 ---
 

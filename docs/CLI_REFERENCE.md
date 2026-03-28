@@ -263,6 +263,38 @@ See [GITHUB.md](GITHUB.md) for setup and configuration.
 
 ---
 
+## Workspace Management
+
+Manage the multi-repo `workspaces.yaml` without editing the file by hand. All mutation commands (`add`, `remove`, `enable`, `disable`) automatically send a reload signal to the running daemon so changes take effect immediately — no `devtrack restart` needed.
+
+```bash
+devtrack workspace list                              # List all configured workspaces and their status
+devtrack workspace add <name> <path> --pm <platform> # Add a new workspace
+devtrack workspace remove <name>                     # Remove a workspace by name
+devtrack workspace enable <name>                     # Set enabled: true for a workspace
+devtrack workspace disable <name>                    # Set enabled: false for a workspace
+devtrack workspace reload                            # Send reload signal to the daemon (manual)
+```
+
+### workspace add flags
+
+| Flag | Values | Description |
+|------|--------|-------------|
+| `--pm` | `azure`, `gitlab`, `github`, `jira`, `none` | PM platform for this workspace (required) |
+
+Example:
+
+```bash
+devtrack workspace add work-api ~/work/api --pm azure
+devtrack workspace add oss-lib  ~/oss/lib  --pm github
+```
+
+After adding, the daemon picks up the new workspace without a restart. If the daemon is not running, the entry is written to `workspaces.yaml` and will be active on the next `devtrack start`.
+
+See [MULTI_REPO.md](MULTI_REPO.md) for full multi-repo documentation.
+
+---
+
 ## PM Agent (via Telegram)
 
 The PM Agent is Telegram-only. Use `/plan` in your Telegram bot:
