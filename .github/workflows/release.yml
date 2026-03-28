@@ -22,9 +22,6 @@ jobs:
           go-version-file: devtrack-bin/go.mod
           cache-dependency-path: devtrack-bin/go.sum
 
-      - name: Install uv (needed for Python dep validation)
-        run: pip install uv
-
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -33,3 +30,4 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
