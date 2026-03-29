@@ -15,11 +15,17 @@ const (
 	ServerModeManaged ServerMode = "managed"
 	// ServerModeExternal — Python backend runs independently; daemon does not spawn it
 	ServerModeExternal ServerMode = "external"
+	// ServerModeCloud — Python backend is a remote cloud-hosted server; credentials in ~/.devtrack/cloud.json
+	ServerModeCloud ServerMode = "cloud"
 )
 
 // GetServerMode returns the configured server mode.
-// Defaults to "managed" (spawn subprocess) if DEVTRACK_SERVER_MODE is unset.
+// Cloud credentials (~/.devtrack/cloud.json) take priority over env vars.
+// Defaults to "managed" (spawn subprocess) if nothing is configured.
 func GetServerMode() ServerMode {
+	if IsCloudMode() {
+		return ServerModeCloud
+	}
 	if os.Getenv("DEVTRACK_SERVER_MODE") == "external" {
 		return ServerModeExternal
 	}
@@ -29,11 +35,15 @@ func GetServerMode() ServerMode {
 // GetServerURL returns the base URL of the Python backend server.
 //
 // Resolution order:
-//  1. DEVTRACK_SERVER_URL env var (explicit override)
-//  2. Managed mode default — https://127.0.0.1:<WEBHOOK_PORT>
-//
-// Both managed and external modes now use HTTP, so this always returns a usable URL.
+//  1. ~/.devtrack/cloud.json URL (when in cloud mode)
+//  2. DEVTRACK_SERVER_URL env var (explicit override)
+//  3. Managed mode default — https://127.0.0.1:<WEBHOOK_PORT>
 func GetServerURL() string {
+	if IsCloudMode() {
+		if url := GetCloudURL(); url != "" {
+			return url
+		}
+	}
 	if v := os.Getenv("DEVTRACK_SERVER_URL"); v != "" {
 		return v
 	}
@@ -83,7 +93,15 @@ func GetTLSKeyPath() string {
 // IsExternalServer returns true when the Python backend is managed externally
 // (i.e. the daemon should NOT spawn it as a subprocess).
 func IsExternalServer() bool {
-	return GetServerMode() == ServerModeExternal
+	mode := GetServerMode()
+	return mode == ServerModeExternal || mode == ServerModeCloud
+}
+
+// IsLocalTLS reports whether TLS cert-pinning (self-signed) should be used.
+// True for managed/external-local mode; false for cloud mode where the remote
+// server has a CA-signed cert and system roots are used instead.
+func IsLocalTLS() bool {
+	return IsTLSEnabled() && !IsCloudMode()
 }
 
 // RunInstall is called by `devtrack install`. It explains the client-server setup.

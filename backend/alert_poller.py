@@ -198,6 +198,8 @@ async def _run_one_cycle(store, user_id: str) -> List[Dict[str, Any]]:
             logger.warning(f"Failed to store notification: {e}")
             # Still deliver even if storage fails
             new_notifications.append(notif)
+        # Dual-write to SQLite so the Bubble Tea TUI can read alerts offline
+        _write_notification_to_sqlite(notif)
 
     # Deliver via notifier
     if new_notifications:
@@ -208,6 +210,50 @@ async def _run_one_cycle(store, user_id: str) -> List[Dict[str, Any]]:
             logger.warning(f"Alert notifier failed: {e}")
 
     return new_notifications
+
+
+# ---------------------------------------------------------------------------
+# SQLite dual-write (for Bubble Tea TUI offline access)
+# ---------------------------------------------------------------------------
+
+def _write_notification_to_sqlite(notif: Dict[str, Any]) -> None:
+    """
+    Write a notification record to the local SQLite database so that the
+    Bubble Tea TUI (Go side) can display alerts without needing MongoDB.
+
+    Non-fatal: any error is logged at DEBUG level and silently ignored.
+    """
+    try:
+        import sqlite3
+        db_path = cfg.database_path()
+        if not db_path.exists():
+            return
+        ts = notif.get("timestamp")
+        if isinstance(ts, datetime):
+            ts_str = ts.isoformat()
+        elif isinstance(ts, str):
+            ts_str = ts
+        else:
+            ts_str = datetime.now(tz=timezone.utc).isoformat()
+
+        with sqlite3.connect(str(db_path)) as conn:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO notifications
+                    (source, event_type, ticket_id, title, url, read, created_at)
+                VALUES (?, ?, ?, ?, ?, 0, ?)
+                """,
+                (
+                    notif.get("source", ""),
+                    notif.get("event_type", ""),
+                    notif.get("ticket_id", ""),
+                    notif.get("title", ""),
+                    notif.get("url", ""),
+                    ts_str,
+                ),
+            )
+    except Exception as e:
+        logger.debug(f"SQLite dual-write skipped: {e}")
 
 
 # ---------------------------------------------------------------------------
