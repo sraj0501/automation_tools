@@ -601,6 +601,7 @@ const NAV = [
       { id: 'AUTOSTART',       label: 'Auto-Start',       icon: launch_icon() },
       { id: 'SERVER_TUI',      label: 'Server TUI',       icon: terminal_icon() },
       { id: 'ADMIN_CONSOLE',   label: 'Admin Console',    icon: settings_icon() },
+      { id: 'TELEMETRY',       label: 'Telemetry',        icon: '📊' },
       { id: 'CLOUD_MODE',      label: 'Cloud Mode',       icon: '☁️' },
       { id: 'TUI_DASHBOARD',   label: 'TUI Dashboard',    icon: terminal_icon() },
     ]
@@ -980,6 +981,136 @@ devtrack cloud logout</code></pre>
 <li>charmbracelet/bubbletea v1.3.10 and lipgloss v1.1.0 are included in the Go binary — no separate installation needed.</li>
 <li>Terminal must support 256-color mode (all modern macOS / Linux terminals do).</li>
 </ul>
+</div>`,
+
+  TELEMETRY: `<div class="md-body">
+<h1>Telemetry</h1>
+<div class="home-badge" style="margin-bottom:24px;background:var(--callout-warn);border-color:var(--callout-warn-border);color:#92400e;">Planned — not yet implemented</div>
+
+<p>DevTrack's telemetry system is a <strong>privacy-first, three-tier</strong> approach to understanding how many people download and use the tool — without ever collecting personal data. Telemetry is always opt-in and the binary works identically with it on or off.</p>
+
+<h2>Three Tiers at a Glance</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Tier</th><th>Source</th><th>What it measures</th><th>Code needed</th></tr></thead>
+<tbody>
+<tr><td><strong>1 — Downloads</strong></td><td>GitHub Releases API</td><td>Binary download counts per release, star count, forks</td><td>None — polled every 15 min by the server</td></tr>
+<tr><td><strong>2 — Anonymous usage</strong></td><td>Go binary (opt-in)</td><td>install / command / heartbeat / signup events; random UUID; no PII</td><td><code>devtrack-bin/telemetry.go</code> + CLI wiring</td></tr>
+<tr><td><strong>3 — Registered users</strong></td><td>CS-4 cloud server</td><td><code>api_keys.last_seen_at</code> — active registered users (D1/D7/D30)</td><td><code>api_keys</code> table extension</td></tr>
+</tbody>
+</table></div>
+
+<h2>Privacy Design</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Property</th><th>Detail</th></tr></thead>
+<tbody>
+<tr><td><strong>Default OFF</strong></td><td>Telemetry is disabled until you explicitly run <code>devtrack telemetry on</code></td></tr>
+<tr><td><strong>Anonymous UUID</strong></td><td><code>install_id</code> is a random UUID with no link to your identity, email, or machine name</td></tr>
+<tr><td><strong>No PII ever</strong></td><td>Repo paths, commit messages, file names, usernames, API keys, and workspace names are never sent</td></tr>
+<tr><td><strong>Local-first safe</strong></td><td>All telemetry POSTs are fire-and-forget on a goroutine; failures are silent and never block the CLI</td></tr>
+<tr><td><strong>Transparent</strong></td><td><code>devtrack telemetry status</code> shows the exact payload that would be sent on the next event</td></tr>
+</tbody>
+</table></div>
+
+<h3>What Is Sent</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Event</th><th>Trigger</th><th>Payload (no PII)</th></tr></thead>
+<tbody>
+<tr><td><code>install</code></td><td>First <code>devtrack telemetry on</code></td><td><code>version</code>, <code>os</code>, <code>arch</code></td></tr>
+<tr><td><code>command</code></td><td>Each CLI invocation</td><td>Command name only (e.g. <code>work</code>, <code>tui</code>, <code>cloud</code>)</td></tr>
+<tr><td><code>heartbeat</code></td><td>Daemon startup</td><td><code>version</code>, <code>active_features</code> bitmask</td></tr>
+<tr><td><code>signup</code></td><td><code>devtrack cloud login</code> succeeds</td><td><code>version</code>, <code>os</code> only</td></tr>
+</tbody>
+</table></div>
+
+<h3>What Is Never Sent</h3>
+<ul>
+<li>Repo paths or names</li>
+<li>Commit messages or hashes</li>
+<li>File names or diffs</li>
+<li>Usernames or emails</li>
+<li>API keys or tokens</li>
+<li>Workspace names or ticket IDs</li>
+</ul>
+
+<h2>CLI Reference</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Command</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>devtrack telemetry on</code></td><td>Enable telemetry; generate <code>install_id</code> UUID if not already present; fire the <code>install</code> event</td></tr>
+<tr><td><code>devtrack telemetry off</code></td><td>Disable telemetry; <code>install_id</code> is retained so re-enabling is seamless</td></tr>
+<tr><td><code>devtrack telemetry status</code></td><td>Show enabled/disabled state, the first 8 chars of your <code>install_id</code>, and the exact payload that would be sent on the next event</td></tr>
+</tbody>
+</table></div>
+
+<p>State is stored in <code>~/.devtrack/telemetry.json</code> (chmod 0600):</p>
+<pre><code class="language-json">{
+  "enabled": true,
+  "install_id": "a3f8c2d1-…",
+  "opted_in_at": "2026-03-29T10:00:00Z"
+}</code></pre>
+
+<h2>Real-Time Admin Dashboard</h2>
+<p>When telemetry is enabled on the server, the Admin Console gains a live telemetry panel powered by <strong>Server-Sent Events (SSE) + HTMX</strong> — no JavaScript needed on the frontend.</p>
+
+<h3>How It Works</h3>
+<ol>
+<li>Each <code>POST /telemetry/event</code> from a client binary inserts a row into <code>telemetry_events</code> and pushes the event into an <code>asyncio.Queue</code>.</li>
+<li>The SSE endpoint (<code>GET /admin/telemetry/stream</code>) streams two event types:
+  <ul>
+    <li><code>counters</code> — aggregate stats (DAU, MAU, signups today, command histogram) pushed every 5 seconds</li>
+    <li><code>live_event</code> — individual event row pushed immediately on each INSERT</li>
+  </ul>
+</li>
+<li>HTMX on the admin dashboard subscribes to the SSE stream and swaps rendered HTML fragments directly — the server returns HTML, not raw JSON, so no client-side rendering is needed.</li>
+</ol>
+
+<pre><code class="language-html">&lt;!-- One persistent SSE connection; HTMX handles reconnect --&gt;
+&lt;div hx-ext="sse" sse-connect="/admin/telemetry/stream"&gt;
+  &lt;div id="stats-panel" sse-swap="counters" hx-swap="outerHTML"&gt;&lt;/div&gt;
+  &lt;table&gt;
+    &lt;tbody id="live-feed" sse-swap="live_event" hx-swap="afterbegin"&gt;&lt;/tbody&gt;
+  &lt;/table&gt;
+&lt;/div&gt;</code></pre>
+
+<h3>GitHub Download Counts</h3>
+<p>A background task on the server polls the GitHub Releases API every 15 minutes and caches the result in memory. Download counts are surfaced in the admin dashboard alongside live event counts — no binary changes needed for this tier.</p>
+<pre><code class="language-bash"># Manual query (no auth needed for public repos)
+curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
+  | jq '[.[] | {tag: .tag_name, downloads: [.assets[].download_count] | add}]'</code></pre>
+
+<h2>Data Model</h2>
+<h3>telemetry_events table</h3>
+<pre><code class="language-sql">CREATE TABLE telemetry_events (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    install_id   TEXT    NOT NULL,       -- random UUID; stable per install
+    event        TEXT    NOT NULL,       -- "install"|"command"|"heartbeat"|"signup"
+    props        TEXT    DEFAULT '{}',   -- JSON: {command, version, os, arch, features}
+    received_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+);</code></pre>
+
+<h2>New .env Variables</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Variable</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>TELEMETRY_ENABLED</code></td><td>Set to <code>true</code> to enable the <code>/telemetry/event</code> endpoint on the server (default: <code>false</code>)</td></tr>
+<tr><td><code>GITHUB_REPO_SLUG</code></td><td>GitHub repo slug for download count polling (e.g. <code>sraj0501/automation_tools</code>)</td></tr>
+</tbody>
+</table></div>
+
+<h2>New Files (to be created)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td><code>devtrack-bin/telemetry.go</code></td><td><code>TelemetryConfig</code>, <code>LoadTelemetryConfig()</code>, <code>SaveTelemetryConfig()</code>, <code>Track(event, props)</code> (non-blocking goroutine POST), <code>handleTelemetry()</code> CLI dispatcher</td></tr>
+<tr><td><code>backend/telemetry/__init__.py</code></td><td>Package init</td></tr>
+<tr><td><code>backend/telemetry/store.py</code></td><td><code>TelemetryStore</code>: INSERT event, aggregate queries (DAU, MAU, signups, command histogram)</td></tr>
+<tr><td><code>backend/telemetry/router.py</code></td><td>FastAPI router: <code>POST /telemetry/event</code>, <code>GET /admin/telemetry/stream</code> (SSE)</td></tr>
+<tr><td><code>backend/telemetry/github_stats.py</code></td><td>Background poller for GitHub Releases download counts (15-min interval)</td></tr>
+<tr><td><code>backend/telemetry/stream.py</code></td><td><code>asyncio.Queue</code> shared state, <code>push_live_event()</code>, SSE generator</td></tr>
+</tbody>
+</table></div>
+
+<blockquote><p><strong>Implementation status:</strong> The telemetry system is fully designed and documented in <code>docs/TELEMETRY_PLAN.md</code>. No code has been written yet. The plan covers four implementation phases: server-side foundation (1 day), real-time admin dashboard (1 day), Go binary instrumentation (1 day), and polish including a first-run opt-in prompt (half day).</p></blockquote>
 </div>`,
 
   WHATS_NEW: `<div class="md-body">
