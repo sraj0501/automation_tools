@@ -198,6 +198,8 @@ func (cli *CLI) Execute() error {
 		return cli.handleAutostartStatus()
 	case "alerts":
 		return cli.handleAlerts()
+	case "vacation":
+		return cli.handleVacation()
 	case "work":
 		return cli.handleWork()
 	case "server-tui":
@@ -1473,6 +1475,35 @@ func (cli *CLI) handleGitHubView() error {
 		return err
 	}
 	return nil
+}
+
+// handleVacation dispatches vacation mode subcommands.
+//
+// Usage:
+//
+//	devtrack vacation on [--until YYYY-MM-DD] [--threshold 0.7] [--no-submit]
+//	devtrack vacation off
+//	devtrack vacation status
+func (cli *CLI) handleVacation() error {
+	vc, err := NewVacationCommands()
+	if err != nil {
+		return err
+	}
+	args := os.Args
+	sub := ""
+	if len(args) > 2 {
+		sub = args[2]
+	}
+	switch sub {
+	case "on":
+		return vc.On(args[3:])
+	case "off":
+		return vc.Off()
+	case "status", "":
+		return vc.Status()
+	default:
+		return fmt.Errorf("unknown vacation subcommand %q — use: on | off | status", sub)
+	}
 }
 
 // handleAlerts shows ticket alert notifications or marks them as read.

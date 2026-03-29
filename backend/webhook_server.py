@@ -245,6 +245,30 @@ class TriggerProcessor:
 
         logger.info(f"[HTTP timer] trigger #{trigger_count} (every {interval_mins}m, workspace={workspace_name})")
 
+        # Check vacation mode — auto-respond instead of nudging
+        try:
+            from backend.vacation.auto_responder import is_vacation_active, VacationAutoResponder
+            if is_vacation_active():
+                logger.info("[vacation mode] active — auto-generating work update")
+                import asyncio
+                responder = VacationAutoResponder()
+                result = asyncio.run(responder.handle(data))
+                logger.info(
+                    "[vacation mode] confidence=%.2f submitted=%s reason=%s",
+                    result.get("confidence", 0),
+                    result.get("submitted"),
+                    result.get("skipped_reason"),
+                )
+                return {
+                    "status": "vacation_auto",
+                    "trigger_count": trigger_count,
+                    "confidence": result.get("confidence", 0),
+                    "submitted": result.get("submitted", False),
+                    "skipped_reason": result.get("skipped_reason"),
+                }
+        except Exception as e:
+            logger.debug(f"Vacation auto-responder error (non-fatal): {e}")
+
         # Check active work session
         active_session = None
         try:

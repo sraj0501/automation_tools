@@ -345,6 +345,16 @@ func (d *Database) initSchema() error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_work_sessions_started ON work_sessions(started_at);
 	CREATE INDEX IF NOT EXISTS idx_work_sessions_ended ON work_sessions(ended_at);
+
+	CREATE TABLE IF NOT EXISTS vacation_mode (
+		id                   INTEGER PRIMARY KEY CHECK (id = 1),
+		enabled              INTEGER NOT NULL DEFAULT 0,
+		enabled_at           TEXT,
+		until                TEXT,
+		confidence_threshold REAL    NOT NULL DEFAULT 0.7,
+		auto_submit          INTEGER NOT NULL DEFAULT 1
+	);
+	INSERT OR IGNORE INTO vacation_mode (id, enabled) VALUES (1, 0);
 	`
 
 	_, err := d.db.Exec(schema)
@@ -1556,4 +1566,57 @@ func buildJSONStringArray(items []string) string {
 	}
 	out += "]"
 	return out
+}
+
+// VacationState holds the current vacation mode configuration.
+type VacationState struct {
+	Enabled             bool
+	EnabledAt           string
+	Until               string // empty = indefinite
+	ConfidenceThreshold float64
+	AutoSubmit          bool
+}
+
+// GetVacationState returns the current vacation mode state.
+func (d *Database) GetVacationState() (*VacationState, error) {
+	row := d.db.QueryRow(`SELECT enabled, enabled_at, until, confidence_threshold, auto_submit FROM vacation_mode WHERE id = 1`)
+	var (
+		enabled    int
+		enabledAt  string
+		until      string
+		threshold  float64
+		autoSubmit int
+	)
+	if err := row.Scan(&enabled, &enabledAt, &until, &threshold, &autoSubmit); err != nil {
+		return nil, err
+	}
+	return &VacationState{
+		Enabled:             enabled == 1,
+		EnabledAt:           enabledAt,
+		Until:               until,
+		ConfidenceThreshold: threshold,
+		AutoSubmit:          autoSubmit == 1,
+	}, nil
+}
+
+// SetVacationMode enables or disables vacation mode.
+func (d *Database) SetVacationMode(enabled bool, until string, threshold float64, autoSubmit bool) error {
+	enabledAt := ""
+	if enabled {
+		enabledAt = time.Now().UTC().Format(time.RFC3339)
+	}
+	autoSubmitInt := 0
+	if autoSubmit {
+		autoSubmitInt = 1
+	}
+	enabledInt := 0
+	if enabled {
+		enabledInt = 1
+	}
+	_, err := d.db.Exec(`
+		UPDATE vacation_mode
+		SET enabled=?, enabled_at=?, until=?, confidence_threshold=?, auto_submit=?
+		WHERE id=1`,
+		enabledInt, enabledAt, until, threshold, autoSubmitInt)
+	return err
 }
