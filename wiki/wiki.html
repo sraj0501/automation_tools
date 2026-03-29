@@ -524,7 +524,7 @@
         <span class="current" id="breadcrumbCurrent">Home</span>
       </div>
       <div class="topbar-actions">
-        <span class="version-chip">v1.0</span>
+        <span class="version-chip">v1.1</span>
         <button class="icon-btn" id="themeToggle" title="Toggle theme">
           <svg id="themeIcon" viewBox="0 0 20 20" fill="currentColor"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>
         </button>
@@ -601,6 +601,8 @@ const NAV = [
       { id: 'AUTOSTART',       label: 'Auto-Start',       icon: launch_icon() },
       { id: 'SERVER_TUI',      label: 'Server TUI',       icon: terminal_icon() },
       { id: 'ADMIN_CONSOLE',   label: 'Admin Console',    icon: settings_icon() },
+      { id: 'CLOUD_MODE',      label: 'Cloud Mode',       icon: '☁️' },
+      { id: 'TUI_DASHBOARD',   label: 'TUI Dashboard',    icon: terminal_icon() },
     ]
   },
   {
@@ -864,8 +866,157 @@ VACATION_AUTO_SUBMIT=true</code></pre>
 <p>Vacation state is stored as a single row in the <code>vacation_mode</code> table in <code>Data/devtrack.db</code>. All fields (<code>enabled</code>, <code>enabled_at</code>, <code>until</code>, <code>confidence_threshold</code>, <code>auto_submit</code>) are updated atomically on every <code>on</code> / <code>off</code> call — no config file is written.</p>
 </div>`,
 
+  CLOUD_MODE: `<div class="md-body">
+<h1>Cloud Mode (CS-4)</h1>
+<p>Cloud Mode lets you connect the DevTrack Go daemon on your developer machine to a remote, managed Python backend — no local Python installation required on the developer machine. The daemon uses your cloud credentials for all HTTP trigger POSTs, bypassing the local cert-pinning that applies to self-signed certificates in managed and external modes.</p>
+
+<h2>Quick Start</h2>
+<pre><code class="language-bash"># Log in to a remote DevTrack server
+devtrack cloud login --url https://myserver.com --key your-api-key
+
+# Check connection status (pings /health, fetches /version, shows key preview)
+devtrack cloud status
+
+# Disconnect and revert to managed mode
+devtrack cloud logout</code></pre>
+
+<h2>Server Modes</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Mode</th><th>Config</th><th>Use case</th></tr></thead>
+<tbody>
+<tr><td><code>managed</code> (default)</td><td><code>DEVTRACK_SERVER_MODE=managed</code></td><td>Local dev — daemon spawns Python subprocess automatically</td></tr>
+<tr><td><code>external</code></td><td><code>DEVTRACK_SERVER_MODE=external</code> + <code>DEVTRACK_SERVER_URL=http://host:port</code></td><td>Docker or self-hosted Python backend; uses cert-pinning for TLS</td></tr>
+<tr><td><code>cloud</code></td><td>Set via <code>devtrack cloud login</code></td><td>Hosted DevTrack backend; CA-signed cert; API key auth</td></tr>
+</tbody>
+</table></div>
+
+<h2>How It Works</h2>
+<ol>
+<li><code>devtrack cloud login --url URL --key KEY</code> tests the <code>/health</code> endpoint, then writes credentials to <code>~/.devtrack/cloud.json</code> (chmod 0600). This file contains <code>mode</code>, <code>url</code>, and <code>api_key</code>.</li>
+<li>When cloud mode is active, <code>IsCloudMode()</code> returns <code>true</code> and <code>IsLocalTLS()</code> returns <code>false</code> — the Go HTTP client skips the cert-pinning step that is used for self-signed local certificates, trusting the system CA store instead.</li>
+<li>Every trigger POST and health-check request includes the API key in the <code>Authorization</code> header.</li>
+<li><code>devtrack cloud logout</code> removes <code>~/.devtrack/cloud.json</code> and restores managed mode.</li>
+</ol>
+
+<h2>cloud.json Format</h2>
+<pre><code class="language-json">{
+  "mode": "cloud",
+  "url": "https://myserver.com",
+  "api_key": "your-api-key"
+}</code></pre>
+<p>The file is stored at <code>~/.devtrack/cloud.json</code> with permissions <code>0600</code> — readable only by the current user.</p>
+
+<h2>Status Output</h2>
+<p><code>devtrack cloud status</code> pings <code>/health</code> and reports the round-trip latency, fetches <code>/version</code> for the server version string, and displays a masked preview of the API key (first 8 chars + <code>…</code>) so you can confirm the right key is active without exposing it in the terminal.</p>
+
+<h2>Configuration</h2>
+<p>Cloud mode does not require any <code>.env</code> changes — credentials are stored in <code>~/.devtrack/cloud.json</code> and loaded at startup automatically. The existing <code>DEVTRACK_SERVER_MODE</code> and <code>DEVTRACK_SERVER_URL</code> variables are ignored when <code>cloud.json</code> is present.</p>
+
+<blockquote><p><strong>Note:</strong> Cloud mode follows the local-first design principle. If the remote server is unreachable, the daemon logs the error and continues operating locally — git monitoring, scheduling, and SQLite logging all continue without interruption. Triggers are re-tried on the next cycle.</p></blockquote>
+</div>`,
+
+  TUI_DASHBOARD: `<div class="md-body">
+<h1>TUI Dashboard</h1>
+<p>The TUI Dashboard is a real-time, alt-screen terminal dashboard built with <strong>Bubble Tea</strong> (charmbracelet/bubbletea). It gives you a live view of daemon health, recent git activity, workspace status, and ticket alerts — all from a single terminal window, with no browser required.</p>
+
+<h2>Launching</h2>
+<pre><code class="language-bash">devtrack tui</code></pre>
+<p>The dashboard opens in alt-screen mode (full terminal takeover). Press <code>q</code> to quit and return to your shell — the daemon keeps running.</p>
+
+<h2>Tabs</h2>
+<p>Navigate between tabs with the <code>Tab</code> key or by pressing <code>1</code>–<code>4</code>.</p>
+
+<pre><code>┌──────────────────────────────────────────────────────────────────────┐
+│  [1] Overview  [2] Activity  [3] Workspaces  [4] Alerts              │
+└──────────────────────────────────────────────────────────────────────┘</code></pre>
+
+<h3>1 — Overview</h3>
+<p>At-a-glance summary of the running daemon:</p>
+<ul>
+<li>Daemon uptime since last start</li>
+<li>Python backend server status and latency (ping to <code>/health</code>)</li>
+<li>Today's commit trigger count and timer trigger count</li>
+<li>Total configured workspace count</li>
+</ul>
+
+<h3>2 — Activity</h3>
+<p>A live table of the last 30 trigger records from the SQLite database — both commit triggers (with short commit hash) and timer triggers — with timestamps and the workspace that fired them. Useful for confirming git monitoring is working and seeing recent AI-enhanced commit activity at a glance.</p>
+
+<h3>3 — Workspaces</h3>
+<p>A table of every workspace configured in <code>workspaces.yaml</code>:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Column</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td>Name</td><td>Workspace name as defined in workspaces.yaml</td></tr>
+<tr><td>Platform</td><td>PM platform (azure / github / gitlab / jira / none)</td></tr>
+<tr><td>Enabled</td><td>Whether monitoring is active for this workspace</td></tr>
+<tr><td>Path</td><td>Filesystem path being monitored</td></tr>
+</tbody>
+</table></div>
+
+<h3>4 — Alerts</h3>
+<p>The last 30 ticket notifications from the SQLite <code>notifications</code> table — written there by the alert poller as a dual-write alongside MongoDB. Shows source (github / azure / jira), event type, ticket ID, summary, and read/unread state. This tab works fully offline (no MongoDB required).</p>
+
+<h2>Key Bindings</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Key</th><th>Action</th></tr></thead>
+<tbody>
+<tr><td><code>Tab</code></td><td>Cycle to the next tab</td></tr>
+<tr><td><code>1</code> / <code>2</code> / <code>3</code> / <code>4</code></td><td>Jump directly to Overview / Activity / Workspaces / Alerts</td></tr>
+<tr><td><code>r</code></td><td>Refresh all data immediately (overrides 30-second auto-refresh)</td></tr>
+<tr><td><code>q</code></td><td>Quit and return to shell (daemon keeps running)</td></tr>
+</tbody>
+</table></div>
+
+<h2>Auto-Refresh</h2>
+<p>All tabs refresh automatically every <strong>30 seconds</strong> via an internal <code>tea.Tick</code> timer. Press <code>r</code> to force an immediate refresh at any time.</p>
+
+<h2>Offline Support</h2>
+<p>The TUI reads all data from the local SQLite database (<code>Data/devtrack.db</code>) — no Python backend or network connection is needed. The only tab that requires a reachable backend is the server latency shown on the Overview tab; if the backend is unreachable, the latency field shows "unavailable" and the rest of the dashboard continues to function.</p>
+
+<h2>Requirements</h2>
+<ul>
+<li>The <code>devtrack</code> daemon should be running (or have previously run) so the SQLite database has data to display.</li>
+<li>charmbracelet/bubbletea v1.3.10 and lipgloss v1.1.0 are included in the Go binary — no separate installation needed.</li>
+<li>Terminal must support 256-color mode (all modern macOS / Linux terminals do).</li>
+</ul>
+</div>`,
+
   WHATS_NEW: `<div class="md-body">
 <h1>What's New</h1>
+<div class="home-badge" style="margin-bottom:24px;">v1.1 — March 2026</div>
+
+<h2>v1.1 Highlights</h2>
+<p>DevTrack v1.1 adds the CS-4 Cloud Mode tier, a Bubble Tea TUI Dashboard, GitLab webhook auto-registration, and offline-capable SQLite dual-write for the alert poller.</p>
+
+<div class="feature-list" style="margin-bottom:32px;">
+  <div class="feature-item"><div class="feature-dot">1</div><div><h4>Cloud Mode (CS-4) — <code>devtrack cloud</code></h4><p>Connect your local daemon to a remote managed backend with a single command: <code>devtrack cloud login --url https://myserver.com --key your-api-key</code>. Credentials are stored in <code>~/.devtrack/cloud.json</code> (chmod 0600). Cloud mode bypasses local cert-pinning (CA-signed certs on the remote) and includes the API key in every request. <code>devtrack cloud status</code> shows latency, server version, and a masked key preview. <code>devtrack cloud logout</code> reverts to managed mode.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">2</div><div><h4>TUI Dashboard — <code>devtrack tui</code></h4><p>A full-screen Bubble Tea dashboard with 4 tabs: <strong>Overview</strong> (daemon uptime, server latency, today's trigger counts), <strong>Activity</strong> (last 30 commit/timer records), <strong>Workspaces</strong> (all configured repos + PM platform + enabled state), and <strong>Alerts</strong> (last 30 ticket notifications). Tab key or 1–4 to switch, <code>r</code> to refresh, <code>q</code> to quit. 30-second auto-refresh. Reads entirely from local SQLite — works offline.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">3</div><div><h4>GitLab Webhook Auto-Registration</h4><p>The Python backend now automatically registers the <code>/webhooks/gitlab</code> endpoint with all projects listed in <code>GITLAB_PROJECT_IDS</code> on startup. Set <code>DEVTRACK_WEBHOOK_PUBLIC_URL</code> to your server's public URL and the backend handles idempotent hook registration — no manual API calls needed when the server URL changes or when adding a new project ID.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">4</div><div><h4>Alert Poller SQLite Dual-Write</h4><p>The alert poller now writes every new notification to both MongoDB (when available) and the local SQLite <code>notifications</code> table. This powers the TUI Dashboard Alerts tab and ensures notifications are accessible offline without a MongoDB connection.</p></div></div>
+</div>
+
+<h2>CLI Additions (v1.1)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Command</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>devtrack cloud login --url URL --key KEY</code></td><td>Connect to a remote DevTrack backend</td></tr>
+<tr><td><code>devtrack cloud logout</code></td><td>Disconnect from cloud mode, revert to managed</td></tr>
+<tr><td><code>devtrack cloud status</code></td><td>Ping remote server, show latency + version + key preview</td></tr>
+<tr><td><code>devtrack tui</code></td><td>Open the Bubble Tea TUI Dashboard</td></tr>
+</tbody>
+</table></div>
+
+<h2>New .env Variables (v1.1)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Variable</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>GITLAB_PROJECT_IDS</code></td><td>Comma-separated GitLab project IDs for auto webhook registration (e.g. <code>12345,67890</code>)</td></tr>
+<tr><td><code>DEVTRACK_WEBHOOK_PUBLIC_URL</code></td><td>Public URL of the DevTrack server, used when registering GitLab webhooks</td></tr>
+</tbody>
+</table></div>
+
+<hr>
 <div class="home-badge" style="margin-bottom:24px;">v1.0 — March 2026</div>
 
 <h2>v1.0 Highlights</h2>
@@ -903,12 +1054,10 @@ VACATION_AUTO_SUBMIT=true</code></pre>
 </tbody>
 </table></div>
 
-<h2>Coming in v1.1</h2>
+<h2>Coming in v1.2</h2>
 <ul>
-<li><strong>Autonomous Communication (CS-4 preview)</strong> — AI drafts and sends standup messages via Power Automate</li>
-<li><strong>Managed Cloud Mode</strong> — Hosted Python backend; local Go binary connects to it; <code>DEVTRACK_API_KEY</code> auth</li>
-<li><strong>TUI Dashboard</strong> — Bubble Tea TUI replacement for the web dashboard in managed mode</li>
-<li><strong>GitLab webhook hot-reload</strong> — Re-register GitLab hooks automatically when the server URL changes</li>
+<li><strong>Autonomous Communication</strong> — AI drafts and sends standup messages via Power Automate / email</li>
+<li><strong>CS-4 SaaS tier</strong> — Multi-tenant managed backend; billing; <code>DEVTRACK_API_KEY</code> subscription auth</li>
 </ul>
 
 <blockquote><p>DevTrack follows a local-first design principle: everything in v1.0 works fully offline on your machine. Cloud features (CS-4) are opt-in upgrades — they extend capability without replacing the local-first core.</p></blockquote>
@@ -1043,14 +1192,14 @@ function renderHome() {
   const content = document.getElementById('content');
   content.innerHTML = `
     <div class="home-hero">
-      <div class="home-badge">Local-First · v1.0</div>
+      <div class="home-badge">Local-First · v1.1</div>
       <h1 class="home-title">Developer automation<br>that handles the <span>overhead</span>.</h1>
       <p class="home-sub">DevTrack monitors your Git activity, prompts for work updates, routes them through AI, and keeps your project management systems in sync — all running locally on your machine.</p>
     </div>
 
     <div class="home-grid">
       ${[
-        { id:'WHATS_NEW',       icon:'🎉', title:"What's New in v1.0", desc:'IPC→HTTPS, Slack bot, Server TUI, Admin Console, Work Sessions, Vacation Mode, Multi-Repo Hot-Reload, Jira Alerter, and more.' },
+        { id:'WHATS_NEW',       icon:'🎉', title:"What's New in v1.1", desc:'Cloud Mode, TUI Dashboard, GitLab Webhook Auto-Registration, Alert SQLite Dual-Write, and all v1.0 features.' },
         { id:'GETTING_STARTED', icon:'🚀', title:'Getting Started',   desc:'New to DevTrack? Start here — concepts, setup, and first run.' },
         { id:'QUICK_START',     icon:'⚡', title:'Quick Start',       desc:'Get running in 5 minutes with the minimal setup guide.' },
         { id:'CLI_REFERENCE',   icon:'⌨️', title:'CLI Reference',     desc:'All devtrack commands with flags and examples.' },
@@ -1070,6 +1219,8 @@ function renderHome() {
         { id:'AUTOSTART', icon:'⚙️', title:'Auto-Start',   desc:'Auto-start DevTrack at login — OS-aware. Run <code>devtrack autostart-install</code>: launchd LaunchAgent on macOS, systemd user service on Linux/WSL with systemd, or a shell profile block on WSL without systemd. Uninstall with <code>devtrack autostart-uninstall</code>.' },
         { id:'SERVER_TUI',    icon:'🖥️', title:'Server TUI',     desc:'Textual process monitor for the Python backend. Shows all server processes (webhook server, Telegram bot, Slack bot, alert poller) with live CPU/MEM/status and a health bar. Navigate with ↑↓, restart with r, toggle logs with l.' },
         { id:'ADMIN_CONSOLE', icon:'⚙️', title:'Admin Console',  desc:'Web UI at <code>http://localhost:8090/admin/</code> — manage users, API keys, review server health, LLM config, integration credentials, and a full audit log. Run with <code>devtrack admin-start</code>.' },
+        { id:'CLOUD_MODE',    icon:'☁️', title:'Cloud Mode',      desc:'Connect your local daemon to a remote managed backend. <code>devtrack cloud login --url URL --key KEY</code> saves credentials to <code>~/.devtrack/cloud.json</code>. Bypasses cert-pinning for CA-signed remote certs.' },
+        { id:'TUI_DASHBOARD', icon:'🖥️', title:'TUI Dashboard',   desc:'Bubble Tea full-screen dashboard. 4 tabs: Overview (uptime, latency, counts), Activity (last 30 triggers), Workspaces (all repos + PM platform), Alerts (last 30 notifications). Tab/1–4 to switch, <code>r</code> refresh, <code>q</code> quit.' },
         { id:'TROUBLESHOOTING', icon:'🔧', title:'Troubleshooting',   desc:'Common problems, error messages, and solutions.' },
       ].map(c => `
         <a class="home-card" href="#${c.id}" onclick="navigate('${c.id}');return false;">

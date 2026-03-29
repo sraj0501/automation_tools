@@ -55,6 +55,8 @@ DevTrack is a **client-server tool**. The Go binary (`devtrack`) is a lean daemo
 | Track time automatically (EOD report) | [Work Tracker](docs/WORK_TRACKER.md) |
 | Get ticket alerts (GitHub / Azure / Jira) | [Ticket Alerter](docs/TICKET_ALERTER.md) |
 | Plan a project with AI | [AI Project Planning](docs/PROJECT_PLANNING.md) |
+| Connect to a remote backend | [Cloud Mode](wiki/wiki.html#CLOUD_MODE) |
+| Use the TUI dashboard | [TUI Dashboard](wiki/wiki.html#TUI_DASHBOARD) |
 | Contribute or modify DevTrack | [CLAUDE.md](CLAUDE.md) |
 
 ---
@@ -106,6 +108,18 @@ docker compose up -d     # start Python backend + infrastructure (MongoDB, etc.)
 devtrack start           # Go daemon only — connects to the running Python server
 devtrack status
 ```
+
+#### Cloud mode (CS-4)
+
+Connect your local Go daemon to a remote managed DevTrack backend (no local Python needed).
+
+```bash
+devtrack cloud login --url https://myserver.com --key your-api-key
+devtrack cloud status    # ping /health, show latency + server version + key preview
+devtrack cloud logout    # revert to managed mode
+```
+
+Credentials are stored in `~/.devtrack/cloud.json` (chmod 0600). Cloud mode uses CA-signed certificates — the local cert-pinning step for self-signed certs is bypassed automatically.
 
 ### Option 2 — Build from source (developers / contributors)
 
@@ -360,6 +374,14 @@ ADMIN_USERNAME=admin
 ADMIN_PASSWORD=changeme
 ```
 
+### TUI Dashboard
+
+```bash
+devtrack tui
+```
+
+A Bubble Tea full-screen terminal dashboard with 4 tabs: **Overview** (daemon uptime, server latency, today's trigger counts, workspace count), **Activity** (last 30 commit/timer records), **Workspaces** (all configured repos with PM platform and enabled state), and **Alerts** (last 30 ticket notifications). Navigate with Tab or 1–4, press `r` to refresh, `q` to quit. Auto-refreshes every 30 seconds. Reads entirely from local SQLite — works without a Python backend or network connection.
+
 ### Personalized AI
 
 ```bash
@@ -381,12 +403,13 @@ DevTrack is split into two independently deployable components:
 
 The Go daemon handles git monitoring, cron scheduling, the SQLite database, and the HTTP trigger client. The Python backend handles NLP, LLM calls, TUI prompts, project management integrations, Telegram, Slack, and report generation. They communicate over HTTPS (Go POSTs triggers to Python; self-signed ECDSA cert generated at startup, cert-pinned in the Go client).
 
-**Server modes** — set in `.env`:
+**Server modes** — set in `.env` or via `devtrack cloud login`:
 
 | Mode | Config | Use case |
 |------|--------|----------|
 | `managed` (default) | `DEVTRACK_SERVER_MODE=managed` | Local dev — daemon spawns Python subprocess automatically |
-| `external` | `DEVTRACK_SERVER_MODE=external` + `DEVTRACK_SERVER_URL=http://host:port` | Docker or cloud-hosted Python backend |
+| `external` | `DEVTRACK_SERVER_MODE=external` + `DEVTRACK_SERVER_URL=http://host:port` | Docker or self-hosted Python backend |
+| `cloud` | `devtrack cloud login --url URL --key KEY` | Remote managed backend; API key auth; no cert-pinning |
 
 A `Dockerfile.server` is provided for containerising the Python backend.
 
