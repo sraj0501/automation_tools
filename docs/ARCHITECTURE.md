@@ -78,17 +78,17 @@ GitHub Releases contain only the Go binary (~5 MB, no Python). Users set up the 
          │                               │
          ├─ Git Repository Monitor      │
          ├─ Scheduler (cron-based)      │
-         ├─ IPC Server (TCP socket)     │
+         ├─ HTTP Trigger Client         │
          ├─ SQLite Database             │
          └─ Configuration Manager       │
                          │
-        ─────────────────┼───── TCP IPC (JSON) ─────────────────
+        ─────────────────┼───── HTTPS POST /trigger/* ──────────
                          │
          ┌───────────────▼───────────────────────────────────┐
-         │   Python Intelligence Bridge                      │
-         │  (python_bridge.py, backend/ modules)             │
+         │   Python Backend (webhook_server.py + backend/)   │
+         │  FastAPI on port 8089, self-signed ECDSA cert      │
          │                                                   │
-         ├─ IPC Client                                       │
+         ├─ Trigger Handlers (/trigger/commit, /timer…)      │
          ├─ NLP Parser (spaCy)                              │
          ├─ LLM Integration (Ollama/OpenAI/Anthropic)       │
          ├─ TUI (Terminal User Interface)                    │
@@ -118,10 +118,10 @@ The lightweight background service that monitors and coordinates.
 | **Entry Point** | main.go | Routes CLI args or delegates git subcommand |
 | **CLI Handler** | cli.go | Implements all CLI commands (start, stop, status, etc.) |
 | **Daemon Lifecycle** | daemon.go | Manages PID file, signals, Python bridge process |
-| **Integration Hub** | integrated.go | Wires together git monitor, scheduler, IPC server |
+| **Integration Hub** | integrated.go | Wires together git monitor, scheduler, HTTP trigger client |
 | **Git Monitor** | git_monitor.go | fsnotify-based repository watcher, fires commit_trigger |
 | **Scheduler** | scheduler.go | Cron-based periodic trigger, fires timer_trigger |
-| **IPC Server** | ipc.go | TCP server, JSON message protocol, one handler per MessageType |
+| **HTTP Trigger Client** | server_config.go + daemon.go | POSTs JSON to Python `/trigger/*` via HTTPS (self-signed ECDSA cert) |
 | **Database** | database.go | SQLite access, trigger history, task updates |
 | **Configuration** | config.go, config_env.go | YAML struct + .env accessors |
 | **Learning** | learning.go | AI learning consent and profile management |
@@ -129,20 +129,18 @@ The lightweight background service that monitors and coordinates.
 | **Health Monitor** | health.go | Periodic service health checks with auto-restart |
 | **Deferred Commits** | deferred_commit.go | Queue commits for later AI enhancement |
 
-#### Message Types
+#### Trigger Endpoints
 
-Go daemon and Python bridge communicate using JSON-delimited messages over TCP:
+Go daemon sends all triggers to the Python backend via HTTPS POST. The Python backend (`webhook_server.py`) exposes `/trigger/*` endpoints:
 
 ```
-commit_trigger      → Git commit detected (includes workspace_name, pm_platform, pm_project)
-timer_trigger       → Scheduled time reached (includes workspace context in multi-repo mode)
-task_update         → Update project management system
-acknowledge         → Confirm message received
-error               → Report error back to client
-ping                → Health check request
-pong                ← Health check response
-workspace_reload    → Reload workspaces.yaml and restart monitors
+POST /trigger/commit_trigger   → Git commit detected (includes workspace_name, pm_platform, pm_project)
+POST /trigger/timer_trigger    → Scheduled time reached (includes workspace context in multi-repo mode)
+POST /trigger/workspace_reload → Reload workspaces.yaml and restart monitors
+GET  /health                   → Python backend health check
 ```
+
+All trigger requests include an `X-DevTrack-API-Key` header (when `DEVTRACK_API_KEY` is set). Go pins the Python server's TLS cert at startup to prevent MITM on localhost.
 
 #### Multi-Repo Mode
 
@@ -186,9 +184,8 @@ The smart processing engine that handles AI, NLP, and integrations.
 
 | Module | Purpose |
 |--------|---------|
-| **python_bridge.py** | Entry point started by Go daemon; connects to IPC server and dispatches triggers |
+| **webhook_server.py** | FastAPI entry point started by Go daemon; exposes `/trigger/*` HTTP endpoints, inbound webhooks, Admin Console, Slack bot, and Vacation auto-responder |
 | **backend/config.py** | Centralized config; all modules use `get()`, `get_int()`, `get_bool()`, `get_path()` |
-| **backend/ipc_client.py** | TCP IPC client; mirrors message types from Go's ipc.go |
 
 #### NLP & AI Processing
 
@@ -256,10 +253,10 @@ Go daemon receives file event
 Go daemon logs to database
          │
          ▼
-Go daemon sends commit_trigger via IPC
+Go daemon POSTs commit_trigger to Python /trigger/commit_trigger
          │
          ▼
-Python bridge receives commit_trigger
+Python backend receives commit_trigger
          │
          ├─ Extract commit hash, message, diff
          ├─ Get git context (branch, PR, recent commits)
@@ -283,10 +280,14 @@ Log completion in database
 Scheduled time reached (cron)
          │
          ▼
-Go daemon fires timer_trigger via IPC
+Go daemon POSTs timer_trigger to Python /trigger/timer_trigger
          │
          ▼
-Python bridge receives timer_trigger
+Python backend receives timer_trigger
+         │
+         ├─ [Vacation mode active?] → VacationAutoResponder generates update from commits,
+         │                            scores confidence, posts to PM if above threshold
+         │
          │
          ├─ Show TUI prompt to user
          ├─ Get work update from user input
@@ -556,40 +557,43 @@ CREATE TABLE health_snapshots (
 
 ---
 
-## IPC Message Protocol
+## Trigger Protocol (HTTPS POST)
 
-JSON-newline-delimited over TCP socket (default `127.0.0.1:35893`).
+Go daemon sends all triggers as JSON POST requests to the Python backend over HTTPS. A self-signed ECDSA certificate is generated at daemon startup (`Data/tls/server.{crt,key}`) and cert-pinned in the Go TLS client — no CA required.
 
-### Message Format
+### Trigger Endpoint Format
 
-```json
+```
+POST https://127.0.0.1:<WEBHOOK_PORT>/trigger/<type>
+Content-Type: application/json
+X-DevTrack-API-Key: <DEVTRACK_API_KEY>   (if configured)
+
 {
-  "type": "commit_trigger",
-  "timestamp": "2026-03-11T10:30:00Z",
-  "payload": {
-    "commit_hash": "abc123def456",
-    "branch": "feature/auth",
-    "message": "Fixed OAuth flow",
-    "files_changed": 5,
-    "insertions": 42,
-    "deletions": 12
-  }
+  "commit_hash": "abc123def456",
+  "branch": "feature/auth",
+  "message": "Fixed OAuth flow",
+  "workspace_name": "my-api",
+  "pm_platform": "azure"
 }
 ```
 
-Each message must end with a newline (`\n`).
+### Trigger Types
 
-### Message Types
+| Endpoint | Direction | Purpose |
+|----------|-----------|---------|
+| `POST /trigger/commit_trigger` | Go → Python | Git commit detected |
+| `POST /trigger/timer_trigger` | Go → Python | Scheduled time reached |
+| `POST /trigger/workspace_reload` | Go → Python | Reload workspaces.yaml |
+| `GET  /health` | Go → Python | Liveness check |
 
-| Type | Direction | Purpose |
-|------|-----------|---------|
-| `commit_trigger` | Go → Python | Git commit detected |
-| `timer_trigger` | Go → Python | Scheduled time reached |
-| `task_update` | Python → Go | Update project management system |
-| `acknowledge` | Python → Go | Confirm message received |
-| `error` | Both | Report error condition |
-| `ping` | Go → Python | Health check request |
-| `pong` | Python → Go | Health check response |
+### TLS Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DEVTRACK_TLS` | `true` | Enable HTTPS (disable only in trusted Docker networks) |
+| `DEVTRACK_TLS_CERT` | `Data/tls/server.crt` | Auto-generated cert path |
+| `DEVTRACK_TLS_KEY` | `Data/tls/server.key` | Auto-generated key path |
+| `DEVTRACK_API_KEY` | — | Optional bearer token for cloud/public deployments |
 
 ---
 
@@ -616,11 +620,11 @@ The daemon checks 6 services every 30 seconds:
 
 | Service | Check Method | Auto-Restart |
 |---------|-------------|--------------|
-| Python IPC | Client connection count | No |
-| Python Bridge | Process liveness (signal 0) | Yes |
+| Python backend | HTTP GET /health | Yes |
 | Ollama | HTTP GET /api/tags | No |
 | Azure DevOps | Config presence check | No |
 | Webhook Server | Process liveness | Yes |
+| Telegram bot | Process liveness | Yes |
 | MongoDB | TCP dial timeout | No |
 
 ### Deferred Commits

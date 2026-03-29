@@ -6,6 +6,7 @@
 DevTrack is a **client-server tool**. The Go binary (`devtrack`) is a lean daemon/client (~5 MB, no Python required to install) that monitors git activity and handles scheduling. The Python backend is a separate deployable server that provides AI processing, integrations, and reporting. In the default "managed" mode the daemon spawns the Python process automatically; in "external" mode you run Python in Docker or in the cloud and point the daemon at it.
 
 [![GitHub Release](https://img.shields.io/github/v/release/sraj0501/automation_tools?label=release)](https://github.com/sraj0501/automation_tools/releases/latest)
+[![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-blue)](https://github.com/sraj0501/automation_tools/releases/latest)
 
 ---
 
@@ -62,7 +63,7 @@ DevTrack is a **client-server tool**. The Go binary (`devtrack`) is a lean daemo
 
 ### Option 1 — Download binary (recommended)
 
-Pre-built binaries are published automatically on every release for macOS (Apple Silicon + Intel), Linux (amd64 + arm64), and Windows (amd64).
+Pre-built binaries are published automatically on every release for macOS (Apple Silicon + Intel) and Linux (amd64 + arm64).
 
 ```bash
 # macOS / Linux — download the Go daemon
@@ -117,7 +118,7 @@ chmod +x setup_local.sh
 
 The script handles everything: dependency checks, Python env, spaCy model, Go binary build (`go build` — no bundle step), `~/.local/bin` install, and `.env` bootstrap.
 
-See [Installation Guide](docs/INSTALLATION.md) for a manual walkthrough or Windows instructions.
+See [Installation Guide](docs/INSTALLATION.md) for a manual walkthrough.
 
 To uninstall: `./uninstall.sh`
 
@@ -375,7 +376,7 @@ DevTrack is split into two independently deployable components:
 
 | Component | What it is | Language | Size |
 |-----------|-----------|----------|------|
-| `devtrack` binary | Daemon + CLI client | Go 1.20+ | ~5 MB — no Python required to install |
+| `devtrack` binary | Daemon + CLI client | Go 1.24+ | ~5 MB — no Python required to install |
 | Python backend | AI server | Python 3.12+ | Runs as subprocess (managed) or container (external) |
 
 The Go daemon handles git monitoring, cron scheduling, the SQLite database, and the HTTP trigger client. The Python backend handles NLP, LLM calls, TUI prompts, project management integrations, Telegram, Slack, and report generation. They communicate over HTTPS (Go POSTs triggers to Python; self-signed ECDSA cert generated at startup, cert-pinned in the Go client).
@@ -393,7 +394,7 @@ A `Dockerfile.server` is provided for containerising the Python backend.
 
 | Layer | Stack |
 |-------|-------|
-| Daemon / CLI | Go 1.20+, fsnotify, robfig/cron, modernc/sqlite |
+| Daemon / CLI | Go 1.24+, fsnotify, robfig/cron, modernc/sqlite |
 | AI backend server | Python 3.12+, uv, spaCy, aiohttp |
 | Local LLM | Ollama (default) — also OpenAI, Anthropic, Groq, LM Studio |
 | Storage | SQLite (all app state including sync cache + learning data), ChromaDB (RAG), optional MongoDB |

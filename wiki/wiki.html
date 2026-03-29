@@ -553,6 +553,7 @@ const NAV = [
       { id: 'GETTING_STARTED', label: 'Getting Started',    icon: rocket_icon() },
       { id: 'INSTALLATION',    label: 'Installation',       icon: download_icon() },
       { id: 'QUICK_START',     label: 'Quick Start',        icon: flash_icon() },
+      { id: 'WHATS_NEW',       label: "What's New",         icon: '🎉' },
     ]
   },
   {
@@ -583,6 +584,7 @@ const NAV = [
       { id: 'PROJECT_PLANNING',label: 'Project Planning',icon: pm_icon() },
       { id: 'TICKET_ALERTER',  label: 'Ticket Alerter',  icon: bell_icon() },
       { id: 'WORK_TRACKER',    label: 'Work Tracker',    icon: '⏱️' },
+      { id: 'VACATION_MODE',   label: 'Vacation Mode',   icon: '✈️' },
     ]
   },
   {
@@ -799,6 +801,118 @@ SLACK_ALLOWED_CHANNEL_IDS=C123ABC,C456DEF   # leave blank for all channels (dev 
 <h2>Channel Restrictions</h2>
 <p>Set <code>SLACK_ALLOWED_CHANNEL_IDS</code> to a comma-separated list of Slack channel IDs (e.g. <code>C123ABC,C456DEF</code>) to restrict commands and notifications to specific channels. Leave it blank during development to allow all channels.</p>
 </div>`,
+  VACATION_MODE: `<div class="md-body">
+<h1>Vacation Mode</h1>
+<p>Vacation mode lets DevTrack run fully autonomously while you are away. Instead of firing the interactive work-update prompt, the system generates a work summary from recent git commits using the LLM, scores its own confidence, and (optionally) posts the update to your PM tool — no human in the loop required.</p>
+
+<h2>Enabling Vacation Mode</h2>
+<pre><code class="language-bash"># Turn on with optional end date and confidence threshold
+devtrack vacation on
+devtrack vacation on --until 2026-04-07
+devtrack vacation on --until 2026-04-07 --threshold 0.8
+devtrack vacation on --until 2026-04-07 --no-submit   # log only, don't post to PM
+
+# Turn off
+devtrack vacation off
+
+# Check status
+devtrack vacation status</code></pre>
+
+<h2>How It Works</h2>
+<ol>
+<li>When the DevTrack timer fires (every <code>PROMPT_INTERVAL</code> minutes), the Python backend checks vacation mode before showing any interactive prompt.</li>
+<li>If vacation mode is active, <code>VacationAutoResponder</code> collects the recent commits for the workspace and builds a context string.</li>
+<li>The context is sent to the configured LLM provider with a prompt that asks for a 1-3 sentence work update <strong>and</strong> a <code>CONFIDENCE: 0.0–1.0</code> score on the same response.</li>
+<li>If the confidence meets the configured threshold <strong>and</strong> <code>auto_submit</code> is enabled, the update is posted to the PM tool (Azure DevOps, GitHub, GitLab, or Jira) as a comment, prefixed with <em>"[Auto — vacation mode]"</em>.</li>
+<li>If confidence is below threshold, the update is logged but not posted.</li>
+</ol>
+
+<h2>Telegram &amp; Slack</h2>
+<p>Vacation mode can also be toggled from Telegram and Slack:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Telegram</th><th>Slack</th><th>Action</th></tr></thead>
+<tbody>
+<tr><td><code>/vacation on</code></td><td><code>/devtrack vacation on</code></td><td>Enable vacation mode (indefinite)</td></tr>
+<tr><td><code>/vacation on --until 2026-04-07</code></td><td><code>/devtrack vacation on --until 2026-04-07</code></td><td>Enable until date</td></tr>
+<tr><td><code>/vacation off</code></td><td><code>/devtrack vacation off</code></td><td>Disable vacation mode</td></tr>
+<tr><td><code>/vacation status</code></td><td><code>/devtrack vacation status</code></td><td>Show current state</td></tr>
+</tbody>
+</table></div>
+
+<h2>Configuration</h2>
+<pre><code class="language-bash"># Minimum LLM confidence (0-1) to auto-submit a work update while on vacation
+VACATION_CONFIDENCE_THRESHOLD=0.7
+
+# Set to false to log auto-generated updates without posting to PM
+VACATION_AUTO_SUBMIT=true</code></pre>
+<p>These are the global defaults. The per-session <code>--threshold</code> and <code>--no-submit</code> flags override them and are stored in the database for the duration of vacation mode.</p>
+
+<h2>Flags</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Flag</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>--until YYYY-MM-DD</code></td><td>Auto-expire vacation mode at end of this date</td></tr>
+<tr><td><code>--threshold 0.0–1.0</code></td><td>Minimum confidence to auto-post (default: <code>0.7</code>)</td></tr>
+<tr><td><code>--no-submit</code></td><td>Generate updates but never post them — logging only</td></tr>
+</tbody>
+</table></div>
+
+<h2>Expiry</h2>
+<p>If <code>--until</code> is set, vacation mode is treated as <strong>expired</strong> on the day after the end date. The daemon resumes normal prompting automatically. Run <code>devtrack vacation off</code> to clear the record explicitly.</p>
+
+<h2>Database Storage</h2>
+<p>Vacation state is stored as a single row in the <code>vacation_mode</code> table in <code>Data/devtrack.db</code>. All fields (<code>enabled</code>, <code>enabled_at</code>, <code>until</code>, <code>confidence_threshold</code>, <code>auto_submit</code>) are updated atomically on every <code>on</code> / <code>off</code> call — no config file is written.</p>
+</div>`,
+
+  WHATS_NEW: `<div class="md-body">
+<h1>What's New</h1>
+<div class="home-badge" style="margin-bottom:24px;">v1.0 — March 2026</div>
+
+<h2>v1.0 Highlights</h2>
+<p>DevTrack v1.0 ships the complete automation stack — local-first, production-ready, with optional cloud upgrade paths.</p>
+
+<div class="feature-list" style="margin-bottom:32px;">
+  <div class="feature-item"><div class="feature-dot">1</div><div><h4>IPC → HTTPS (CS-1)</h4><p>Go daemon now POSTs all triggers to the Python backend over HTTPS with a self-signed ECDSA cert (auto-generated at startup, cert-pinned in the Go TLS client). The old TCP IPC socket is gone — cleaner, more secure, and works across processes and containers.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">2</div><div><h4>Slack Bot (Socket Mode)</h4><p>Full <code>/devtrack &lt;cmd&gt;</code> slash command support via Slack Socket Mode. No public URL, no ngrok. Supports all work-session commands, PM queries, and proactive work-reminder nudges. Set <code>SLACK_ENABLED=true</code> and configure two tokens.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">3</div><div><h4>Server TUI (CS-2)</h4><p>A Textual-based terminal dashboard for the Python backend — live CPU/MEM per process, a service health bar, and keyboard controls to restart/start/stop individual processes and stream logs. Run with <code>devtrack server-tui</code>.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">4</div><div><h4>Admin Console (CS-3)</h4><p>A lightweight HTMX web UI at <code>http://localhost:8090/admin/</code> for managing users, API keys, reviewing LLM config, integration credential status, and a full audit log. JWT sessions, scrypt-hashed passwords — safe to expose on a LAN.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">5</div><div><h4>Work Session Tracking</h4><p><code>devtrack work start AUTH-42</code> begins a session timer. Every git commit is auto-attached — no manual time entry. <code>devtrack work stop</code> records the auto-measured duration. <code>devtrack work report</code> generates an AI narrative EOD summary with achievements, in-progress, and pending items, plus optional HTML email via MS Graph.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">6</div><div><h4>Vacation Mode</h4><p>Enable with <code>devtrack vacation on --until 2026-04-07</code>. While active, timer triggers are handled autonomously: the LLM generates a work update from recent commits, scores its own confidence, and posts to the PM tool when above the threshold. Also controllable via Telegram <code>/vacation</code> and Slack <code>/devtrack vacation</code>.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">7</div><div><h4>Multi-Repo Hot-Reload</h4><p>Edit <code>workspaces.yaml</code> and save — DevTrack detects the change via fsnotify, diffs old vs new workspace configs, and surgically restarts only the monitors that changed. Unchanged workspaces keep running without interruption.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">8</div><div><h4>Jira Ticket Alerter</h4><p>The ticket alerter now covers all three major platforms: GitHub (assigned/review-requested/comments), Azure DevOps (assigned/state-change/comments), and Jira (assigned/status/comments). OS notifications via osascript + terminal output. View with <code>devtrack alerts</code>.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">9</div><div><h4>Database Consolidation</h4><p>All filesystem persistence moved to a single SQLite database at <code>Data/devtrack.db</code>. No more scattered JSON files for sync state, learning consent, or learning samples. MongoDB remains the preferred store when <code>MONGODB_URI</code> is set — SQLite is the always-available local fallback.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">10</div><div><h4>AI Project Planning (<code>/newproject</code>)</h4><p>Telegram command that orchestrates full project setup: collects requirements in plain text, fetches the live team roster + workloads from the PM tool, generates a YAML spec with sprints/stories/capacity analysis/risk flags, emails a review link to the PM, and creates all issues on approval.</p></div></div>
+</div>
+
+<h2>CLI Additions (v1.0)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Command</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>devtrack work start [ticket]</code></td><td>Begin a work session</td></tr>
+<tr><td><code>devtrack work stop</code></td><td>End the active session and record duration</td></tr>
+<tr><td><code>devtrack work adjust &lt;mins&gt;</code></td><td>Override auto-measured time</td></tr>
+<tr><td><code>devtrack work status</code></td><td>Show active session and today's log</td></tr>
+<tr><td><code>devtrack work report [--email addr]</code></td><td>Generate EOD report, optionally email it</td></tr>
+<tr><td><code>devtrack vacation on [--until DATE] [--threshold N] [--no-submit]</code></td><td>Enable autonomous vacation mode</td></tr>
+<tr><td><code>devtrack vacation off</code></td><td>Disable vacation mode</td></tr>
+<tr><td><code>devtrack vacation status</code></td><td>Show current vacation state</td></tr>
+<tr><td><code>devtrack server-tui</code></td><td>Launch the Textual process monitor</td></tr>
+<tr><td><code>devtrack admin-start</code></td><td>Launch the Admin Console web UI</td></tr>
+<tr><td><code>devtrack alerts [--all|--clear]</code></td><td>View or clear ticket notifications</td></tr>
+<tr><td><code>devtrack autostart-install</code></td><td>Install OS-native auto-start (launchd/systemd/profile)</td></tr>
+</tbody>
+</table></div>
+
+<h2>Coming in v1.1</h2>
+<ul>
+<li><strong>Autonomous Communication (CS-4 preview)</strong> — AI drafts and sends standup messages via Power Automate</li>
+<li><strong>Managed Cloud Mode</strong> — Hosted Python backend; local Go binary connects to it; <code>DEVTRACK_API_KEY</code> auth</li>
+<li><strong>TUI Dashboard</strong> — Bubble Tea TUI replacement for the web dashboard in managed mode</li>
+<li><strong>GitLab webhook hot-reload</strong> — Re-register GitLab hooks automatically when the server URL changes</li>
+</ul>
+
+<blockquote><p>DevTrack follows a local-first design principle: everything in v1.0 works fully offline on your machine. Cloud features (CS-4) are opt-in upgrades — they extend capability without replacing the local-first core.</p></blockquote>
+</div>`,
 };
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -936,6 +1050,7 @@ function renderHome() {
 
     <div class="home-grid">
       ${[
+        { id:'WHATS_NEW',       icon:'🎉', title:"What's New in v1.0", desc:'IPC→HTTPS, Slack bot, Server TUI, Admin Console, Work Sessions, Vacation Mode, Multi-Repo Hot-Reload, Jira Alerter, and more.' },
         { id:'GETTING_STARTED', icon:'🚀', title:'Getting Started',   desc:'New to DevTrack? Start here — concepts, setup, and first run.' },
         { id:'QUICK_START',     icon:'⚡', title:'Quick Start',       desc:'Get running in 5 minutes with the minimal setup guide.' },
         { id:'CLI_REFERENCE',   icon:'⌨️', title:'CLI Reference',     desc:'All devtrack commands with flags and examples.' },
@@ -950,6 +1065,7 @@ function renderHome() {
         { id:'PROJECT_PLANNING',icon:'📋', title:'AI Project Planning', desc:'<code>/newproject</code> in Telegram: describe requirements, pick team from live roster, AI auto-fetches workloads, generates a full YAML spec with sprints/stories/risks, emails it to the PM for review, and creates everything in the PM tool on approval.' },
         { id:'TICKET_ALERTER',  icon:'🔔', title:'Ticket Alerter',    desc:'Background poller for GitHub, Azure DevOps, and Jira — delivers OS notifications and terminal output when you\'re assigned, mentioned, or a status changes. <code>devtrack alerts</code> to view, <code>devtrack alerts --clear</code> to dismiss.' },
         { id:'WORK_TRACKER',   icon:'⏱️', title:'Work Tracker',      desc:'Automatic session-based time tracking. <code>devtrack work start AUTH-42</code> begins a session; every commit is auto-attached. <code>devtrack work stop</code> records the duration. At end of day, <code>devtrack work report</code> produces an AI narrative summary and optional email.' },
+        { id:'VACATION_MODE',  icon:'✈️', title:'Vacation Mode',     desc:'Fully autonomous mode while you\'re away. LLM generates work updates from recent commits, scores its own confidence, and posts to the PM tool when confident enough. Enable with <code>devtrack vacation on --until YYYY-MM-DD</code>.' },
         { id:'PERSONALIZATION', icon:'🎨', title:'Personalization',   desc:'"Talk Like You" — AI that learns your communication style.' },
         { id:'AUTOSTART', icon:'⚙️', title:'Auto-Start',   desc:'Auto-start DevTrack at login — OS-aware. Run <code>devtrack autostart-install</code>: launchd LaunchAgent on macOS, systemd user service on Linux/WSL with systemd, or a shell profile block on WSL without systemd. Uninstall with <code>devtrack autostart-uninstall</code>.' },
         { id:'SERVER_TUI',    icon:'🖥️', title:'Server TUI',     desc:'Textual process monitor for the Python backend. Shows all server processes (webhook server, Telegram bot, Slack bot, alert poller) with live CPU/MEM/status and a health bar. Navigate with ↑↓, restart with r, toggle logs with l.' },
@@ -1013,6 +1129,7 @@ cd automation_tools
         { n:'Ticket Alerter',      d:'Background poller for GitHub, Azure DevOps, and Jira. Delivers macOS OS notifications and terminal output when tickets are assigned, commented on, or change state. <code>devtrack alerts</code> to view unread. Configurable per-source via <code>ALERT_*</code> env vars.' },
         { n:'AI Project Planning', d:'<code>/newproject</code> in Telegram — describe a project in plain text, pick developers from the live team roster, and let AI auto-fetch each person\'s workload from the PM tool. Generates a full YAML spec (features, stories, sprints, capacity analysis, skill-gap risks), emails it to the PM with an approve/edit link, and creates everything in Azure/GitHub/GitLab on approval.' },
         { n:'Work Session Tracking', d:'<code>devtrack work start [ticket]</code> begins a session timer. Every git commit while the session is active is auto-attached — no manual time entry. <code>devtrack work stop</code> records the auto-measured duration; <code>devtrack work adjust 90</code> overrides it (raw time kept for audit). <code>devtrack work report</code> generates an AI EOD summary with achievements, in-progress items, and what\'s pending tomorrow, plus optional email via MS Graph.' },
+        { n:'Vacation Mode',         d:'<code>devtrack vacation on --until 2026-04-07</code> enables fully autonomous operation. While active, timer triggers are handled by the LLM: it reads recent commits, writes a 1-3 sentence work update, scores its own confidence, and posts to the PM tool when above the threshold (default 0.7). Use <code>--no-submit</code> to log updates without posting. Toggle via Telegram <code>/vacation</code> or Slack <code>/devtrack vacation</code>.' },
       ].map((f, i) => `
         <div class="feature-item">
           <div class="feature-dot">${i+1}</div>
