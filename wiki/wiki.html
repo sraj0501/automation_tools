@@ -1588,29 +1588,40 @@ function renderHome() {
 
     <div class="home-grid">
       ${[
-        { id:'WHATS_NEW',       icon:'🎉', title:"What's New in v1.1", desc:'Cloud Mode, TUI Dashboard, GitLab Webhook Auto-Registration, Alert SQLite Dual-Write, and all v1.0 features.' },
-        { id:'GETTING_STARTED', icon:'🚀', title:'Getting Started',   desc:'New to DevTrack? Start here — concepts, setup, and first run.' },
-        { id:'QUICK_START',     icon:'⚡', title:'Quick Start',       desc:'Get running in 5 minutes with the minimal setup guide.' },
-        { id:'CLI_REFERENCE',   icon:'⌨️', title:'CLI Reference',     desc:'All devtrack commands with flags and examples.' },
-        { id:'GIT_FEATURES',    icon:'🔀', title:'Git Features',      desc:'Shell integration, AI commits, and conflict resolution. Add <code>export PATH</code> and <code>eval "$(devtrack shell-init)"</code> to <code>~/.zshrc</code> once. Type <code>git commit</code> — DevTrack intercepts it, prompts for time spent, then opens an interactive split-pane ticket picker so you can link the commit to an issue instantly. <code>git add</code> with no args stages everything. After commit, one keypress pushes to origin. Press <kbd>E</kbd> in the refinement loop for a richer AI message. <code>devtrack start</code> auto-enables git interception for all workspaces — no manual <code>enable-git</code> needed. Bypass with <code>GIT_NO_DEVTRACK=1</code>.' },
-        { id:'GIT_SAGE',        icon:'🤖', title:'git-sage Agent',    desc:'Autonomous local LLM agent for complex git operations.' },
-        { id:'AZURE_DEVOPS',    icon:'🔷', title:'Azure DevOps',      desc:'Sync work items, auto-comment, and transition states.' },
-        { id:'GITLAB',          icon:'🦊', title:'GitLab',            desc:'Full CLI and Telegram access; inbound webhooks; issue enrichment on create.' },
-        { id:'GITHUB',          icon:'🐙', title:'GitHub',            desc:'Full CLI parity, bidirectional sync, inbound webhooks, Telegram commands, and per-workspace milestone assignment via <code>pm_milestone</code> in workspaces.yaml.' },
-        { id:'TELEGRAM_BOT',    icon:'📱', title:'Telegram Bot',      desc:'Control DevTrack remotely from your phone.' },
-        { id:'SLACK_BOT',       icon:'💬', title:'Slack Bot',          desc:'Socket Mode slash command <code>/devtrack &lt;cmd&gt;</code> — no public URL required. Supports all work-session and PM commands plus proactive work-reminder nudges.' },
-        { id:'PM_AGENT',        icon:'🗂️', title:'PM Agent',          desc:'AI decomposes problems into Epic → Story → Task hierarchies.' },
+        // ── Get Started ────────────────────────────────────────────────────────
+        { id:'WHATS_NEW',        icon:'🎉', title:"What's New",         desc:'Cloud Mode, TUI Dashboard, GitLab Webhook Auto-Registration, Alert SQLite Dual-Write, and all v1.0 features.' },
+        { id:'GETTING_STARTED',  icon:'🚀', title:'Getting Started',    desc:'New to DevTrack? Start here — concepts, setup, and first run.' },
+        { id:'QUICK_START',      icon:'⚡', title:'Quick Start',        desc:'Get running in 5 minutes with the minimal setup guide.' },
+        // ── Reference ─────────────────────────────────────────────────────────
+        { id:'CLI_REFERENCE',    icon:'⌨️', title:'CLI Reference',      desc:'All devtrack commands with flags and examples.' },
+        { id:'CONFIGURATION',    icon:'🔧', title:'Configuration',      desc:'All .env variables with defaults, required vars, timeout settings, server modes, TLS, LLM providers, and feature flags.' },
+        { id:'MULTI_REPO',       icon:'🗃️', title:'Multi-Repo Setup',   desc:'Monitor multiple git repos simultaneously, each routing to its own PM platform. Configure in <code>workspaces.yaml</code> with <code>pm_platform</code>, <code>pm_project</code>, and <code>pm_milestone</code> per workspace. Hot-reloads on save.' },
+        // ── Git & Shell ────────────────────────────────────────────────────────
+        { id:'GIT_FEATURES',    icon:'🔀', title:'Git Features',        desc:'Shell integration, AI commits, and conflict resolution. Add <code>eval "$(devtrack shell-init)"</code> to <code>~/.zshrc</code> once. Type <code>git commit</code> — DevTrack intercepts, prompts for time spent, opens the ticket picker, then pushes on one keypress. <code>devtrack start</code> auto-enables git for all workspaces.' },
+        { id:'GIT_SAGE',        icon:'🤖', title:'git-sage Agent',      desc:'Autonomous local LLM agent for complex git operations.' },
+        // ── Integrations ──────────────────────────────────────────────────────
+        { id:'AZURE_DEVOPS',    icon:'🔷', title:'Azure DevOps',        desc:'Sync work items, auto-comment, and transition states.' },
+        { id:'GITLAB',          icon:'🦊', title:'GitLab',              desc:'Full CLI and Telegram access; inbound webhooks; issue enrichment on create.' },
+        { id:'GITHUB',          icon:'🐙', title:'GitHub',              desc:'Full CLI parity, bidirectional sync, inbound webhooks, Telegram commands, and per-workspace milestone assignment via <code>pm_milestone</code> in workspaces.yaml.' },
+        { id:'TELEGRAM_BOT',    icon:'📱', title:'Telegram Bot',        desc:'Control DevTrack remotely from your phone.' },
+        { id:'SLACK_BOT',       icon:'💬', title:'Slack Bot',           desc:'Socket Mode slash command <code>/devtrack &lt;cmd&gt;</code> — no public URL required. Supports all work-session and PM commands plus proactive work-reminder nudges.' },
+        { id:'PM_AGENT',        icon:'🗂️', title:'PM Agent',            desc:'AI decomposes problems into Epic → Story → Task hierarchies.' },
         { id:'PROJECT_PLANNING',icon:'📋', title:'AI Project Planning', desc:'<code>/newproject</code> in Telegram: describe requirements, pick team from live roster, AI auto-fetches workloads, generates a full YAML spec with sprints/stories/risks, emails it to the PM for review, and creates everything in the PM tool on approval.' },
-        { id:'TICKET_ALERTER',  icon:'🔔', title:'Ticket Alerter',    desc:'Background poller for GitHub, Azure DevOps, and Jira — delivers OS notifications and terminal output when you\'re assigned, mentioned, or a status changes. <code>devtrack alerts</code> to view, <code>devtrack alerts --clear</code> to dismiss.' },
-        { id:'WORK_TRACKER',   icon:'⏱️', title:'Work Tracker',      desc:'Automatic session-based time tracking. <code>devtrack work start AUTH-42</code> begins a session; every commit is auto-attached. <code>devtrack work stop</code> records the duration. At end of day, <code>devtrack work report</code> produces an AI narrative summary and optional email.' },
-        { id:'VACATION_MODE',  icon:'✈️', title:'Vacation Mode',     desc:'Fully autonomous mode while you\'re away. LLM generates work updates from recent commits, scores its own confidence, and posts to the PM tool when confident enough. Enable with <code>devtrack vacation on --until YYYY-MM-DD</code>.' },
-        { id:'PERSONALIZATION', icon:'🎨', title:'Personalization',   desc:'"Talk Like You" — AI that learns your communication style.' },
-        { id:'AUTOSTART', icon:'⚙️', title:'Auto-Start',   desc:'Auto-start DevTrack at login — OS-aware. Run <code>devtrack autostart-install</code>: launchd LaunchAgent on macOS, systemd user service on Linux/WSL with systemd, or a shell profile block on WSL without systemd. Uninstall with <code>devtrack autostart-uninstall</code>.' },
-        { id:'SERVER_TUI',    icon:'🖥️', title:'Server TUI',     desc:'Textual process monitor for the Python backend. Shows all server processes (webhook server, Telegram bot, Slack bot, alert poller) with live CPU/MEM/status and a health bar. Navigate with ↑↓, restart with r, toggle logs with l.' },
-        { id:'ADMIN_CONSOLE', icon:'⚙️', title:'Admin Console',  desc:'Web UI at <code>http://localhost:8090/admin/</code> — manage users, API keys, review server health, LLM config, integration credentials, and a full audit log. Run with <code>devtrack admin-start</code>.' },
-        { id:'CLOUD_MODE',    icon:'☁️', title:'Cloud Mode',      desc:'Connect your local daemon to a remote managed backend. <code>devtrack cloud login --url URL --key KEY</code> saves credentials to <code>~/.devtrack/cloud.json</code>. Bypasses cert-pinning for CA-signed remote certs.' },
-        { id:'TUI_DASHBOARD', icon:'🖥️', title:'TUI Dashboard',   desc:'Bubble Tea full-screen dashboard. 4 tabs: Overview (uptime, latency, counts), Activity (last 30 triggers), Workspaces (all repos + PM platform), Alerts (last 30 notifications). Tab/1–4 to switch, <code>r</code> refresh, <code>q</code> quit.' },
-        { id:'TROUBLESHOOTING', icon:'🔧', title:'Troubleshooting',   desc:'Common problems, error messages, and solutions.' },
+        { id:'TICKET_ALERTER',  icon:'🔔', title:'Ticket Alerter',      desc:'Background poller for GitHub, Azure DevOps, and Jira — delivers OS notifications and terminal output when you\'re assigned, mentioned, or a status changes. <code>devtrack alerts</code> to view, <code>devtrack alerts --clear</code> to dismiss.' },
+        { id:'WORK_TRACKER',    icon:'⏱️', title:'Work Tracker',        desc:'Automatic session-based time tracking. <code>devtrack work start AUTH-42</code> begins a session; every commit is auto-attached. <code>devtrack work stop</code> records the duration. At end of day, <code>devtrack work report</code> produces an AI narrative summary and optional email.' },
+        { id:'VACATION_MODE',   icon:'✈️', title:'Vacation Mode',       desc:'Fully autonomous mode while you\'re away. LLM generates work updates from recent commits, scores its own confidence, and posts to the PM tool when confident enough. Enable with <code>devtrack vacation on --until YYYY-MM-DD</code>.' },
+        // ── AI & Personalization ──────────────────────────────────────────────
+        { id:'LLM_GUIDE',       icon:'🧠', title:'LLM Setup',           desc:'Configure local (Ollama, LM Studio) or cloud (OpenAI, Anthropic, Groq) AI providers. Automatic fallback chain. Per-use-case temperature and token limits.' },
+        { id:'PERSONALIZATION', icon:'🎨', title:'Personalization',     desc:'"Talk Like You" — AI that learns your communication style from Teams messages and writes in your voice using RAG-powered few-shot examples.' },
+        // ── System Integration ────────────────────────────────────────────────
+        { id:'AUTOSTART',       icon:'🔌', title:'Auto-Start',          desc:'Auto-start DevTrack at login — OS-aware. Run <code>devtrack autostart-install</code>: launchd LaunchAgent on macOS, systemd user service on Linux/WSL with systemd, or a shell profile block on WSL without systemd.' },
+        { id:'SERVER_TUI',      icon:'🖥️', title:'Server TUI',          desc:'Textual process monitor for the Python backend. Shows all server processes with live CPU/MEM/status and a health bar. Navigate with ↑↓, restart with r, toggle logs with l.' },
+        { id:'ADMIN_CONSOLE',   icon:'🛡️', title:'Admin Console',       desc:'Web UI at <code>http://localhost:8090/admin/</code> — manage users, API keys, review server health, LLM config, integration credentials, and a full audit log. Run with <code>devtrack admin-start</code>.' },
+        { id:'TELEMETRY',       icon:'📊', title:'Telemetry',           desc:'Optional usage tracking: download counts, command frequencies, version adoption. Fully transparent, no PII. Designed for a real-time admin dashboard via Server-Sent Events. See the plan in <code>docs/TELEMETRY_PLAN.md</code>.' },
+        { id:'CLOUD_MODE',      icon:'☁️', title:'Cloud Mode',          desc:'Connect your local daemon to a remote managed backend. <code>devtrack cloud login --url URL --key KEY</code> saves credentials to <code>~/.devtrack/cloud.json</code>. Bypasses cert-pinning for CA-signed remote certs.' },
+        { id:'TUI_DASHBOARD',   icon:'📟', title:'TUI Dashboard',       desc:'Bubble Tea full-screen dashboard. 4 tabs: Overview (uptime, latency, counts), Activity (last 30 triggers), Workspaces (all repos + PM platform), Alerts (last 30 notifications). Tab/1–4 to switch, <code>r</code> refresh, <code>q</code> quit.' },
+        // ── Advanced ──────────────────────────────────────────────────────────
+        { id:'TROUBLESHOOTING', icon:'🔍', title:'Troubleshooting',     desc:'Common problems, error messages, and solutions.' },
       ].map(c => `
         <a class="home-card" href="#${c.id}" onclick="navigate('${c.id}');return false;">
           <div class="home-card-icon">${c.icon}</div>
@@ -1638,8 +1649,8 @@ devtrack start       # spawns Python backend automatically (managed mode)
 devtrack status
 
 # Optional: type 'git commit' instead of 'devtrack git commit'
-echo 'eval "$(devtrack shell-init)"' >> ~/.zshrc && source ~/.zshrc
-devtrack enable-git   # opt this repo in</code></pre>
+# devtrack start auto-enables git interception for all workspaces — no extra step needed
+echo 'eval "$(devtrack shell-init)"' >> ~/.zshrc && source ~/.zshrc</code></pre>
       <p style="margin:.75rem 0 .25rem;font-size:.9rem;opacity:.8;">Option 2 — Docker (Python backend in a container)</p>
       <pre><code class="language-bash">git clone https://github.com/sraj0501/automation_tools.git
 cd automation_tools
