@@ -95,6 +95,7 @@ workspaces:
     path: string          # absolute or ~/ path to the Git repo (required)
     pm_platform: string   # routing target (required; see values below)
     pm_project: string    # optional platform-specific override (see below)
+    pm_milestone: int     # optional milestone number/ID for new issues (see below)
     enabled: bool         # true = monitored, false = ignored (default: true)
     ignore_branches: list # branch names to ignore (optional)
     tags: list            # arbitrary labels for your own organization (optional)
@@ -120,6 +121,26 @@ Allows overriding the PM project per workspace without changing global `.env` va
 | `azure` | Azure DevOps project name (overrides `AZURE_DEVOPS_PROJECT`) |
 | `gitlab` | Numeric project ID (overrides `GITLAB_PROJECT_ID`) |
 | `github` | Ignored — owner/repo comes from `.env` |
+
+### pm_milestone Field
+
+Assigns a milestone to new issues created by DevTrack for this workspace:
+
+| Platform | pm_milestone meaning |
+|----------|---------------------|
+| `github` | GitHub milestone number (integer, from the milestone URL: `.../milestones/N`) |
+| `gitlab` | GitLab milestone ID (integer, from `GET /projects/:id/milestones`) |
+| `azure` | Ignored |
+
+```yaml
+  - name: "my-sprint-repo"
+    path: ~/work/my-repo
+    pm_platform: github
+    pm_milestone: 3       # assigns new issues to GitHub milestone #3
+    enabled: true
+```
+
+When `pm_milestone` is `0` or absent, new issues are created without a milestone assignment.
 
 ---
 

@@ -87,7 +87,9 @@ git clone https://github.com/sraj0501/automation_tools.git   # Python source
 cd automation_tools
 uv sync                  # install Python dependencies
 cp .env_sample .env
-nano .env                # set PROJECT_ROOT, DEVTRACK_WORKSPACE, DATA_DIR, and required vars
+nano .env                # set PROJECT_ROOT, DATA_DIR, and required vars
+                         # DEVTRACK_WORKSPACE = single repo to monitor
+                         # (omit or leave as-is when using workspaces.yaml for multi-repo mode)
 # DEVTRACK_SERVER_MODE=managed  (default — no need to set explicitly)
 
 devtrack start           # starts the Go daemon + Python backend together
