@@ -1,7 +1,7 @@
 [project]
-name = "ai-powered-task-automation"
-version = "1.0.0"
-description = "Add your description here"
+name = "devtrack"
+version = "1.1.0"
+description = "The Swiss Army knife for developer workflows — Git monitoring, AI-enhanced commit messages, ticket sync, daily reports, and a local LLM git agent, all wired together and personalized to how you write"
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = [
