@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"time"
 )
 
@@ -28,7 +27,9 @@ type HTTPTriggerClient struct {
 func NewHTTPTriggerClient() *HTTPTriggerClient {
 	transport := &http.Transport{}
 
-	if IsTLSEnabled() {
+	if IsLocalTLS() {
+		// Cert-pin the locally generated self-signed cert (managed / external-local mode).
+		// In cloud mode we skip pinning and use system CA roots instead.
 		pool, err := LoadTLSCertPool(GetTLSCertPath())
 		if err != nil {
 			log.Printf("Warning: could not load TLS cert for HTTP client (%v) — falling back to system roots", err)
@@ -42,7 +43,7 @@ func NewHTTPTriggerClient() *HTTPTriggerClient {
 
 	return &HTTPTriggerClient{
 		serverURL: GetServerURL(),
-		apiKey:    os.Getenv("DEVTRACK_API_KEY"),
+		apiKey:    GetCloudAPIKey(),
 		httpClient: &http.Client{
 			Timeout:   30 * time.Second,
 			Transport: transport,

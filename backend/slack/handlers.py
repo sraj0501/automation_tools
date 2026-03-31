@@ -399,3 +399,65 @@ def cmd_gitlab(args: str, respond: Callable, bot: "SlackBot") -> None:
         respond("\n".join(lines))
     except Exception as e:
         respond(f":x: GitLab error: {e}")
+
+
+@_cmd("vacation")
+def cmd_vacation(args: str, respond: Callable, bot: "SlackBot") -> None:
+    """vacation [on|off|status] — toggle vacation auto-responder mode."""
+    parts = args.split() if args else []
+    sub = parts[0].lower() if parts else "status"
+
+    try:
+        from backend.vacation.auto_responder import get_vacation_state
+        import sqlite3
+        from backend.config import get_path, get
+
+        def _db():
+            db_path = get_path("DATABASE_DIR") / get("DATABASE_FILE_NAME")
+            return sqlite3.connect(str(db_path))
+
+        if sub == "status":
+            state = get_vacation_state()
+            if not state or not state.enabled:
+                respond(":airplane: Vacation mode: *OFF*")
+            else:
+                until = f"until {state.until}" if state.until else "indefinite"
+                respond(
+                    f":airplane: Vacation mode: *ON* ({until})\n"
+                    f"Confidence threshold: {state.confidence_threshold:.0%} | "
+                    f"Auto-submit: {'yes' if state.auto_submit else 'no'}"
+                )
+        elif sub == "on":
+            until = ""
+            threshold = 0.7
+            auto_submit = True
+            i = 1
+            while i < len(parts):
+                if parts[i] == "--until" and i + 1 < len(parts):
+                    i += 1; until = parts[i]
+                elif parts[i] == "--threshold" and i + 1 < len(parts):
+                    i += 1; threshold = float(parts[i])
+                elif parts[i] == "--no-submit":
+                    auto_submit = False
+                i += 1
+            from datetime import datetime, timezone
+            enabled_at = datetime.now(timezone.utc).isoformat()
+            conn = _db()
+            conn.execute(
+                "UPDATE vacation_mode SET enabled=1, enabled_at=?, until=?, confidence_threshold=?, auto_submit=? WHERE id=1",
+                (enabled_at, until, threshold, int(auto_submit)),
+            )
+            conn.commit(); conn.close()
+            msg = ":airplane: Vacation mode *ON*"
+            if until:
+                msg += f" (until {until})"
+            respond(msg)
+        elif sub == "off":
+            conn = _db()
+            conn.execute("UPDATE vacation_mode SET enabled=0 WHERE id=1")
+            conn.commit(); conn.close()
+            respond(":white_check_mark: Vacation mode *OFF* — normal prompting resumed")
+        else:
+            respond("Usage: `/devtrack vacation [on|off|status] [--until YYYY-MM-DD] [--threshold 0.7] [--no-submit]`")
+    except Exception as e:
+        respond(f":x: Error: {e}")

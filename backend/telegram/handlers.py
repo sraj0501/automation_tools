@@ -91,6 +91,7 @@ def register_handlers(app: Application, bot: "DevTrackBot"):
     app.add_handler(CommandHandler("workadjust", _make_handler(bot, _cmd_workadjust)))
     app.add_handler(CommandHandler("workstatus", _make_handler(bot, _cmd_workstatus)))
     app.add_handler(CommandHandler("workreport", _make_handler(bot, _cmd_workreport)))
+    app.add_handler(CommandHandler("vacation", _make_handler(bot, _cmd_vacation)))
 
 
 def _make_handler(bot: "DevTrackBot", handler_fn):
@@ -2096,3 +2097,71 @@ async def _cmd_workreport(update: Update, context: ContextTypes.DEFAULT_TYPE, bo
                 await update.message.reply_text(f"⚠️ Could not send email to {email_to} — check server logs.")
     except Exception as e:
         await update.message.reply_text(f"Error generating report: {e}")
+
+
+async def _cmd_vacation(update: Update, context: ContextTypes.DEFAULT_TYPE, bot: "DevTrackBot"):
+    """/vacation [on|off|status] [--until YYYY-MM-DD] [--threshold 0.7] [--no-submit]"""
+    args = context.args or []
+    sub = args[0].lower() if args else "status"
+
+    try:
+        from backend.vacation.auto_responder import get_vacation_state, is_vacation_active
+        import sqlite3
+        from backend.config import get_path, get
+
+        def _db():
+            db_path = get_path("DATABASE_DIR") / get("DATABASE_FILE_NAME")
+            return sqlite3.connect(str(db_path))
+
+        if sub == "status":
+            state = get_vacation_state()
+            if not state or not state.enabled:
+                await update.message.reply_text("✈️ Vacation mode: *OFF*", parse_mode="Markdown")
+            else:
+                until = f"until {state.until}" if state.until else "indefinite"
+                msg = (
+                    f"✈️ Vacation mode: *ON* ({until})\n"
+                    f"Confidence threshold: {state.confidence_threshold:.0%}\n"
+                    f"Auto-submit: {'yes' if state.auto_submit else 'no'}"
+                )
+                await update.message.reply_text(msg, parse_mode="Markdown")
+
+        elif sub == "on":
+            until = ""
+            threshold = 0.7
+            auto_submit = True
+            i = 1
+            while i < len(args):
+                if args[i] == "--until" and i + 1 < len(args):
+                    i += 1
+                    until = args[i]
+                elif args[i] == "--threshold" and i + 1 < len(args):
+                    i += 1
+                    threshold = float(args[i])
+                elif args[i] == "--no-submit":
+                    auto_submit = False
+                i += 1
+            from datetime import datetime, timezone
+            enabled_at = datetime.now(timezone.utc).isoformat()
+            conn = _db()
+            conn.execute(
+                "UPDATE vacation_mode SET enabled=1, enabled_at=?, until=?, confidence_threshold=?, auto_submit=? WHERE id=1",
+                (enabled_at, until, threshold, int(auto_submit)),
+            )
+            conn.commit(); conn.close()
+            msg = f"✈️ Vacation mode *ON*"
+            if until:
+                msg += f" (until {until})"
+            await update.message.reply_text(msg, parse_mode="Markdown")
+
+        elif sub == "off":
+            conn = _db()
+            conn.execute("UPDATE vacation_mode SET enabled=0 WHERE id=1")
+            conn.commit(); conn.close()
+            await update.message.reply_text("✅ Vacation mode *OFF* — normal prompting resumed", parse_mode="Markdown")
+
+        else:
+            await update.message.reply_text("Usage: /vacation [on|off|status]")
+
+    except Exception as e:
+        await update.message.reply_text(f"Error: {e}")

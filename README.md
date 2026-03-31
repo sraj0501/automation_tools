@@ -6,6 +6,7 @@
 DevTrack is a **client-server tool**. The Go binary (`devtrack`) is a lean daemon/client (~5 MB, no Python required to install) that monitors git activity and handles scheduling. The Python backend is a separate deployable server that provides AI processing, integrations, and reporting. In the default "managed" mode the daemon spawns the Python process automatically; in "external" mode you run Python in Docker or in the cloud and point the daemon at it.
 
 [![GitHub Release](https://img.shields.io/github/v/release/sraj0501/automation_tools?label=release)](https://github.com/sraj0501/automation_tools/releases/latest)
+[![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-blue)](https://github.com/sraj0501/automation_tools/releases/latest)
 
 ---
 
@@ -54,6 +55,8 @@ DevTrack is a **client-server tool**. The Go binary (`devtrack`) is a lean daemo
 | Track time automatically (EOD report) | [Work Tracker](docs/WORK_TRACKER.md) |
 | Get ticket alerts (GitHub / Azure / Jira) | [Ticket Alerter](docs/TICKET_ALERTER.md) |
 | Plan a project with AI | [AI Project Planning](docs/PROJECT_PLANNING.md) |
+| Connect to a remote backend | [Cloud Mode](wiki/wiki.html#CLOUD_MODE) |
+| Use the TUI dashboard | [TUI Dashboard](wiki/wiki.html#TUI_DASHBOARD) |
 | Contribute or modify DevTrack | [CLAUDE.md](CLAUDE.md) |
 
 ---
@@ -62,7 +65,7 @@ DevTrack is a **client-server tool**. The Go binary (`devtrack`) is a lean daemo
 
 ### Option 1 — Download binary (recommended)
 
-Pre-built binaries are published automatically on every release for macOS (Apple Silicon + Intel), Linux (amd64 + arm64), and Windows (amd64).
+Pre-built binaries are published automatically on every release for macOS (Apple Silicon + Intel) and Linux (amd64 + arm64).
 
 ```bash
 # macOS / Linux — download the Go daemon
@@ -84,7 +87,9 @@ git clone https://github.com/sraj0501/automation_tools.git   # Python source
 cd automation_tools
 uv sync                  # install Python dependencies
 cp .env_sample .env
-nano .env                # set PROJECT_ROOT, DEVTRACK_WORKSPACE, DATA_DIR, and required vars
+nano .env                # set PROJECT_ROOT, DATA_DIR, and required vars
+                         # DEVTRACK_WORKSPACE = single repo to monitor
+                         # (omit or leave as-is when using workspaces.yaml for multi-repo mode)
 # DEVTRACK_SERVER_MODE=managed  (default — no need to set explicitly)
 
 devtrack start           # starts the Go daemon + Python backend together
@@ -106,6 +111,18 @@ devtrack start           # Go daemon only — connects to the running Python ser
 devtrack status
 ```
 
+#### Cloud mode (CS-4)
+
+Connect your local Go daemon to a remote managed DevTrack backend (no local Python needed).
+
+```bash
+devtrack cloud login --url https://myserver.com --key your-api-key
+devtrack cloud status    # ping /health, show latency + server version + key preview
+devtrack cloud logout    # revert to managed mode
+```
+
+Credentials are stored in `~/.devtrack/cloud.json` (chmod 0600). Cloud mode uses CA-signed certificates — the local cert-pinning step for self-signed certs is bypassed automatically.
+
 ### Option 2 — Build from source (developers / contributors)
 
 ```bash
@@ -117,7 +134,7 @@ chmod +x setup_local.sh
 
 The script handles everything: dependency checks, Python env, spaCy model, Go binary build (`go build` — no bundle step), `~/.local/bin` install, and `.env` bootstrap.
 
-See [Installation Guide](docs/INSTALLATION.md) for a manual walkthrough or Windows instructions.
+See [Installation Guide](docs/INSTALLATION.md) for a manual walkthrough.
 
 To uninstall: `./uninstall.sh`
 
@@ -359,6 +376,14 @@ ADMIN_USERNAME=admin
 ADMIN_PASSWORD=changeme
 ```
 
+### TUI Dashboard
+
+```bash
+devtrack tui
+```
+
+A Bubble Tea full-screen terminal dashboard with 4 tabs: **Overview** (daemon uptime, server latency, today's trigger counts, workspace count), **Activity** (last 30 commit/timer records), **Workspaces** (all configured repos with PM platform and enabled state), and **Alerts** (last 30 ticket notifications). Navigate with Tab or 1–4, press `r` to refresh, `q` to quit. Auto-refreshes every 30 seconds. Reads entirely from local SQLite — works without a Python backend or network connection.
+
 ### Personalized AI
 
 ```bash
@@ -375,17 +400,18 @@ DevTrack is split into two independently deployable components:
 
 | Component | What it is | Language | Size |
 |-----------|-----------|----------|------|
-| `devtrack` binary | Daemon + CLI client | Go 1.20+ | ~5 MB — no Python required to install |
+| `devtrack` binary | Daemon + CLI client | Go 1.24+ | ~5 MB — no Python required to install |
 | Python backend | AI server | Python 3.12+ | Runs as subprocess (managed) or container (external) |
 
 The Go daemon handles git monitoring, cron scheduling, the SQLite database, and the HTTP trigger client. The Python backend handles NLP, LLM calls, TUI prompts, project management integrations, Telegram, Slack, and report generation. They communicate over HTTPS (Go POSTs triggers to Python; self-signed ECDSA cert generated at startup, cert-pinned in the Go client).
 
-**Server modes** — set in `.env`:
+**Server modes** — set in `.env` or via `devtrack cloud login`:
 
 | Mode | Config | Use case |
 |------|--------|----------|
 | `managed` (default) | `DEVTRACK_SERVER_MODE=managed` | Local dev — daemon spawns Python subprocess automatically |
-| `external` | `DEVTRACK_SERVER_MODE=external` + `DEVTRACK_SERVER_URL=http://host:port` | Docker or cloud-hosted Python backend |
+| `external` | `DEVTRACK_SERVER_MODE=external` + `DEVTRACK_SERVER_URL=http://host:port` | Docker or self-hosted Python backend |
+| `cloud` | `devtrack cloud login --url URL --key KEY` | Remote managed backend; API key auth; no cert-pinning |
 
 A `Dockerfile.server` is provided for containerising the Python backend.
 
@@ -393,7 +419,7 @@ A `Dockerfile.server` is provided for containerising the Python backend.
 
 | Layer | Stack |
 |-------|-------|
-| Daemon / CLI | Go 1.20+, fsnotify, robfig/cron, modernc/sqlite |
+| Daemon / CLI | Go 1.24+, fsnotify, robfig/cron, modernc/sqlite |
 | AI backend server | Python 3.12+, uv, spaCy, aiohttp |
 | Local LLM | Ollama (default) — also OpenAI, Anthropic, Groq, LM Studio |
 | Storage | SQLite (all app state including sync cache + learning data), ChromaDB (RAG), optional MongoDB |

@@ -476,3 +476,63 @@ class GitLabClient:
         if isinstance(data, list) and data:
             return data[0]
         return None
+
+    # -- webhook management -------------------------------------------------
+
+    async def ensure_webhook_current(
+        self,
+        project_id: int,
+        webhook_url: str,
+        secret: str = "",
+    ) -> bool:
+        """
+        Ensure a project webhook pointing at *webhook_url* is registered.
+
+        Idempotent: if a hook with the same URL already exists it is left
+        unchanged; only missing or stale hooks are (re-)created.
+
+        Args:
+            project_id: GitLab numeric project ID.
+            webhook_url: Full URL the webhook should POST to.
+            secret: Optional webhook secret token (WEBHOOK_GITLAB_SECRET).
+
+        Returns True if the hook is present after the call, False on error.
+        """
+        if not project_id or not webhook_url:
+            logger.debug("ensure_webhook_current: project_id or webhook_url missing — skip")
+            return False
+
+        # List existing hooks
+        hooks = await self._get(self._api(f"projects/{project_id}/hooks"))
+        if not isinstance(hooks, list):
+            logger.warning(f"GitLab: could not list hooks for project {project_id}")
+            return False
+
+        for hook in hooks:
+            if hook.get("url") == webhook_url:
+                logger.debug(f"GitLab: webhook already registered for project {project_id}")
+                return True
+
+        # Register missing hook
+        body: Dict[str, Any] = {
+            "url": webhook_url,
+            "push_events": True,
+            "issues_events": True,
+            "merge_requests_events": True,
+            "note_events": True,
+            "confidential_issues_events": True,
+            "confidential_note_events": True,
+            "enable_ssl_verification": False,
+        }
+        if secret:
+            body["token"] = secret
+
+        result = await self._post(self._api(f"projects/{project_id}/hooks"), json_body=body)
+        if result and result.get("id"):
+            logger.info(
+                f"GitLab: registered webhook #{result['id']} for project {project_id} → {webhook_url}"
+            )
+            return True
+
+        logger.warning(f"GitLab: failed to register webhook for project {project_id}")
+        return False

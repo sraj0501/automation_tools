@@ -524,7 +524,7 @@
         <span class="current" id="breadcrumbCurrent">Home</span>
       </div>
       <div class="topbar-actions">
-        <span class="version-chip">v1.0</span>
+        <span class="version-chip">v1.1</span>
         <button class="icon-btn" id="themeToggle" title="Toggle theme">
           <svg id="themeIcon" viewBox="0 0 20 20" fill="currentColor"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>
         </button>
@@ -553,6 +553,7 @@ const NAV = [
       { id: 'GETTING_STARTED', label: 'Getting Started',    icon: rocket_icon() },
       { id: 'INSTALLATION',    label: 'Installation',       icon: download_icon() },
       { id: 'QUICK_START',     label: 'Quick Start',        icon: flash_icon() },
+      { id: 'WHATS_NEW',       label: "What's New",         icon: '🎉' },
     ]
   },
   {
@@ -560,6 +561,7 @@ const NAV = [
     items: [
       { id: 'CLI_REFERENCE',   label: 'CLI Reference',      icon: terminal_icon() },
       { id: 'CONFIGURATION',   label: 'Configuration',      icon: settings_icon() },
+      { id: 'MULTI_REPO',      label: 'Multi-Repo Setup',   icon: git_icon() },
       { id: 'ARCHITECTURE',    label: 'Architecture',       icon: arch_icon() },
     ]
   },
@@ -583,6 +585,7 @@ const NAV = [
       { id: 'PROJECT_PLANNING',label: 'Project Planning',icon: pm_icon() },
       { id: 'TICKET_ALERTER',  label: 'Ticket Alerter',  icon: bell_icon() },
       { id: 'WORK_TRACKER',    label: 'Work Tracker',    icon: '⏱️' },
+      { id: 'VACATION_MODE',   label: 'Vacation Mode',   icon: '✈️' },
     ]
   },
   {
@@ -599,6 +602,9 @@ const NAV = [
       { id: 'AUTOSTART',       label: 'Auto-Start',       icon: launch_icon() },
       { id: 'SERVER_TUI',      label: 'Server TUI',       icon: terminal_icon() },
       { id: 'ADMIN_CONSOLE',   label: 'Admin Console',    icon: settings_icon() },
+      { id: 'TELEMETRY',       label: 'Telemetry',        icon: '📊' },
+      { id: 'CLOUD_MODE',      label: 'Cloud Mode',       icon: '☁️' },
+      { id: 'TUI_DASHBOARD',   label: 'TUI Dashboard',    icon: terminal_icon() },
     ]
   },
   {
@@ -799,6 +805,652 @@ SLACK_ALLOWED_CHANNEL_IDS=C123ABC,C456DEF   # leave blank for all channels (dev 
 <h2>Channel Restrictions</h2>
 <p>Set <code>SLACK_ALLOWED_CHANNEL_IDS</code> to a comma-separated list of Slack channel IDs (e.g. <code>C123ABC,C456DEF</code>) to restrict commands and notifications to specific channels. Leave it blank during development to allow all channels.</p>
 </div>`,
+  VACATION_MODE: `<div class="md-body">
+<h1>Vacation Mode</h1>
+<p>Vacation mode lets DevTrack run fully autonomously while you are away. Instead of firing the interactive work-update prompt, the system generates a work summary from recent git commits using the LLM, scores its own confidence, and (optionally) posts the update to your PM tool — no human in the loop required.</p>
+
+<h2>Enabling Vacation Mode</h2>
+<pre><code class="language-bash"># Turn on with optional end date and confidence threshold
+devtrack vacation on
+devtrack vacation on --until 2026-04-07
+devtrack vacation on --until 2026-04-07 --threshold 0.8
+devtrack vacation on --until 2026-04-07 --no-submit   # log only, don't post to PM
+
+# Turn off
+devtrack vacation off
+
+# Check status
+devtrack vacation status</code></pre>
+
+<h2>How It Works</h2>
+<ol>
+<li>When the DevTrack timer fires (every <code>PROMPT_INTERVAL</code> minutes), the Python backend checks vacation mode before showing any interactive prompt.</li>
+<li>If vacation mode is active, <code>VacationAutoResponder</code> collects the recent commits for the workspace and builds a context string.</li>
+<li>The context is sent to the configured LLM provider with a prompt that asks for a 1-3 sentence work update <strong>and</strong> a <code>CONFIDENCE: 0.0–1.0</code> score on the same response.</li>
+<li>If the confidence meets the configured threshold <strong>and</strong> <code>auto_submit</code> is enabled, the update is posted to the PM tool (Azure DevOps, GitHub, GitLab, or Jira) as a comment, prefixed with <em>"[Auto — vacation mode]"</em>.</li>
+<li>If confidence is below threshold, the update is logged but not posted.</li>
+</ol>
+
+<h2>Telegram &amp; Slack</h2>
+<p>Vacation mode can also be toggled from Telegram and Slack:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Telegram</th><th>Slack</th><th>Action</th></tr></thead>
+<tbody>
+<tr><td><code>/vacation on</code></td><td><code>/devtrack vacation on</code></td><td>Enable vacation mode (indefinite)</td></tr>
+<tr><td><code>/vacation on --until 2026-04-07</code></td><td><code>/devtrack vacation on --until 2026-04-07</code></td><td>Enable until date</td></tr>
+<tr><td><code>/vacation off</code></td><td><code>/devtrack vacation off</code></td><td>Disable vacation mode</td></tr>
+<tr><td><code>/vacation status</code></td><td><code>/devtrack vacation status</code></td><td>Show current state</td></tr>
+</tbody>
+</table></div>
+
+<h2>Configuration</h2>
+<pre><code class="language-bash"># Minimum LLM confidence (0-1) to auto-submit a work update while on vacation
+VACATION_CONFIDENCE_THRESHOLD=0.7
+
+# Set to false to log auto-generated updates without posting to PM
+VACATION_AUTO_SUBMIT=true</code></pre>
+<p>These are the global defaults. The per-session <code>--threshold</code> and <code>--no-submit</code> flags override them and are stored in the database for the duration of vacation mode.</p>
+
+<h2>Flags</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Flag</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>--until YYYY-MM-DD</code></td><td>Auto-expire vacation mode at end of this date</td></tr>
+<tr><td><code>--threshold 0.0–1.0</code></td><td>Minimum confidence to auto-post (default: <code>0.7</code>)</td></tr>
+<tr><td><code>--no-submit</code></td><td>Generate updates but never post them — logging only</td></tr>
+</tbody>
+</table></div>
+
+<h2>Expiry</h2>
+<p>If <code>--until</code> is set, vacation mode is treated as <strong>expired</strong> on the day after the end date. The daemon resumes normal prompting automatically. Run <code>devtrack vacation off</code> to clear the record explicitly.</p>
+
+<h2>Database Storage</h2>
+<p>Vacation state is stored as a single row in the <code>vacation_mode</code> table in <code>Data/devtrack.db</code>. All fields (<code>enabled</code>, <code>enabled_at</code>, <code>until</code>, <code>confidence_threshold</code>, <code>auto_submit</code>) are updated atomically on every <code>on</code> / <code>off</code> call — no config file is written.</p>
+</div>`,
+
+  CLOUD_MODE: `<div class="md-body">
+<h1>Cloud Mode (CS-4)</h1>
+<p>Cloud Mode lets you connect the DevTrack Go daemon on your developer machine to a remote, managed Python backend — no local Python installation required on the developer machine. The daemon uses your cloud credentials for all HTTP trigger POSTs, bypassing the local cert-pinning that applies to self-signed certificates in managed and external modes.</p>
+
+<h2>Quick Start</h2>
+<pre><code class="language-bash"># Log in to a remote DevTrack server
+devtrack cloud login --url https://myserver.com --key your-api-key
+
+# Check connection status (pings /health, fetches /version, shows key preview)
+devtrack cloud status
+
+# Disconnect and revert to managed mode
+devtrack cloud logout</code></pre>
+
+<h2>Server Modes</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Mode</th><th>Config</th><th>Use case</th></tr></thead>
+<tbody>
+<tr><td><code>managed</code> (default)</td><td><code>DEVTRACK_SERVER_MODE=managed</code></td><td>Local dev — daemon spawns Python subprocess automatically</td></tr>
+<tr><td><code>external</code></td><td><code>DEVTRACK_SERVER_MODE=external</code> + <code>DEVTRACK_SERVER_URL=http://host:port</code></td><td>Docker or self-hosted Python backend; uses cert-pinning for TLS</td></tr>
+<tr><td><code>cloud</code></td><td>Set via <code>devtrack cloud login</code></td><td>Hosted DevTrack backend; CA-signed cert; API key auth</td></tr>
+</tbody>
+</table></div>
+
+<h2>How It Works</h2>
+<ol>
+<li><code>devtrack cloud login --url URL --key KEY</code> tests the <code>/health</code> endpoint, then writes credentials to <code>~/.devtrack/cloud.json</code> (chmod 0600). This file contains <code>mode</code>, <code>url</code>, and <code>api_key</code>.</li>
+<li>When cloud mode is active, <code>IsCloudMode()</code> returns <code>true</code> and <code>IsLocalTLS()</code> returns <code>false</code> — the Go HTTP client skips the cert-pinning step that is used for self-signed local certificates, trusting the system CA store instead.</li>
+<li>Every trigger POST and health-check request includes the API key in the <code>Authorization</code> header.</li>
+<li><code>devtrack cloud logout</code> removes <code>~/.devtrack/cloud.json</code> and restores managed mode.</li>
+</ol>
+
+<h2>cloud.json Format</h2>
+<pre><code class="language-json">{
+  "mode": "cloud",
+  "url": "https://myserver.com",
+  "api_key": "your-api-key"
+}</code></pre>
+<p>The file is stored at <code>~/.devtrack/cloud.json</code> with permissions <code>0600</code> — readable only by the current user.</p>
+
+<h2>Status Output</h2>
+<p><code>devtrack cloud status</code> pings <code>/health</code> and reports the round-trip latency, fetches <code>/version</code> for the server version string, and displays a masked preview of the API key (first 8 chars + <code>…</code>) so you can confirm the right key is active without exposing it in the terminal.</p>
+
+<h2>Configuration</h2>
+<p>Cloud mode does not require any <code>.env</code> changes — credentials are stored in <code>~/.devtrack/cloud.json</code> and loaded at startup automatically. The existing <code>DEVTRACK_SERVER_MODE</code> and <code>DEVTRACK_SERVER_URL</code> variables are ignored when <code>cloud.json</code> is present.</p>
+
+<blockquote><p><strong>Note:</strong> Cloud mode follows the local-first design principle. If the remote server is unreachable, the daemon logs the error and continues operating locally — git monitoring, scheduling, and SQLite logging all continue without interruption. Triggers are re-tried on the next cycle.</p></blockquote>
+</div>`,
+
+  TUI_DASHBOARD: `<div class="md-body">
+<h1>TUI Dashboard</h1>
+<p>The TUI Dashboard is a real-time, alt-screen terminal dashboard built with <strong>Bubble Tea</strong> (charmbracelet/bubbletea). It gives you a live view of daemon health, recent git activity, workspace status, and ticket alerts — all from a single terminal window, with no browser required.</p>
+
+<h2>Launching</h2>
+<pre><code class="language-bash">devtrack tui</code></pre>
+<p>The dashboard opens in alt-screen mode (full terminal takeover). Press <code>q</code> to quit and return to your shell — the daemon keeps running.</p>
+
+<h2>Tabs</h2>
+<p>Navigate between tabs with the <code>Tab</code> key or by pressing <code>1</code>–<code>4</code>.</p>
+
+<pre><code>┌──────────────────────────────────────────────────────────────────────┐
+│  [1] Overview  [2] Activity  [3] Workspaces  [4] Alerts              │
+└──────────────────────────────────────────────────────────────────────┘</code></pre>
+
+<h3>1 — Overview</h3>
+<p>At-a-glance summary of the running daemon:</p>
+<ul>
+<li>Daemon uptime since last start</li>
+<li>Python backend server status and latency (ping to <code>/health</code>)</li>
+<li>Today's commit trigger count and timer trigger count</li>
+<li>Total configured workspace count</li>
+</ul>
+
+<h3>2 — Activity</h3>
+<p>A live table of the last 30 trigger records from the SQLite database — both commit triggers (with short commit hash) and timer triggers — with timestamps and the workspace that fired them. Useful for confirming git monitoring is working and seeing recent AI-enhanced commit activity at a glance.</p>
+
+<h3>3 — Workspaces</h3>
+<p>A table of every workspace configured in <code>workspaces.yaml</code>:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Column</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td>Name</td><td>Workspace name as defined in workspaces.yaml</td></tr>
+<tr><td>Platform</td><td>PM platform (azure / github / gitlab / jira / none)</td></tr>
+<tr><td>Enabled</td><td>Whether monitoring is active for this workspace</td></tr>
+<tr><td>Path</td><td>Filesystem path being monitored</td></tr>
+</tbody>
+</table></div>
+
+<h3>4 — Alerts</h3>
+<p>The last 30 ticket notifications from the SQLite <code>notifications</code> table — written there by the alert poller as a dual-write alongside MongoDB. Shows source (github / azure / jira), event type, ticket ID, summary, and read/unread state. This tab works fully offline (no MongoDB required).</p>
+
+<h2>Key Bindings</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Key</th><th>Action</th></tr></thead>
+<tbody>
+<tr><td><code>Tab</code></td><td>Cycle to the next tab</td></tr>
+<tr><td><code>1</code> / <code>2</code> / <code>3</code> / <code>4</code></td><td>Jump directly to Overview / Activity / Workspaces / Alerts</td></tr>
+<tr><td><code>r</code></td><td>Refresh all data immediately (overrides 30-second auto-refresh)</td></tr>
+<tr><td><code>q</code></td><td>Quit and return to shell (daemon keeps running)</td></tr>
+</tbody>
+</table></div>
+
+<h2>Auto-Refresh</h2>
+<p>All tabs refresh automatically every <strong>30 seconds</strong> via an internal <code>tea.Tick</code> timer. Press <code>r</code> to force an immediate refresh at any time.</p>
+
+<h2>Offline Support</h2>
+<p>The TUI reads all data from the local SQLite database (<code>Data/devtrack.db</code>) — no Python backend or network connection is needed. The only tab that requires a reachable backend is the server latency shown on the Overview tab; if the backend is unreachable, the latency field shows "unavailable" and the rest of the dashboard continues to function.</p>
+
+<h2>Requirements</h2>
+<ul>
+<li>The <code>devtrack</code> daemon should be running (or have previously run) so the SQLite database has data to display.</li>
+<li>charmbracelet/bubbletea v1.3.10 and lipgloss v1.1.0 are included in the Go binary — no separate installation needed.</li>
+<li>Terminal must support 256-color mode (all modern macOS / Linux terminals do).</li>
+</ul>
+</div>`,
+
+  TELEMETRY: `<div class="md-body">
+<h1>Telemetry</h1>
+<div class="home-badge" style="margin-bottom:24px;background:var(--callout-warn);border-color:var(--callout-warn-border);color:#92400e;">Planned — not yet implemented</div>
+
+<p>DevTrack's telemetry system is a <strong>privacy-first, three-tier</strong> approach to understanding how many people download and use the tool — without ever collecting personal data. Telemetry is always opt-in and the binary works identically with it on or off.</p>
+
+<h2>Three Tiers at a Glance</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Tier</th><th>Source</th><th>What it measures</th><th>Code needed</th></tr></thead>
+<tbody>
+<tr><td><strong>1 — Downloads</strong></td><td>GitHub Releases API</td><td>Binary download counts per release, star count, forks</td><td>None — polled every 15 min by the server</td></tr>
+<tr><td><strong>2 — Anonymous usage</strong></td><td>Go binary (opt-in)</td><td>install / command / heartbeat / signup events; random UUID; no PII</td><td><code>devtrack-bin/telemetry.go</code> + CLI wiring</td></tr>
+<tr><td><strong>3 — Registered users</strong></td><td>CS-4 cloud server</td><td><code>api_keys.last_seen_at</code> — active registered users (D1/D7/D30)</td><td><code>api_keys</code> table extension</td></tr>
+</tbody>
+</table></div>
+
+<h2>Privacy Design</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Property</th><th>Detail</th></tr></thead>
+<tbody>
+<tr><td><strong>Default OFF</strong></td><td>Telemetry is disabled until you explicitly run <code>devtrack telemetry on</code></td></tr>
+<tr><td><strong>Anonymous UUID</strong></td><td><code>install_id</code> is a random UUID with no link to your identity, email, or machine name</td></tr>
+<tr><td><strong>No PII ever</strong></td><td>Repo paths, commit messages, file names, usernames, API keys, and workspace names are never sent</td></tr>
+<tr><td><strong>Local-first safe</strong></td><td>All telemetry POSTs are fire-and-forget on a goroutine; failures are silent and never block the CLI</td></tr>
+<tr><td><strong>Transparent</strong></td><td><code>devtrack telemetry status</code> shows the exact payload that would be sent on the next event</td></tr>
+</tbody>
+</table></div>
+
+<h3>What Is Sent</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Event</th><th>Trigger</th><th>Payload (no PII)</th></tr></thead>
+<tbody>
+<tr><td><code>install</code></td><td>First <code>devtrack telemetry on</code></td><td><code>version</code>, <code>os</code>, <code>arch</code></td></tr>
+<tr><td><code>command</code></td><td>Each CLI invocation</td><td>Command name only (e.g. <code>work</code>, <code>tui</code>, <code>cloud</code>)</td></tr>
+<tr><td><code>heartbeat</code></td><td>Daemon startup</td><td><code>version</code>, <code>active_features</code> bitmask</td></tr>
+<tr><td><code>signup</code></td><td><code>devtrack cloud login</code> succeeds</td><td><code>version</code>, <code>os</code> only</td></tr>
+</tbody>
+</table></div>
+
+<h3>What Is Never Sent</h3>
+<ul>
+<li>Repo paths or names</li>
+<li>Commit messages or hashes</li>
+<li>File names or diffs</li>
+<li>Usernames or emails</li>
+<li>API keys or tokens</li>
+<li>Workspace names or ticket IDs</li>
+</ul>
+
+<h2>CLI Reference</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Command</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>devtrack telemetry on</code></td><td>Enable telemetry; generate <code>install_id</code> UUID if not already present; fire the <code>install</code> event</td></tr>
+<tr><td><code>devtrack telemetry off</code></td><td>Disable telemetry; <code>install_id</code> is retained so re-enabling is seamless</td></tr>
+<tr><td><code>devtrack telemetry status</code></td><td>Show enabled/disabled state, the first 8 chars of your <code>install_id</code>, and the exact payload that would be sent on the next event</td></tr>
+</tbody>
+</table></div>
+
+<p>State is stored in <code>~/.devtrack/telemetry.json</code> (chmod 0600):</p>
+<pre><code class="language-json">{
+  "enabled": true,
+  "install_id": "a3f8c2d1-…",
+  "opted_in_at": "2026-03-29T10:00:00Z"
+}</code></pre>
+
+<h2>Real-Time Admin Dashboard</h2>
+<p>When telemetry is enabled on the server, the Admin Console gains a live telemetry panel powered by <strong>Server-Sent Events (SSE) + HTMX</strong> — no JavaScript needed on the frontend.</p>
+
+<h3>How It Works</h3>
+<ol>
+<li>Each <code>POST /telemetry/event</code> from a client binary inserts a row into <code>telemetry_events</code> and pushes the event into an <code>asyncio.Queue</code>.</li>
+<li>The SSE endpoint (<code>GET /admin/telemetry/stream</code>) streams two event types:
+  <ul>
+    <li><code>counters</code> — aggregate stats (DAU, MAU, signups today, command histogram) pushed every 5 seconds</li>
+    <li><code>live_event</code> — individual event row pushed immediately on each INSERT</li>
+  </ul>
+</li>
+<li>HTMX on the admin dashboard subscribes to the SSE stream and swaps rendered HTML fragments directly — the server returns HTML, not raw JSON, so no client-side rendering is needed.</li>
+</ol>
+
+<pre><code class="language-html">&lt;!-- One persistent SSE connection; HTMX handles reconnect --&gt;
+&lt;div hx-ext="sse" sse-connect="/admin/telemetry/stream"&gt;
+  &lt;div id="stats-panel" sse-swap="counters" hx-swap="outerHTML"&gt;&lt;/div&gt;
+  &lt;table&gt;
+    &lt;tbody id="live-feed" sse-swap="live_event" hx-swap="afterbegin"&gt;&lt;/tbody&gt;
+  &lt;/table&gt;
+&lt;/div&gt;</code></pre>
+
+<h3>GitHub Download Counts</h3>
+<p>A background task on the server polls the GitHub Releases API every 15 minutes and caches the result in memory. Download counts are surfaced in the admin dashboard alongside live event counts — no binary changes needed for this tier.</p>
+<pre><code class="language-bash"># Manual query (no auth needed for public repos)
+curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
+  | jq '[.[] | {tag: .tag_name, downloads: [.assets[].download_count] | add}]'</code></pre>
+
+<h2>Data Model</h2>
+<h3>telemetry_events table</h3>
+<pre><code class="language-sql">CREATE TABLE telemetry_events (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    install_id   TEXT    NOT NULL,       -- random UUID; stable per install
+    event        TEXT    NOT NULL,       -- "install"|"command"|"heartbeat"|"signup"
+    props        TEXT    DEFAULT '{}',   -- JSON: {command, version, os, arch, features}
+    received_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+);</code></pre>
+
+<h2>New .env Variables</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Variable</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>TELEMETRY_ENABLED</code></td><td>Set to <code>true</code> to enable the <code>/telemetry/event</code> endpoint on the server (default: <code>false</code>)</td></tr>
+<tr><td><code>GITHUB_REPO_SLUG</code></td><td>GitHub repo slug for download count polling (e.g. <code>sraj0501/automation_tools</code>)</td></tr>
+</tbody>
+</table></div>
+
+<h2>New Files (to be created)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td><code>devtrack-bin/telemetry.go</code></td><td><code>TelemetryConfig</code>, <code>LoadTelemetryConfig()</code>, <code>SaveTelemetryConfig()</code>, <code>Track(event, props)</code> (non-blocking goroutine POST), <code>handleTelemetry()</code> CLI dispatcher</td></tr>
+<tr><td><code>backend/telemetry/__init__.py</code></td><td>Package init</td></tr>
+<tr><td><code>backend/telemetry/store.py</code></td><td><code>TelemetryStore</code>: INSERT event, aggregate queries (DAU, MAU, signups, command histogram)</td></tr>
+<tr><td><code>backend/telemetry/router.py</code></td><td>FastAPI router: <code>POST /telemetry/event</code>, <code>GET /admin/telemetry/stream</code> (SSE)</td></tr>
+<tr><td><code>backend/telemetry/github_stats.py</code></td><td>Background poller for GitHub Releases download counts (15-min interval)</td></tr>
+<tr><td><code>backend/telemetry/stream.py</code></td><td><code>asyncio.Queue</code> shared state, <code>push_live_event()</code>, SSE generator</td></tr>
+</tbody>
+</table></div>
+
+<blockquote><p><strong>Implementation status:</strong> The telemetry system is fully designed and documented in <code>docs/TELEMETRY_PLAN.md</code>. No code has been written yet. The plan covers four implementation phases: server-side foundation (1 day), real-time admin dashboard (1 day), Go binary instrumentation (1 day), and polish including a first-run opt-in prompt (half day).</p></blockquote>
+</div>`,
+
+  WHATS_NEW: `<div class="md-body">
+<h1>What's New</h1>
+<div class="home-badge" style="margin-bottom:24px;background:var(--callout-tip);border-color:var(--callout-tip-border);color:#166534;">March 30, 2026 — Docs &amp; Config polish</div>
+
+<h2>Docs &amp; Configuration polish (March 30)</h2>
+<p>No new runtime features — this release focuses on documentation accuracy and configuration hygiene.</p>
+
+<div class="feature-list" style="margin-bottom:32px;">
+  <div class="feature-item"><div class="feature-dot">1</div><div><h4>.env_sample fixes</h4><p>Removed a duplicate <code>DEVTRACK_WORKSPACE</code> key. Replaced angle-bracket placeholder URLs (<code>&lt;http://localhost:11434&gt;</code>, <code>&lt;https://api.groq.com/openai/v1&gt;</code>, etc.) with real example values so the sample can be used directly. Fixed a <code>LEARNING_CRON_SCHEDULE</code> double-asterisk typo (<code>0 20 ** *</code> → <code>0 20 * * *</code>).</p></div></div>
+  <div class="feature-item"><div class="feature-dot">2</div><div><h4>docs/CONFIGURATION.md rewrite</h4><p>Fully updated to match the current codebase: server architecture modes (managed/external/cloud/TLS), admin console variables, vacation mode, work sessions, cloud mode, Groq/LMStudio provider setup, GitLab webhook auto-registration variables, and all 12 required startup variables documented with examples.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">3</div><div><h4>docs/MULTI_REPO.md — pm_milestone field</h4><p>Added <code>pm_milestone</code> field documentation to the workspace schema. Supported for GitHub (milestone number from URL) and GitLab (milestone ID from REST API). Leave at <code>0</code> or omit to create issues without a milestone.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">4</div><div><h4>Wiki — CONFIGURATION and MULTI_REPO inline pages</h4><p>The wiki now has fully inline pages for <a href="#CONFIGURATION" onclick="navigate('CONFIGURATION');return false;">Configuration Reference</a> (summary tables for all variable groups) and <a href="#MULTI_REPO" onclick="navigate('MULTI_REPO');return false;">Multi-Repo Monitoring</a> (full schema including <code>pm_milestone</code>). No HTTP server needed to read these pages.</p></div></div>
+</div>
+
+<hr>
+<div class="home-badge" style="margin-bottom:24px;">v1.1 — March 2026</div>
+
+<h2>v1.1 Highlights</h2>
+<p>DevTrack v1.1 adds the CS-4 Cloud Mode tier, a Bubble Tea TUI Dashboard, GitLab webhook auto-registration, and offline-capable SQLite dual-write for the alert poller.</p>
+
+<div class="feature-list" style="margin-bottom:32px;">
+  <div class="feature-item"><div class="feature-dot">1</div><div><h4>Cloud Mode (CS-4) — <code>devtrack cloud</code></h4><p>Connect your local daemon to a remote managed backend with a single command: <code>devtrack cloud login --url https://myserver.com --key your-api-key</code>. Credentials are stored in <code>~/.devtrack/cloud.json</code> (chmod 0600). Cloud mode bypasses local cert-pinning (CA-signed certs on the remote) and includes the API key in every request. <code>devtrack cloud status</code> shows latency, server version, and a masked key preview. <code>devtrack cloud logout</code> reverts to managed mode.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">2</div><div><h4>TUI Dashboard — <code>devtrack tui</code></h4><p>A full-screen Bubble Tea dashboard with 4 tabs: <strong>Overview</strong> (daemon uptime, server latency, today's trigger counts), <strong>Activity</strong> (last 30 commit/timer records), <strong>Workspaces</strong> (all configured repos + PM platform + enabled state), and <strong>Alerts</strong> (last 30 ticket notifications). Tab key or 1–4 to switch, <code>r</code> to refresh, <code>q</code> to quit. 30-second auto-refresh. Reads entirely from local SQLite — works offline.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">3</div><div><h4>GitLab Webhook Auto-Registration</h4><p>The Python backend now automatically registers the <code>/webhooks/gitlab</code> endpoint with all projects listed in <code>GITLAB_PROJECT_IDS</code> on startup. Set <code>DEVTRACK_WEBHOOK_PUBLIC_URL</code> to your server's public URL and the backend handles idempotent hook registration — no manual API calls needed when the server URL changes or when adding a new project ID.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">4</div><div><h4>Alert Poller SQLite Dual-Write</h4><p>The alert poller now writes every new notification to both MongoDB (when available) and the local SQLite <code>notifications</code> table. This powers the TUI Dashboard Alerts tab and ensures notifications are accessible offline without a MongoDB connection.</p></div></div>
+</div>
+
+<h2>CLI Additions (v1.1)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Command</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>devtrack cloud login --url URL --key KEY</code></td><td>Connect to a remote DevTrack backend</td></tr>
+<tr><td><code>devtrack cloud logout</code></td><td>Disconnect from cloud mode, revert to managed</td></tr>
+<tr><td><code>devtrack cloud status</code></td><td>Ping remote server, show latency + version + key preview</td></tr>
+<tr><td><code>devtrack tui</code></td><td>Open the Bubble Tea TUI Dashboard</td></tr>
+</tbody>
+</table></div>
+
+<h2>New .env Variables (v1.1)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Variable</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>GITLAB_PROJECT_IDS</code></td><td>Comma-separated GitLab project IDs for auto webhook registration (e.g. <code>12345,67890</code>)</td></tr>
+<tr><td><code>DEVTRACK_WEBHOOK_PUBLIC_URL</code></td><td>Public URL of the DevTrack server, used when registering GitLab webhooks</td></tr>
+</tbody>
+</table></div>
+
+<hr>
+<div class="home-badge" style="margin-bottom:24px;">v1.0 — March 2026</div>
+
+<h2>v1.0 Highlights</h2>
+<p>DevTrack v1.0 ships the complete automation stack — local-first, production-ready, with optional cloud upgrade paths.</p>
+
+<div class="feature-list" style="margin-bottom:32px;">
+  <div class="feature-item"><div class="feature-dot">1</div><div><h4>IPC → HTTPS (CS-1)</h4><p>Go daemon now POSTs all triggers to the Python backend over HTTPS with a self-signed ECDSA cert (auto-generated at startup, cert-pinned in the Go TLS client). The old TCP IPC socket is gone — cleaner, more secure, and works across processes and containers.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">2</div><div><h4>Slack Bot (Socket Mode)</h4><p>Full <code>/devtrack &lt;cmd&gt;</code> slash command support via Slack Socket Mode. No public URL, no ngrok. Supports all work-session commands, PM queries, and proactive work-reminder nudges. Set <code>SLACK_ENABLED=true</code> and configure two tokens.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">3</div><div><h4>Server TUI (CS-2)</h4><p>A Textual-based terminal dashboard for the Python backend — live CPU/MEM per process, a service health bar, and keyboard controls to restart/start/stop individual processes and stream logs. Run with <code>devtrack server-tui</code>.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">4</div><div><h4>Admin Console (CS-3)</h4><p>A lightweight HTMX web UI at <code>http://localhost:8090/admin/</code> for managing users, API keys, reviewing LLM config, integration credential status, and a full audit log. JWT sessions, scrypt-hashed passwords — safe to expose on a LAN.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">5</div><div><h4>Work Session Tracking</h4><p><code>devtrack work start AUTH-42</code> begins a session timer. Every git commit is auto-attached — no manual time entry. <code>devtrack work stop</code> records the auto-measured duration. <code>devtrack work report</code> generates an AI narrative EOD summary with achievements, in-progress, and pending items, plus optional HTML email via MS Graph.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">6</div><div><h4>Vacation Mode</h4><p>Enable with <code>devtrack vacation on --until 2026-04-07</code>. While active, timer triggers are handled autonomously: the LLM generates a work update from recent commits, scores its own confidence, and posts to the PM tool when above the threshold. Also controllable via Telegram <code>/vacation</code> and Slack <code>/devtrack vacation</code>.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">7</div><div><h4>Multi-Repo Hot-Reload</h4><p>Edit <code>workspaces.yaml</code> and save — DevTrack detects the change via fsnotify, diffs old vs new workspace configs, and surgically restarts only the monitors that changed. Unchanged workspaces keep running without interruption.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">8</div><div><h4>Jira Ticket Alerter</h4><p>The ticket alerter now covers all three major platforms: GitHub (assigned/review-requested/comments), Azure DevOps (assigned/state-change/comments), and Jira (assigned/status/comments). OS notifications via osascript + terminal output. View with <code>devtrack alerts</code>.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">9</div><div><h4>Database Consolidation</h4><p>All filesystem persistence moved to a single SQLite database at <code>Data/devtrack.db</code>. No more scattered JSON files for sync state, learning consent, or learning samples. MongoDB remains the preferred store when <code>MONGODB_URI</code> is set — SQLite is the always-available local fallback.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">10</div><div><h4>AI Project Planning (<code>/newproject</code>)</h4><p>Telegram command that orchestrates full project setup: collects requirements in plain text, fetches the live team roster + workloads from the PM tool, generates a YAML spec with sprints/stories/capacity analysis/risk flags, emails a review link to the PM, and creates all issues on approval.</p></div></div>
+</div>
+
+<h2>CLI Additions (v1.0)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Command</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>devtrack work start [ticket]</code></td><td>Begin a work session</td></tr>
+<tr><td><code>devtrack work stop</code></td><td>End the active session and record duration</td></tr>
+<tr><td><code>devtrack work adjust &lt;mins&gt;</code></td><td>Override auto-measured time</td></tr>
+<tr><td><code>devtrack work status</code></td><td>Show active session and today's log</td></tr>
+<tr><td><code>devtrack work report [--email addr]</code></td><td>Generate EOD report, optionally email it</td></tr>
+<tr><td><code>devtrack vacation on [--until DATE] [--threshold N] [--no-submit]</code></td><td>Enable autonomous vacation mode</td></tr>
+<tr><td><code>devtrack vacation off</code></td><td>Disable vacation mode</td></tr>
+<tr><td><code>devtrack vacation status</code></td><td>Show current vacation state</td></tr>
+<tr><td><code>devtrack server-tui</code></td><td>Launch the Textual process monitor</td></tr>
+<tr><td><code>devtrack admin-start</code></td><td>Launch the Admin Console web UI</td></tr>
+<tr><td><code>devtrack alerts [--all|--clear]</code></td><td>View or clear ticket notifications</td></tr>
+<tr><td><code>devtrack autostart-install</code></td><td>Install OS-native auto-start (launchd/systemd/profile)</td></tr>
+</tbody>
+</table></div>
+
+<h2>Coming in v1.2</h2>
+<ul>
+<li><strong>Autonomous Communication</strong> — AI drafts and sends standup messages via Power Automate / email</li>
+<li><strong>CS-4 SaaS tier</strong> — Multi-tenant managed backend; billing; <code>DEVTRACK_API_KEY</code> subscription auth</li>
+</ul>
+
+<blockquote><p>DevTrack follows a local-first design principle: everything in v1.0 works fully offline on your machine. Cloud features (CS-4) are opt-in upgrades — they extend capability without replacing the local-first core.</p></blockquote>
+</div>`,
+
+  CONFIGURATION: `<div class="md-body">
+<h1>Configuration Reference</h1>
+<p>DevTrack is configured via a single <code>.env</code> file. Copy <code>.env_sample</code> to <code>.env</code>, fill in your values, then run <code>devtrack start</code>. All path values must be absolute. Restart the daemon after changes.</p>
+
+<h2>Minimum Required Setup</h2>
+<pre><code class="language-bash">PROJECT_ROOT=/path/to/automation_tools
+DEVTRACK_WORKSPACE=\${PROJECT_ROOT}
+DATA_DIR=\${PROJECT_ROOT}/Data
+LLM_PROVIDER=ollama
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_MODEL=llama3.2
+GIT_SAGE_DEFAULT_MODEL=llama3.2
+WEBHOOK_PORT=8089
+IPC_CONNECT_TIMEOUT_SECS=5
+IPC_RETRY_DELAY_MS=2000
+HTTP_TIMEOUT_SHORT=10
+HTTP_TIMEOUT=30
+HTTP_TIMEOUT_LONG=60
+LLM_REQUEST_TIMEOUT_SECS=120
+PROMPT_TIMEOUT_SIMPLE_SECS=30
+PROMPT_TIMEOUT_WORK_SECS=60
+PROMPT_TIMEOUT_TASK_SECS=120
+SENTIMENT_ANALYSIS_WINDOW_MINUTES=120</code></pre>
+
+<h2>System Paths</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Variable</th><th>Required</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>PROJECT_ROOT</code></td><td>YES</td><td>Absolute path to the <code>automation_tools</code> repo root</td></tr>
+<tr><td><code>DEVTRACK_HOME</code></td><td>YES</td><td>Directory containing the <code>devtrack</code> binary (default: <code>\${PROJECT_ROOT}/devtrack-bin</code>)</td></tr>
+<tr><td><code>DEVTRACK_WORKSPACE</code></td><td>Single-repo only</td><td>Git repo to monitor; ignored when <code>workspaces.yaml</code> is present</td></tr>
+<tr><td><code>WORKSPACES_FILE</code></td><td>No</td><td>Override path to <code>workspaces.yaml</code> (multi-repo mode)</td></tr>
+<tr><td><code>DATA_DIR</code></td><td>YES</td><td>Root data directory (<code>db/</code>, <code>logs/</code>, <code>pids/</code>, <code>reports/</code>)</td></tr>
+</tbody>
+</table></div>
+
+<h2>Server Architecture</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>DEVTRACK_SERVER_MODE</code></td><td><code>managed</code></td><td><code>managed</code> = daemon spawns Python; <code>external</code> = user-run Python; <code>cloud</code> = set by <code>devtrack cloud login</code></td></tr>
+<tr><td><code>DEVTRACK_SERVER_URL</code></td><td>auto</td><td>Python backend URL — leave blank in managed mode; set for external/cloud</td></tr>
+<tr><td><code>DEVTRACK_TLS</code></td><td><code>true</code></td><td>Enable TLS for Go↔Python channel (self-signed ECDSA cert auto-generated)</td></tr>
+<tr><td><code>DEVTRACK_TLS_CERT</code></td><td>auto</td><td>Override cert path (for CA-signed certs in cloud deployments)</td></tr>
+<tr><td><code>DEVTRACK_TLS_KEY</code></td><td>auto</td><td>Override key path</td></tr>
+<tr><td><code>DEVTRACK_API_KEY</code></td><td>—</td><td>API key for webhook server auth; required for public deployments; auto-set by <code>devtrack cloud login</code></td></tr>
+<tr><td><code>WEBHOOK_PORT</code></td><td><code>8089</code></td><td>Python webhook server port</td></tr>
+<tr><td><code>WEBHOOK_HOST</code></td><td><code>0.0.0.0</code></td><td>Python webhook server bind address</td></tr>
+</tbody>
+</table></div>
+
+<h2>Timeouts (all required — no defaults)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Variable</th><th>Unit</th><th>Typical</th><th>Used by</th></tr></thead>
+<tbody>
+<tr><td><code>HTTP_TIMEOUT_SHORT</code></td><td>seconds</td><td>10</td><td>Health checks, quick API calls</td></tr>
+<tr><td><code>HTTP_TIMEOUT</code></td><td>seconds</td><td>30</td><td>Most API calls</td></tr>
+<tr><td><code>HTTP_TIMEOUT_LONG</code></td><td>seconds</td><td>60</td><td>Large uploads, data collection</td></tr>
+<tr><td><code>LLM_REQUEST_TIMEOUT_SECS</code></td><td>seconds</td><td>120</td><td>AI model inference</td></tr>
+<tr><td><code>IPC_CONNECT_TIMEOUT_SECS</code></td><td>seconds</td><td>5</td><td>IPC server connection</td></tr>
+<tr><td><code>IPC_RETRY_DELAY_MS</code></td><td>ms</td><td>2000</td><td>IPC reconnection delay</td></tr>
+<tr><td><code>PROMPT_TIMEOUT_SIMPLE_SECS</code></td><td>seconds</td><td>30</td><td>Quick yes/no TUI prompts</td></tr>
+<tr><td><code>PROMPT_TIMEOUT_WORK_SECS</code></td><td>seconds</td><td>60</td><td>Work update text input</td></tr>
+<tr><td><code>PROMPT_TIMEOUT_TASK_SECS</code></td><td>seconds</td><td>120</td><td>Detailed task descriptions</td></tr>
+<tr><td><code>SENTIMENT_ANALYSIS_WINDOW_MINUTES</code></td><td>minutes</td><td>120</td><td>Teams sentiment analysis window</td></tr>
+</tbody>
+</table></div>
+
+<h2>LLM / AI</h2>
+<p>Set <code>LLM_PROVIDER</code> to your primary provider. Any provider with valid credentials is automatically added as a fallback (OpenAI → Anthropic → Groq → Ollama).</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Provider</th><th>Key vars</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><code>ollama</code></td><td><code>OLLAMA_HOST</code>, <code>OLLAMA_MODEL</code></td><td>Local, free — default</td></tr>
+<tr><td><code>lmstudio</code></td><td><code>LMSTUDIO_HOST</code></td><td>Local, OpenAI-compatible</td></tr>
+<tr><td><code>openai</code></td><td><code>OPENAI_API_KEY</code>, <code>OPENAI_MODEL</code></td><td>Cloud, paid</td></tr>
+<tr><td><code>anthropic</code></td><td><code>ANTHROPIC_API_KEY</code>, <code>ANTHROPIC_MODEL</code></td><td>Cloud, paid</td></tr>
+<tr><td><code>groq</code></td><td><code>GROQ_API_KEY</code>, <code>GROQ_MODEL</code></td><td>Cloud, fast free tier</td></tr>
+</tbody>
+</table></div>
+<p>git-sage uses <code>GIT_SAGE_PROVIDER</code> / <code>GIT_SAGE_DEFAULT_MODEL</code> (defaults to <code>LLM_PROVIDER</code>).</p>
+
+<h2>Application Settings</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>PROMPT_INTERVAL</code></td><td><code>30</code></td><td>Minutes between work-update prompts</td></tr>
+<tr><td><code>WORK_HOURS_ONLY</code></td><td><code>true</code></td><td>Only prompt during work hours</td></tr>
+<tr><td><code>WORK_START_HOUR</code></td><td><code>9</code></td><td>Work day start (24h)</td></tr>
+<tr><td><code>WORK_END_HOUR</code></td><td><code>18</code></td><td>Work day end (24h)</td></tr>
+<tr><td><code>TIMEZONE</code></td><td><code>UTC</code></td><td>Timezone for scheduling</td></tr>
+<tr><td><code>LOG_LEVEL</code></td><td><code>info</code></td><td><code>debug</code> | <code>info</code> | <code>warn</code> | <code>error</code></td></tr>
+<tr><td><code>DEVTRACK_COMMIT_ONLY</code></td><td><code>false</code></td><td>Skip push prompt after commit</td></tr>
+</tbody>
+</table></div>
+
+<h2>Integrations (quick reference)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Integration</th><th>Key variables</th></tr></thead>
+<tbody>
+<tr><td>Azure DevOps</td><td><code>AZURE_DEVOPS_PAT</code>, <code>AZURE_ORGANIZATION</code>, <code>AZURE_PROJECT</code>, <code>AZURE_SYNC_ENABLED</code></td></tr>
+<tr><td>GitHub</td><td><code>GITHUB_TOKEN</code>, <code>GITHUB_OWNER</code>, <code>GITHUB_REPO</code>, <code>GITHUB_SYNC_ENABLED</code></td></tr>
+<tr><td>GitLab</td><td><code>GITLAB_PAT</code>, <code>GITLAB_URL</code>, <code>GITLAB_PROJECT_ID</code>, <code>GITLAB_SYNC_ENABLED</code></td></tr>
+<tr><td>Jira</td><td><code>JIRA_URL</code>, <code>JIRA_EMAIL</code>, <code>JIRA_API_TOKEN</code>, <code>JIRA_PROJECT_KEY</code></td></tr>
+<tr><td>Telegram</td><td><code>TELEGRAM_ENABLED</code>, <code>TELEGRAM_BOT_TOKEN</code>, <code>TELEGRAM_ALLOWED_CHAT_IDS</code></td></tr>
+<tr><td>Slack</td><td><code>SLACK_ENABLED</code>, <code>SLACK_BOT_TOKEN</code>, <code>SLACK_APP_TOKEN</code></td></tr>
+</tbody>
+</table></div>
+
+<h2>Feature-Specific Settings</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Feature</th><th>Key variables</th></tr></thead>
+<tbody>
+<tr><td>Admin Console</td><td><code>ADMIN_PORT=8090</code>, <code>ADMIN_USERNAME</code>, <code>ADMIN_PASSWORD</code>, <code>ADMIN_SECRET_KEY</code></td></tr>
+<tr><td>Ticket Alerter</td><td><code>ALERT_ENABLED</code>, <code>ALERT_POLL_INTERVAL_SECS</code>, <code>ALERT_GITHUB/AZURE/JIRA_ENABLED</code></td></tr>
+<tr><td>Vacation Mode</td><td><code>VACATION_CONFIDENCE_THRESHOLD=0.7</code>, <code>VACATION_AUTO_SUBMIT=true</code></td></tr>
+<tr><td>Work Sessions</td><td><code>EOD_REPORT_HOUR=18</code>, <code>EOD_REPORT_EMAIL</code>, <code>WORK_SESSION_AUTO_STOP_MINUTES</code></td></tr>
+<tr><td>Personalization</td><td><code>PERSONALIZATION_RAG_ENABLED=true</code>, <code>PERSONALIZATION_EMBED_MODEL</code>, <code>LEARNING_CRON_SCHEDULE</code></td></tr>
+<tr><td>GitLab Webhooks</td><td><code>GITLAB_PROJECT_IDS</code>, <code>DEVTRACK_WEBHOOK_PUBLIC_URL</code>, <code>WEBHOOK_GITLAB_SECRET</code></td></tr>
+<tr><td>Project Planning</td><td><code>NEWPROJECT_ENABLED=true</code>, <code>SPEC_REVIEW_BASE_URL</code></td></tr>
+</tbody>
+</table></div>
+
+<blockquote><p>Full variable reference with descriptions and examples: <a href="#CONFIGURATION" onclick="loadMarkdown('CONFIGURATION');return false;">docs/CONFIGURATION.md</a> (requires HTTP server — run <code>python3 -m http.server 8080</code> from project root).</p></blockquote>
+</div>`,
+
+  MULTI_REPO: `<div class="md-body">
+<h1>Multi-Repo Monitoring</h1>
+<p>By default DevTrack monitors a single repository (<code>DEVTRACK_WORKSPACE</code>). <strong>Multi-repo mode</strong> lets you monitor any number of repositories simultaneously, each routing to its own project management platform.</p>
+
+<h2>Setup</h2>
+<pre><code class="language-bash"># Create workspaces.yaml at PROJECT_ROOT (or copy the sample)
+cp workspaces.yaml.sample workspaces.yaml
+nano workspaces.yaml
+
+# Restart the daemon to pick up changes
+devtrack restart
+
+# Verify multi-repo mode is active
+devtrack status   # shows workspace_count: N</code></pre>
+
+<p>The daemon also hot-reloads on save — edit <code>workspaces.yaml</code> and DevTrack surgically restarts only the monitors that changed, without interrupting others.</p>
+
+<h2>workspaces.yaml Schema</h2>
+<pre><code class="language-yaml">version: "1"
+workspaces:
+  - name: "work-api"            # display name (required)
+    path: ~/work/api            # absolute or ~/ path to git repo (required)
+    pm_platform: azure          # routing target (required — see table below)
+    pm_project: ""              # optional: platform-specific project override
+    pm_milestone: 0             # optional: milestone number/ID for new issues
+    enabled: true               # false = pause without removing
+    ignore_branches:            # branches to skip (e.g. dependabot/*)
+      - "dependabot/*"
+    tags: [work]                # arbitrary labels for your own use</code></pre>
+
+<h2>pm_platform Values</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Value</th><th>Routes to</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><code>azure</code></td><td>Azure DevOps</td><td>Uses <code>AZURE_ORGANIZATION</code> / <code>AZURE_PROJECT</code> from <code>.env</code></td></tr>
+<tr><td><code>gitlab</code></td><td>GitLab</td><td>Uses <code>GITLAB_PROJECT_ID</code> from <code>.env</code> unless <code>pm_project</code> is set</td></tr>
+<tr><td><code>github</code></td><td>GitHub</td><td>Uses <code>GITHUB_OWNER</code> / <code>GITHUB_REPO</code> from <code>.env</code></td></tr>
+<tr><td><code>jira</code></td><td>Jira</td><td>Uses <code>JIRA_URL</code>, <code>JIRA_EMAIL</code>, <code>JIRA_API_TOKEN</code></td></tr>
+<tr><td><code>none</code></td><td>—</td><td>Monitoring active; PM sync disabled for this repo</td></tr>
+<tr><td>(empty)</td><td>Priority chain</td><td>Falls back to Azure → GitLab → GitHub (single-repo behavior)</td></tr>
+</tbody>
+</table></div>
+
+<h2>pm_project Field</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Platform</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>azure</code></td><td>Project name (overrides <code>AZURE_PROJECT</code>)</td></tr>
+<tr><td><code>gitlab</code></td><td>Numeric project ID (overrides <code>GITLAB_PROJECT_ID</code>)</td></tr>
+<tr><td><code>github</code></td><td>Ignored — owner/repo comes from <code>.env</code></td></tr>
+</tbody>
+</table></div>
+
+<h2>pm_milestone Field</h2>
+<p>Assigns newly created issues to a milestone. Leave at <code>0</code> or omit to create issues without a milestone.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Platform</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>github</code></td><td>GitHub milestone number (integer from milestone URL: <code>.../milestones/N</code>)</td></tr>
+<tr><td><code>gitlab</code></td><td>GitLab milestone ID (integer from <code>GET /projects/:id/milestones</code>)</td></tr>
+<tr><td><code>azure</code></td><td>Ignored</td></tr>
+</tbody>
+</table></div>
+
+<h2>Full Example</h2>
+<pre><code class="language-yaml">version: "1"
+
+workspaces:
+  # Work project — Azure DevOps, override project name
+  - name: "core-api"
+    path: /Users/dev/work/core-api
+    pm_platform: azure
+    pm_project: CoreServices
+    enabled: true
+    ignore_branches: ["dependabot/*", "renovate/*"]
+    tags: [work, backend]
+
+  # Personal project — GitHub, assign new issues to sprint milestone
+  - name: "my-oss-lib"
+    path: /Users/dev/oss/my-lib
+    pm_platform: github
+    pm_milestone: 3
+    enabled: true
+    tags: [oss]
+
+  # Monitored but no PM sync
+  - name: "scratch"
+    path: /Users/dev/scratch
+    pm_platform: none
+    enabled: true
+
+  # Paused workspace (kept for history)
+  - name: "old-project"
+    path: /Users/dev/old/project
+    pm_platform: azure
+    enabled: false</code></pre>
+
+<h2>How Routing Works</h2>
+<ol>
+<li>Go daemon detects a commit in a workspace path</li>
+<li>The trigger message includes <code>pm_platform</code>, <code>pm_project</code>, <code>pm_milestone</code>, and <code>workspace_name</code></li>
+<li>Python bridge reads <code>pm_platform</code> and calls only that platform's sync handler</li>
+<li>Azure, GitHub, GitLab, and Jira are all skipped for platform values that don't match</li>
+</ol>
+<p>When <code>pm_platform</code> is empty or <code>workspaces.yaml</code> is absent, the legacy priority chain runs: Azure → GitLab → GitHub, stopping at the first match.</p>
+
+<h2>TUI Dashboard</h2>
+<p>The <strong>Workspaces</strong> tab in <code>devtrack tui</code> shows a live table of all configured workspaces with their PM platform, enabled status, and last-seen commit time.</p>
+
+<h2>Troubleshooting</h2>
+<ul>
+<li><strong>Single-repo mode despite workspaces.yaml</strong> — confirm the file is at <code>\$PROJECT_ROOT/workspaces.yaml</code> (or <code>WORKSPACES_FILE</code> is set); check for YAML parse errors: <code>python3 -c "import yaml; yaml.safe_load(open('workspaces.yaml'))"</code></li>
+<li><strong>Workspace not monitored</strong> — confirm <code>enabled: true</code> and that the path is a valid git repo</li>
+<li><strong>Commits routing to wrong platform</strong> — confirm <code>pm_platform</code> matches one of <code>azure | gitlab | github | jira | none</code>; an unknown value falls back to the priority chain</li>
+<li><strong>pm_project not applied for GitLab</strong> — must be a numeric string (e.g., <code>"12345"</code>); strings that fail int conversion are silently ignored</li>
+</ul>
+</div>`,
 };
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -929,32 +1581,47 @@ function renderHome() {
   const content = document.getElementById('content');
   content.innerHTML = `
     <div class="home-hero">
-      <div class="home-badge">Local-First · v1.0</div>
+      <div class="home-badge">Local-First · v1.1</div>
       <h1 class="home-title">Developer automation<br>that handles the <span>overhead</span>.</h1>
       <p class="home-sub">DevTrack monitors your Git activity, prompts for work updates, routes them through AI, and keeps your project management systems in sync — all running locally on your machine.</p>
     </div>
 
     <div class="home-grid">
       ${[
-        { id:'GETTING_STARTED', icon:'🚀', title:'Getting Started',   desc:'New to DevTrack? Start here — concepts, setup, and first run.' },
-        { id:'QUICK_START',     icon:'⚡', title:'Quick Start',       desc:'Get running in 5 minutes with the minimal setup guide.' },
-        { id:'CLI_REFERENCE',   icon:'⌨️', title:'CLI Reference',     desc:'All devtrack commands with flags and examples.' },
-        { id:'GIT_FEATURES',    icon:'🔀', title:'Git Features',      desc:'Shell integration, AI commits, and conflict resolution. Add <code>export PATH</code> and <code>eval "$(devtrack shell-init)"</code> to <code>~/.zshrc</code> once. Type <code>git commit</code> — DevTrack intercepts it, prompts for time spent, then opens an interactive split-pane ticket picker so you can link the commit to an issue instantly. <code>git add</code> with no args stages everything. After commit, one keypress pushes to origin. Press <kbd>E</kbd> in the refinement loop for a richer AI message. <code>devtrack start</code> auto-enables git interception for all workspaces — no manual <code>enable-git</code> needed. Bypass with <code>GIT_NO_DEVTRACK=1</code>.' },
-        { id:'GIT_SAGE',        icon:'🤖', title:'git-sage Agent',    desc:'Autonomous local LLM agent for complex git operations.' },
-        { id:'AZURE_DEVOPS',    icon:'🔷', title:'Azure DevOps',      desc:'Sync work items, auto-comment, and transition states.' },
-        { id:'GITLAB',          icon:'🦊', title:'GitLab',            desc:'Full CLI and Telegram access; inbound webhooks; issue enrichment on create.' },
-        { id:'GITHUB',          icon:'🐙', title:'GitHub',            desc:'Full CLI parity, bidirectional sync, inbound webhooks, Telegram commands, and per-workspace milestone assignment via <code>pm_milestone</code> in workspaces.yaml.' },
-        { id:'TELEGRAM_BOT',    icon:'📱', title:'Telegram Bot',      desc:'Control DevTrack remotely from your phone.' },
-        { id:'SLACK_BOT',       icon:'💬', title:'Slack Bot',          desc:'Socket Mode slash command <code>/devtrack &lt;cmd&gt;</code> — no public URL required. Supports all work-session and PM commands plus proactive work-reminder nudges.' },
-        { id:'PM_AGENT',        icon:'🗂️', title:'PM Agent',          desc:'AI decomposes problems into Epic → Story → Task hierarchies.' },
+        // ── Get Started ────────────────────────────────────────────────────────
+        { id:'WHATS_NEW',        icon:'🎉', title:"What's New",         desc:'Cloud Mode, TUI Dashboard, GitLab Webhook Auto-Registration, Alert SQLite Dual-Write, and all v1.0 features.' },
+        { id:'GETTING_STARTED',  icon:'🚀', title:'Getting Started',    desc:'New to DevTrack? Start here — concepts, setup, and first run.' },
+        { id:'QUICK_START',      icon:'⚡', title:'Quick Start',        desc:'Get running in 5 minutes with the minimal setup guide.' },
+        // ── Reference ─────────────────────────────────────────────────────────
+        { id:'CLI_REFERENCE',    icon:'⌨️', title:'CLI Reference',      desc:'All devtrack commands with flags and examples.' },
+        { id:'CONFIGURATION',    icon:'🔧', title:'Configuration',      desc:'All .env variables with defaults, required vars, timeout settings, server modes, TLS, LLM providers, and feature flags.' },
+        { id:'MULTI_REPO',       icon:'🗃️', title:'Multi-Repo Setup',   desc:'Monitor multiple git repos simultaneously, each routing to its own PM platform. Configure in <code>workspaces.yaml</code> with <code>pm_platform</code>, <code>pm_project</code>, and <code>pm_milestone</code> per workspace. Hot-reloads on save.' },
+        // ── Git & Shell ────────────────────────────────────────────────────────
+        { id:'GIT_FEATURES',    icon:'🔀', title:'Git Features',        desc:'Shell integration, AI commits, and conflict resolution. Add <code>eval "$(devtrack shell-init)"</code> to <code>~/.zshrc</code> once. Type <code>git commit</code> — DevTrack intercepts, prompts for time spent, opens the ticket picker, then pushes on one keypress. <code>devtrack start</code> auto-enables git for all workspaces.' },
+        { id:'GIT_SAGE',        icon:'🤖', title:'git-sage Agent',      desc:'Autonomous local LLM agent for complex git operations.' },
+        // ── Integrations ──────────────────────────────────────────────────────
+        { id:'AZURE_DEVOPS',    icon:'🔷', title:'Azure DevOps',        desc:'Sync work items, auto-comment, and transition states.' },
+        { id:'GITLAB',          icon:'🦊', title:'GitLab',              desc:'Full CLI and Telegram access; inbound webhooks; issue enrichment on create.' },
+        { id:'GITHUB',          icon:'🐙', title:'GitHub',              desc:'Full CLI parity, bidirectional sync, inbound webhooks, Telegram commands, and per-workspace milestone assignment via <code>pm_milestone</code> in workspaces.yaml.' },
+        { id:'TELEGRAM_BOT',    icon:'📱', title:'Telegram Bot',        desc:'Control DevTrack remotely from your phone.' },
+        { id:'SLACK_BOT',       icon:'💬', title:'Slack Bot',           desc:'Socket Mode slash command <code>/devtrack &lt;cmd&gt;</code> — no public URL required. Supports all work-session and PM commands plus proactive work-reminder nudges.' },
+        { id:'PM_AGENT',        icon:'🗂️', title:'PM Agent',            desc:'AI decomposes problems into Epic → Story → Task hierarchies.' },
         { id:'PROJECT_PLANNING',icon:'📋', title:'AI Project Planning', desc:'<code>/newproject</code> in Telegram: describe requirements, pick team from live roster, AI auto-fetches workloads, generates a full YAML spec with sprints/stories/risks, emails it to the PM for review, and creates everything in the PM tool on approval.' },
-        { id:'TICKET_ALERTER',  icon:'🔔', title:'Ticket Alerter',    desc:'Background poller for GitHub, Azure DevOps, and Jira — delivers OS notifications and terminal output when you\'re assigned, mentioned, or a status changes. <code>devtrack alerts</code> to view, <code>devtrack alerts --clear</code> to dismiss.' },
-        { id:'WORK_TRACKER',   icon:'⏱️', title:'Work Tracker',      desc:'Automatic session-based time tracking. <code>devtrack work start AUTH-42</code> begins a session; every commit is auto-attached. <code>devtrack work stop</code> records the duration. At end of day, <code>devtrack work report</code> produces an AI narrative summary and optional email.' },
-        { id:'PERSONALIZATION', icon:'🎨', title:'Personalization',   desc:'"Talk Like You" — AI that learns your communication style.' },
-        { id:'AUTOSTART', icon:'⚙️', title:'Auto-Start',   desc:'Auto-start DevTrack at login — OS-aware. Run <code>devtrack autostart-install</code>: launchd LaunchAgent on macOS, systemd user service on Linux/WSL with systemd, or a shell profile block on WSL without systemd. Uninstall with <code>devtrack autostart-uninstall</code>.' },
-        { id:'SERVER_TUI',    icon:'🖥️', title:'Server TUI',     desc:'Textual process monitor for the Python backend. Shows all server processes (webhook server, Telegram bot, Slack bot, alert poller) with live CPU/MEM/status and a health bar. Navigate with ↑↓, restart with r, toggle logs with l.' },
-        { id:'ADMIN_CONSOLE', icon:'⚙️', title:'Admin Console',  desc:'Web UI at <code>http://localhost:8090/admin/</code> — manage users, API keys, review server health, LLM config, integration credentials, and a full audit log. Run with <code>devtrack admin-start</code>.' },
-        { id:'TROUBLESHOOTING', icon:'🔧', title:'Troubleshooting',   desc:'Common problems, error messages, and solutions.' },
+        { id:'TICKET_ALERTER',  icon:'🔔', title:'Ticket Alerter',      desc:'Background poller for GitHub, Azure DevOps, and Jira — delivers OS notifications and terminal output when you\'re assigned, mentioned, or a status changes. <code>devtrack alerts</code> to view, <code>devtrack alerts --clear</code> to dismiss.' },
+        { id:'WORK_TRACKER',    icon:'⏱️', title:'Work Tracker',        desc:'Automatic session-based time tracking. <code>devtrack work start AUTH-42</code> begins a session; every commit is auto-attached. <code>devtrack work stop</code> records the duration. At end of day, <code>devtrack work report</code> produces an AI narrative summary and optional email.' },
+        { id:'VACATION_MODE',   icon:'✈️', title:'Vacation Mode',       desc:'Fully autonomous mode while you\'re away. LLM generates work updates from recent commits, scores its own confidence, and posts to the PM tool when confident enough. Enable with <code>devtrack vacation on --until YYYY-MM-DD</code>.' },
+        // ── AI & Personalization ──────────────────────────────────────────────
+        { id:'LLM_GUIDE',       icon:'🧠', title:'LLM Setup',           desc:'Configure local (Ollama, LM Studio) or cloud (OpenAI, Anthropic, Groq) AI providers. Automatic fallback chain. Per-use-case temperature and token limits.' },
+        { id:'PERSONALIZATION', icon:'🎨', title:'Personalization',     desc:'"Talk Like You" — AI that learns your communication style from Teams messages and writes in your voice using RAG-powered few-shot examples.' },
+        // ── System Integration ────────────────────────────────────────────────
+        { id:'AUTOSTART',       icon:'🔌', title:'Auto-Start',          desc:'Auto-start DevTrack at login — OS-aware. Run <code>devtrack autostart-install</code>: launchd LaunchAgent on macOS, systemd user service on Linux/WSL with systemd, or a shell profile block on WSL without systemd.' },
+        { id:'SERVER_TUI',      icon:'🖥️', title:'Server TUI',          desc:'Textual process monitor for the Python backend. Shows all server processes with live CPU/MEM/status and a health bar. Navigate with ↑↓, restart with r, toggle logs with l.' },
+        { id:'ADMIN_CONSOLE',   icon:'🛡️', title:'Admin Console',       desc:'Web UI at <code>http://localhost:8090/admin/</code> — manage users, API keys, review server health, LLM config, integration credentials, and a full audit log. Run with <code>devtrack admin-start</code>.' },
+        { id:'TELEMETRY',       icon:'📊', title:'Telemetry',           desc:'Optional usage tracking: download counts, command frequencies, version adoption. Fully transparent, no PII. Designed for a real-time admin dashboard via Server-Sent Events. See the plan in <code>docs/TELEMETRY_PLAN.md</code>.' },
+        { id:'CLOUD_MODE',      icon:'☁️', title:'Cloud Mode',          desc:'Connect your local daemon to a remote managed backend. <code>devtrack cloud login --url URL --key KEY</code> saves credentials to <code>~/.devtrack/cloud.json</code>. Bypasses cert-pinning for CA-signed remote certs.' },
+        { id:'TUI_DASHBOARD',   icon:'📟', title:'TUI Dashboard',       desc:'Bubble Tea full-screen dashboard. 4 tabs: Overview (uptime, latency, counts), Activity (last 30 triggers), Workspaces (all repos + PM platform), Alerts (last 30 notifications). Tab/1–4 to switch, <code>r</code> refresh, <code>q</code> quit.' },
+        // ── Advanced ──────────────────────────────────────────────────────────
+        { id:'TROUBLESHOOTING', icon:'🔍', title:'Troubleshooting',     desc:'Common problems, error messages, and solutions.' },
       ].map(c => `
         <a class="home-card" href="#${c.id}" onclick="navigate('${c.id}');return false;">
           <div class="home-card-icon">${c.icon}</div>
@@ -982,8 +1649,8 @@ devtrack start       # spawns Python backend automatically (managed mode)
 devtrack status
 
 # Optional: type 'git commit' instead of 'devtrack git commit'
-echo 'eval "$(devtrack shell-init)"' >> ~/.zshrc && source ~/.zshrc
-devtrack enable-git   # opt this repo in</code></pre>
+# devtrack start auto-enables git interception for all workspaces — no extra step needed
+echo 'eval "$(devtrack shell-init)"' >> ~/.zshrc && source ~/.zshrc</code></pre>
       <p style="margin:.75rem 0 .25rem;font-size:.9rem;opacity:.8;">Option 2 — Docker (Python backend in a container)</p>
       <pre><code class="language-bash">git clone https://github.com/sraj0501/automation_tools.git
 cd automation_tools
@@ -1010,9 +1677,9 @@ cd automation_tools
         { n:'OS-Aware Auto-Start', d:'Run <code>devtrack autostart-install</code> — DevTrack detects your OS and picks the right mechanism: launchd LaunchAgent on macOS, systemd user service on Linux/WSL with systemd, or a shell profile block on WSL without systemd. The daemon starts automatically each time you log in — no cron, no manual <code>devtrack start</code> after reboot.' },
         { n:'Offline-First',       d:'Queues everything and syncs when connectivity returns.' },
         { n:'Remote Control',      d:'Full Telegram bot: status, logs, create items, trigger updates. Plus a Slack bot (<code>/devtrack &lt;cmd&gt;</code>) via Socket Mode — no public URL required.' },
-        { n:'Ticket Alerter',      d:'Background poller for GitHub, Azure DevOps, and Jira. Delivers macOS OS notifications and terminal output when tickets are assigned, commented on, or change state. <code>devtrack alerts</code> to view unread. Configurable per-source via <code>ALERT_*</code> env vars.' },
         { n:'AI Project Planning', d:'<code>/newproject</code> in Telegram — describe a project in plain text, pick developers from the live team roster, and let AI auto-fetch each person\'s workload from the PM tool. Generates a full YAML spec (features, stories, sprints, capacity analysis, skill-gap risks), emails it to the PM with an approve/edit link, and creates everything in Azure/GitHub/GitLab on approval.' },
         { n:'Work Session Tracking', d:'<code>devtrack work start [ticket]</code> begins a session timer. Every git commit while the session is active is auto-attached — no manual time entry. <code>devtrack work stop</code> records the auto-measured duration; <code>devtrack work adjust 90</code> overrides it (raw time kept for audit). <code>devtrack work report</code> generates an AI EOD summary with achievements, in-progress items, and what\'s pending tomorrow, plus optional email via MS Graph.' },
+        { n:'Vacation Mode',         d:'<code>devtrack vacation on --until 2026-04-07</code> enables fully autonomous operation. While active, timer triggers are handled by the LLM: it reads recent commits, writes a 1-3 sentence work update, scores its own confidence, and posts to the PM tool when above the threshold (default 0.7). Use <code>--no-submit</code> to log updates without posting. Toggle via Telegram <code>/vacation</code> or Slack <code>/devtrack vacation</code>.' },
       ].map((f, i) => `
         <div class="feature-item">
           <div class="feature-dot">${i+1}</div>

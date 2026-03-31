@@ -159,8 +159,17 @@ func (im *IntegratedMonitor) Stop() {
 	log.Println("✓ Monitoring stopped")
 }
 
+// workspaceKey returns a string that uniquely identifies a workspace's config.
+// If the key changes, the monitor must be restarted.
+func workspaceKey(ws WorkspaceConfig) string {
+	return fmt.Sprintf("%s|%s|%s|%s|%s|%s|%d",
+		ws.Name, ws.Path, ws.PMPlatform, ws.PMProject,
+		ws.PMAssignee, ws.PMIterationPath, ws.PMMilestone)
+}
+
 // ReloadWorkspaces hot-reloads the workspace configuration.
-// Called from the SIGHUP handler in daemon.go after the Go config is updated.
+// Diff-based: only restarts monitors for workspaces that were added, removed, or changed.
+// Called from the SIGHUP handler in daemon.go and from the workspaces.yaml file watcher.
 func (im *IntegratedMonitor) ReloadWorkspaces() {
 	newCfg, err := LoadWorkspacesConfig()
 	if err != nil {
@@ -172,20 +181,48 @@ func (im *IntegratedMonitor) ReloadWorkspaces() {
 		return
 	}
 
-	for _, ws := range im.workspaceMonitors {
-		if ws.gitMonitor != nil {
-			ws.gitMonitor.Stop()
+	// Index current monitors by name for fast lookup
+	oldByName := make(map[string]*WorkspaceMonitor, len(im.workspaceMonitors))
+	for _, wm := range im.workspaceMonitors {
+		oldByName[wm.workspaceName] = wm
+	}
+
+	// Index desired workspaces by name
+	desired := newCfg.GetEnabledWorkspaces()
+	desiredByName := make(map[string]WorkspaceConfig, len(desired))
+	for _, ws := range desired {
+		desiredByName[ws.Name] = ws
+	}
+
+	// Stop monitors for removed or changed workspaces
+	for name, wm := range oldByName {
+		ws, stillWanted := desiredByName[name]
+		if !stillWanted || workspaceKey(ws) != fmt.Sprintf("%s|%s|%s|%s|%s|%s|%d",
+			wm.workspaceName, wm.gitMonitor.repoPath, wm.pmPlatform, wm.pmProject,
+			wm.pmAssignee, wm.pmIterationPath, wm.pmMilestone) {
+			log.Printf("Stopping monitor for workspace %q", name)
+			wm.gitMonitor.Stop()
+			delete(oldByName, name)
 		}
 	}
 
+	// Build new monitor list: keep unchanged, add new
 	var newMonitors []*WorkspaceMonitor
-	for _, ws := range newCfg.GetEnabledWorkspaces() {
+	added, kept := 0, 0
+	for _, ws := range desired {
+		if existing, ok := oldByName[ws.Name]; ok {
+			// Unchanged — reuse without restarting
+			newMonitors = append(newMonitors, existing)
+			kept++
+			continue
+		}
+		// New or changed workspace — create and start a fresh monitor
 		gm, err := NewGitMonitor(ws.Path)
 		if err != nil {
 			log.Printf("Warning: skipping workspace %q (%s) on reload: %v", ws.Name, ws.Path, err)
 			continue
 		}
-		newMonitors = append(newMonitors, &WorkspaceMonitor{
+		wm := &WorkspaceMonitor{
 			gitMonitor:      gm,
 			workspaceName:   ws.Name,
 			pmPlatform:      ws.PMPlatform,
@@ -194,19 +231,20 @@ func (im *IntegratedMonitor) ReloadWorkspaces() {
 			pmIterationPath: ws.PMIterationPath,
 			pmAreaPath:      ws.PMAreaPath,
 			pmMilestone:     ws.PMMilestone,
-		})
-	}
-	im.workspaceMonitors = newMonitors
-
-	for _, wsMon := range im.workspaceMonitors {
-		wsCopy := wsMon
-		if err := wsCopy.gitMonitor.Start(func(commit CommitInfo) {
-			im.handleCommitForWorkspace(commit, wsCopy)
-		}); err != nil {
-			log.Printf("Warning: failed to start git monitor for %q on reload: %v", wsCopy.workspaceName, err)
 		}
+		wmCopy := wm
+		if err := wmCopy.gitMonitor.Start(func(commit CommitInfo) {
+			im.handleCommitForWorkspace(commit, wmCopy)
+		}); err != nil {
+			log.Printf("Warning: failed to start git monitor for %q on reload: %v", ws.Name, err)
+			continue
+		}
+		newMonitors = append(newMonitors, wm)
+		added++
 	}
-	log.Printf("Workspace reload complete: %d workspace(s) active", len(im.workspaceMonitors))
+
+	im.workspaceMonitors = newMonitors
+	log.Printf("Workspace reload complete: %d active (%d kept, %d added)", len(newMonitors), kept, added)
 }
 
 // Helper functions to extract values from map[string]interface{}

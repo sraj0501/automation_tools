@@ -245,6 +245,30 @@ class TriggerProcessor:
 
         logger.info(f"[HTTP timer] trigger #{trigger_count} (every {interval_mins}m, workspace={workspace_name})")
 
+        # Check vacation mode — auto-respond instead of nudging
+        try:
+            from backend.vacation.auto_responder import is_vacation_active, VacationAutoResponder
+            if is_vacation_active():
+                logger.info("[vacation mode] active — auto-generating work update")
+                import asyncio
+                responder = VacationAutoResponder()
+                result = asyncio.run(responder.handle(data))
+                logger.info(
+                    "[vacation mode] confidence=%.2f submitted=%s reason=%s",
+                    result.get("confidence", 0),
+                    result.get("submitted"),
+                    result.get("skipped_reason"),
+                )
+                return {
+                    "status": "vacation_auto",
+                    "trigger_count": trigger_count,
+                    "confidence": result.get("confidence", 0),
+                    "submitted": result.get("submitted", False),
+                    "skipped_reason": result.get("skipped_reason"),
+                }
+        except Exception as e:
+            logger.debug(f"Vacation auto-responder error (non-fatal): {e}")
+
         # Check active work session
         active_session = None
         try:
@@ -465,6 +489,13 @@ async def handle_jira_webhook(request: Request) -> JSONResponse:
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok", "service": "devtrack-webhooks"}
+
+
+@app.get("/version")
+async def get_version() -> dict:
+    """Return server version — used by 'devtrack cloud status'."""
+    v = getattr(app, "version", "1.0")
+    return {"version": v, "service": "devtrack-webhooks"}
 
 
 # ---------------------------------------------------------------------------
@@ -767,6 +798,41 @@ async def on_startup() -> None:
     logger.info("DevTrack Webhook + Trigger Server starting (CS-1 HTTP mode)")
     # Pre-warm TriggerProcessor so the first trigger request doesn't pay init cost
     await asyncio.to_thread(TriggerProcessor.get)
+    # Auto-register GitLab webhooks for configured projects
+    await _ensure_gitlab_webhooks()
+
+
+async def _ensure_gitlab_webhooks() -> None:
+    """Register GitLab webhooks for all project IDs listed in GITLAB_PROJECT_IDS."""
+    try:
+        from backend import config as _cfg
+        project_ids_raw = _cfg.get("GITLAB_PROJECT_IDS", "")
+        gitlab_pat = _cfg.get("GITLAB_PAT", "")
+        webhook_url = _cfg.get("DEVTRACK_WEBHOOK_PUBLIC_URL", "")
+        webhook_secret = _cfg.get("WEBHOOK_GITLAB_SECRET", "")
+
+        if not gitlab_pat or not project_ids_raw or not webhook_url:
+            logger.debug("GitLab webhook auto-registration skipped (GITLAB_PAT, GITLAB_PROJECT_IDS, or DEVTRACK_WEBHOOK_PUBLIC_URL not set)")
+            return
+
+        from backend.gitlab.client import GitLabClient
+        client = GitLabClient()
+        if not client.is_configured():
+            return
+
+        full_url = webhook_url.rstrip("/") + "/webhooks/gitlab"
+        project_ids = [p.strip() for p in project_ids_raw.split(",") if p.strip()]
+        for pid_str in project_ids:
+            try:
+                pid = int(pid_str)
+                await client.ensure_webhook_current(pid, full_url, webhook_secret)
+            except ValueError:
+                logger.warning(f"GitLab webhook auto-reg: invalid project ID '{pid_str}'")
+            except Exception as e:
+                logger.warning(f"GitLab webhook auto-reg: project {pid_str} failed: {e}")
+        await client.close()
+    except Exception as e:
+        logger.debug(f"GitLab webhook auto-registration error: {e}")
 
 
 @app.on_event("shutdown")

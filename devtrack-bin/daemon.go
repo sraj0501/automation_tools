@@ -111,6 +111,9 @@ func (d *Daemon) Start() error {
 		return fmt.Errorf("failed to start monitoring: %w", err)
 	}
 
+	// Watch workspaces.yaml for changes — triggers hot-reload automatically
+	d.startWorkspacesFileWatcher()
+
 	// Generate TLS cert before starting any Python subprocess
 	if IsTLSEnabled() {
 		if err := d.generateTLSCert(); err != nil {
@@ -745,6 +748,63 @@ func (d *Daemon) startSlackBot() error {
 	d.slackBot = cmd
 	log.Printf("✓ Slack bot started (PID: %d)", cmd.Process.Pid)
 	return nil
+}
+
+// startWorkspacesFileWatcher watches workspaces.yaml for changes and triggers
+// a hot-reload automatically — no CLI command or SIGHUP needed.
+func (d *Daemon) startWorkspacesFileWatcher() {
+	wsFile := GetWorkspacesFilePath()
+	if _, err := os.Stat(wsFile); os.IsNotExist(err) {
+		log.Println("workspaces.yaml not found — file watcher skipped (single-repo mode)")
+		return
+	}
+
+	watcher, err := newFsnotifyWatcher()
+	if err != nil {
+		log.Printf("Warning: could not start workspaces file watcher: %v", err)
+		return
+	}
+	if err := watcher.Add(wsFile); err != nil {
+		watcher.Close()
+		log.Printf("Warning: could not watch %s: %v", wsFile, err)
+		return
+	}
+	log.Printf("Watching %s for changes", wsFile)
+
+	go func() {
+		defer watcher.Close()
+		var debounce <-chan time.Time
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				if event.Op&(fsnotifyWrite|fsnotifyCreate) != 0 {
+					// Debounce: wait 500 ms for rapid successive writes to settle
+					debounce = time.After(500 * time.Millisecond)
+				}
+			case <-debounce:
+				log.Println("workspaces.yaml changed — triggering hot-reload")
+				if d.monitor != nil {
+					d.monitor.ReloadWorkspaces()
+					go func() {
+						if err := NewHTTPTriggerClient().SendWorkspaceReload(); err != nil {
+							log.Printf("Could not notify Python of workspace reload: %v", err)
+						}
+					}()
+				}
+				debounce = nil
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				log.Printf("Workspace file watcher error: %v", err)
+			case <-d.ctx.Done():
+				return
+			}
+		}
+	}()
 }
 
 // KillDaemon forcefully kills a running daemon process

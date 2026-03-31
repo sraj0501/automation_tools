@@ -22,7 +22,7 @@ func NewCLI() (*CLI, error) {
 	// For status/help commands, we don't need a full daemon
 	if len(os.Args) > 1 {
 		cmd := os.Args[1]
-		if cmd == "help" || cmd == "version" || cmd == "commit-queue" || cmd == "commits" || cmd == "queue" || cmd == "telegram-status" || cmd == "azure-check" || cmd == "gitlab-check" || cmd == "github-check" || cmd == "workspace" || cmd == "shell-init" || cmd == "is-workspace" || cmd == "enable-git" || cmd == "disable-git" || cmd == "launchd-install" || cmd == "launchd-uninstall" || cmd == "autostart-install" || cmd == "autostart-uninstall" || cmd == "autostart-status" || cmd == "alerts" {
+		if cmd == "help" || cmd == "version" || cmd == "commit-queue" || cmd == "commits" || cmd == "queue" || cmd == "telegram-status" || cmd == "azure-check" || cmd == "gitlab-check" || cmd == "github-check" || cmd == "workspace" || cmd == "shell-init" || cmd == "is-workspace" || cmd == "enable-git" || cmd == "disable-git" || cmd == "launchd-install" || cmd == "launchd-uninstall" || cmd == "autostart-install" || cmd == "autostart-uninstall" || cmd == "autostart-status" || cmd == "alerts" || cmd == "cloud" || cmd == "tui" {
 			return &CLI{}, nil
 		}
 	}
@@ -198,12 +198,18 @@ func (cli *CLI) Execute() error {
 		return cli.handleAutostartStatus()
 	case "alerts":
 		return cli.handleAlerts()
+	case "vacation":
+		return cli.handleVacation()
 	case "work":
 		return cli.handleWork()
 	case "server-tui":
 		return cli.handleServerTUI()
 	case "admin-start":
 		return cli.handleAdminStart()
+	case "cloud":
+		return cli.handleCloud()
+	case "tui":
+		return cli.handleTUI()
 	case "help":
 		cli.printUsage()
 		return nil
@@ -1473,6 +1479,35 @@ func (cli *CLI) handleGitHubView() error {
 		return err
 	}
 	return nil
+}
+
+// handleVacation dispatches vacation mode subcommands.
+//
+// Usage:
+//
+//	devtrack vacation on [--until YYYY-MM-DD] [--threshold 0.7] [--no-submit]
+//	devtrack vacation off
+//	devtrack vacation status
+func (cli *CLI) handleVacation() error {
+	vc, err := NewVacationCommands()
+	if err != nil {
+		return err
+	}
+	args := os.Args
+	sub := ""
+	if len(args) > 2 {
+		sub = args[2]
+	}
+	switch sub {
+	case "on":
+		return vc.On(args[3:])
+	case "off":
+		return vc.Off()
+	case "status", "":
+		return vc.Status()
+	default:
+		return fmt.Errorf("unknown vacation subcommand %q — use: on | off | status", sub)
+	}
 }
 
 // handleAlerts shows ticket alert notifications or marks them as read.

@@ -140,6 +140,19 @@ type WorkSessionRecord struct {
 	CreatedAt       string
 }
 
+// NotificationRecord represents a ticket alert notification
+type NotificationRecord struct {
+	ID        int64
+	Source    string    // "github", "azure", "jira"
+	EventType string    // "assigned", "comment", "status_change", "review_requested"
+	TicketID  string
+	Title     string
+	Body      string
+	URL       string
+	Read      bool
+	CreatedAt time.Time
+}
+
 // NewDatabase creates a new database connection
 func NewDatabase() (*Database, error) {
 	// Get database path
@@ -345,6 +358,31 @@ func (d *Database) initSchema() error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_work_sessions_started ON work_sessions(started_at);
 	CREATE INDEX IF NOT EXISTS idx_work_sessions_ended ON work_sessions(ended_at);
+
+	CREATE TABLE IF NOT EXISTS vacation_mode (
+		id                   INTEGER PRIMARY KEY CHECK (id = 1),
+		enabled              INTEGER NOT NULL DEFAULT 0,
+		enabled_at           TEXT,
+		until                TEXT,
+		confidence_threshold REAL    NOT NULL DEFAULT 0.7,
+		auto_submit          INTEGER NOT NULL DEFAULT 1
+	);
+	INSERT OR IGNORE INTO vacation_mode (id, enabled) VALUES (1, 0);
+
+	-- Notifications table: ticket alert notifications (dual-written by Python alert_poller)
+	CREATE TABLE IF NOT EXISTS notifications (
+		id         INTEGER PRIMARY KEY AUTOINCREMENT,
+		source     TEXT NOT NULL,
+		event_type TEXT NOT NULL,
+		ticket_id  TEXT NOT NULL,
+		title      TEXT NOT NULL,
+		body       TEXT DEFAULT '',
+		url        TEXT DEFAULT '',
+		read       INTEGER NOT NULL DEFAULT 0,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE INDEX IF NOT EXISTS idx_notifications_read    ON notifications(read);
+	CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at);
 	`
 
 	_, err := d.db.Exec(schema)
@@ -1556,4 +1594,125 @@ func buildJSONStringArray(items []string) string {
 	}
 	out += "]"
 	return out
+}
+
+// VacationState holds the current vacation mode configuration.
+type VacationState struct {
+	Enabled             bool
+	EnabledAt           string
+	Until               string // empty = indefinite
+	ConfidenceThreshold float64
+	AutoSubmit          bool
+}
+
+// GetVacationState returns the current vacation mode state.
+func (d *Database) GetVacationState() (*VacationState, error) {
+	row := d.db.QueryRow(`SELECT enabled, enabled_at, until, confidence_threshold, auto_submit FROM vacation_mode WHERE id = 1`)
+	var (
+		enabled    int
+		enabledAt  string
+		until      string
+		threshold  float64
+		autoSubmit int
+	)
+	if err := row.Scan(&enabled, &enabledAt, &until, &threshold, &autoSubmit); err != nil {
+		return nil, err
+	}
+	return &VacationState{
+		Enabled:             enabled == 1,
+		EnabledAt:           enabledAt,
+		Until:               until,
+		ConfidenceThreshold: threshold,
+		AutoSubmit:          autoSubmit == 1,
+	}, nil
+}
+
+// SetVacationMode enables or disables vacation mode.
+func (d *Database) SetVacationMode(enabled bool, until string, threshold float64, autoSubmit bool) error {
+	enabledAt := ""
+	if enabled {
+		enabledAt = time.Now().UTC().Format(time.RFC3339)
+	}
+	autoSubmitInt := 0
+	if autoSubmit {
+		autoSubmitInt = 1
+	}
+	enabledInt := 0
+	if enabled {
+		enabledInt = 1
+	}
+	_, err := d.db.Exec(`
+		UPDATE vacation_mode
+		SET enabled=?, enabled_at=?, until=?, confidence_threshold=?, auto_submit=?
+		WHERE id=1`,
+		enabledInt, enabledAt, until, threshold, autoSubmitInt)
+	return err
+}
+
+// CountTriggersToday returns commit and timer trigger counts for today.
+func (d *Database) CountTriggersToday() (commits int, timers int) {
+	today := time.Now().Format("2006-01-02")
+	d.db.QueryRow(`SELECT COUNT(*) FROM triggers WHERE trigger_type='commit' AND date(timestamp)=?`, today).Scan(&commits)
+	d.db.QueryRow(`SELECT COUNT(*) FROM triggers WHERE trigger_type='timer'  AND date(timestamp)=?`, today).Scan(&timers)
+	return
+}
+
+// GetUnreadNotifications returns the N most recent unread notifications.
+func (d *Database) GetUnreadNotifications(limit int) ([]NotificationRecord, error) {
+	rows, err := d.db.Query(`
+		SELECT id, source, event_type, ticket_id, title,
+		       COALESCE(body,''), COALESCE(url,''), read, created_at
+		FROM notifications WHERE read=0
+		ORDER BY created_at DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanNotifications(rows)
+}
+
+// GetAllNotifications returns the N most recent notifications (read + unread).
+func (d *Database) GetAllNotifications(limit int) ([]NotificationRecord, error) {
+	rows, err := d.db.Query(`
+		SELECT id, source, event_type, ticket_id, title,
+		       COALESCE(body,''), COALESCE(url,''), read, created_at
+		FROM notifications
+		ORDER BY created_at DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanNotifications(rows)
+}
+
+// InsertNotification inserts a notification (duplicate ticket_id+event_type+title are ignored).
+func (d *Database) InsertNotification(r NotificationRecord) error {
+	_, err := d.db.Exec(`
+		INSERT OR IGNORE INTO notifications (source, event_type, ticket_id, title, body, url)
+		VALUES (?,?,?,?,?,?)`,
+		r.Source, r.EventType, r.TicketID, r.Title, r.Body, r.URL)
+	return err
+}
+
+// MarkAllNotificationsRead marks every unread notification as read.
+func (d *Database) MarkAllNotificationsRead() error {
+	_, err := d.db.Exec(`UPDATE notifications SET read=1 WHERE read=0`)
+	return err
+}
+
+func scanNotifications(rows interface{ Next() bool; Scan(...interface{}) error; Close() error }) ([]NotificationRecord, error) {
+	defer rows.Close()
+	var out []NotificationRecord
+	for rows.Next() {
+		var r NotificationRecord
+		var createdAt string
+		var readInt int
+		if err := rows.Scan(&r.ID, &r.Source, &r.EventType, &r.TicketID, &r.Title, &r.Body, &r.URL, &readInt, &createdAt); err != nil {
+			continue
+		}
+		r.Read = readInt != 0
+		r.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+		out = append(out, r)
+	}
+	return out, nil
 }
