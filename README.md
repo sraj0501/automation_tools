@@ -20,6 +20,7 @@ DevTrack is a **client-server tool**. The Go binary (`devtrack`) is a lean daemo
 - **Monitors multiple repos** — each repo routes to its own PM platform via `workspaces.yaml`
 - **Learns your communication style** from Teams messages and writes updates in your voice
 - **Runs 100% locally** — Ollama for AI, SQLite for storage, no cloud required
+- **Community License** — free for personal use and teams of up to 10 users; enterprise license required for 11+ users
 - **Works offline** — queues everything and syncs when connectivity returns
 - **Remote-controllable** via a Telegram bot or Slack slash command (`/devtrack`) on your phone or desktop
 - **OS-aware auto-start** — one command installs the right mechanism for your OS: launchd on macOS, systemd user service on Linux/WSL with systemd, or a shell profile block on WSL without systemd
@@ -57,7 +58,26 @@ DevTrack is a **client-server tool**. The Go binary (`devtrack`) is a lean daemo
 | Plan a project with AI | [AI Project Planning](docs/PROJECT_PLANNING.md) |
 | Connect to a remote backend | [Cloud Mode](wiki/wiki.html#CLOUD_MODE) |
 | Use the TUI dashboard | [TUI Dashboard](wiki/wiki.html#TUI_DASHBOARD) |
+| Review the license / terms | [TERMS.md](TERMS.md) |
 | Contribute or modify DevTrack | [CLAUDE.md](CLAUDE.md) |
+
+---
+
+## License Tiers
+
+DevTrack uses the **DevTrack Community License**:
+
+| Tier | Users | Cost |
+|------|-------|------|
+| Personal | 1 user | Free |
+| Team | 2–10 users | Free |
+| Enterprise | 11+ users | Paid — contact maintainer |
+
+On first run you are prompted to read and accept the terms before DevTrack starts. The full license text is in [TERMS.md](TERMS.md). To accept non-interactively (e.g. in CI):
+
+```bash
+devtrack terms --accept
+```
 
 ---
 
@@ -160,6 +180,8 @@ git commit -m "fix auth redirect"
 # Or use devtrack directly (always works, no setup needed):
 devtrack git commit -m "fix auth redirect"
 ```
+
+> **Note:** AI commit enhancement (the Accept / Enhance / Regenerate prompt) is only active when the DevTrack daemon is running (`devtrack start`). If the daemon is stopped, `git commit` passes through to git unmodified — no errors or delays.
 
 ### Shell Integration — Type `git commit` Natively
 
@@ -392,6 +414,30 @@ devtrack show-profile         # view your inferred writing style
 devtrack test-response "Completed auth module"  # see it in action
 ```
 
+### Account
+
+An optional login links your local DevTrack instance to a cloud account (required for cloud mode and enterprise license validation). Standalone local use works without logging in.
+
+```bash
+devtrack login                # authenticate with DevTrack cloud (opens browser)
+devtrack logout               # remove stored credentials
+devtrack whoami               # show the currently authenticated account
+devtrack license              # show license tier, seat count, and expiry
+devtrack terms                # display the Terms & Conditions
+devtrack terms --accept       # accept T&C non-interactively (e.g. in CI)
+```
+
+### Telemetry
+
+DevTrack collects anonymous crash reports and aggregate feature usage to help prioritise fixes. Telemetry is **opt-in** and contains no personal data, code, or commit messages. You can toggle it at any time:
+
+```bash
+devtrack telemetry on         # enable anonymous usage telemetry
+devtrack telemetry off        # disable telemetry (default)
+```
+
+The current state is shown in `devtrack status`.
+
 ---
 
 ## Architecture
@@ -439,4 +485,4 @@ All data stays on your machine. Ollama runs locally. External AI services (OpenA
 
 ## License
 
-MIT License — see [LICENSE](LICENSE).
+DevTrack Community License — free for personal use and teams up to 10 users. Enterprise use (11+ users) requires a paid license. See [TERMS.md](TERMS.md) for the full terms and [LICENSE](LICENSE) for the base open-source license.

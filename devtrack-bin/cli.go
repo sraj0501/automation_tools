@@ -22,7 +22,8 @@ func NewCLI() (*CLI, error) {
 	// For status/help commands, we don't need a full daemon
 	if len(os.Args) > 1 {
 		cmd := os.Args[1]
-		if cmd == "help" || cmd == "version" || cmd == "commit-queue" || cmd == "commits" || cmd == "queue" || cmd == "telegram-status" || cmd == "azure-check" || cmd == "gitlab-check" || cmd == "github-check" || cmd == "workspace" || cmd == "shell-init" || cmd == "is-workspace" || cmd == "enable-git" || cmd == "disable-git" || cmd == "launchd-install" || cmd == "launchd-uninstall" || cmd == "autostart-install" || cmd == "autostart-uninstall" || cmd == "autostart-status" || cmd == "alerts" || cmd == "cloud" || cmd == "tui" {
+		if cmd == "help" || cmd == "version" || cmd == "commit-queue" || cmd == "commits" || cmd == "queue" || cmd == "telegram-status" || cmd == "azure-check" || cmd == "gitlab-check" || cmd == "github-check" || cmd == "workspace" || cmd == "shell-init" || cmd == "is-workspace" || cmd == "enable-git" || cmd == "disable-git" || cmd == "launchd-install" || cmd == "launchd-uninstall" || cmd == "autostart-install" || cmd == "autostart-uninstall" || cmd == "autostart-status" || cmd == "alerts" || cmd == "cloud" || cmd == "tui" ||
+			cmd == "login" || cmd == "logout" || cmd == "whoami" || cmd == "license" || cmd == "terms" || cmd == "telemetry" {
 			return &CLI{}, nil
 		}
 	}
@@ -210,6 +211,18 @@ func (cli *CLI) Execute() error {
 		return cli.handleCloud()
 	case "tui":
 		return cli.handleTUI()
+	case "login":
+		return cli.handleLogin()
+	case "logout":
+		return cli.handleLogout()
+	case "whoami":
+		return cli.handleWhoami()
+	case "license":
+		return cli.handleLicense()
+	case "terms":
+		return cli.handleTerms()
+	case "telemetry":
+		return cli.handleTelemetry()
 	case "help":
 		cli.printUsage()
 		return nil
@@ -232,6 +245,17 @@ func (cli *CLI) handleStart() error {
 		fmt.Println("\nUse 'devtrack status' to see details")
 		fmt.Println("Use 'devtrack restart' to restart")
 		return nil
+	}
+
+	// First-run: ensure Terms of Service are accepted before starting
+	// Only check in the parent process (not in the forked daemon child)
+	if os.Getenv("DEVTRACK_DAEMON") != "1" {
+		projectRoot := resolveProjectRoot()
+		if !EnsureTermsAccepted(projectRoot) {
+			fmt.Println("\nDevTrack requires acceptance of the Terms of Service to start.")
+			fmt.Println("Run 'devtrack terms' to read them, then 'devtrack terms --accept'.")
+			return fmt.Errorf("terms not accepted")
+		}
 	}
 
 	// Check if we're already daemonized (child process)

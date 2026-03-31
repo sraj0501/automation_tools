@@ -40,6 +40,20 @@ func main() {
 			return
 		}
 
+		// Auth / license commands
+		if cmd == "login" || cmd == "logout" || cmd == "whoami" ||
+			cmd == "license" || cmd == "terms" || cmd == "telemetry" {
+			cli, err := NewCLI()
+			if err != nil {
+				fmt.Printf("Error initializing CLI: %v\n", err)
+				os.Exit(1)
+			}
+			if err := cli.Execute(); err != nil {
+				os.Exit(1)
+			}
+			return
+		}
+
 		// Handle daemon commands
 		if cmd == "start" || cmd == "stop" || cmd == "restart" ||
 			cmd == "status" || cmd == "pause" || cmd == "resume" ||
@@ -99,6 +113,7 @@ func printBasicUsage() {
 	fmt.Println("COMMITS:   commits pending | commits review")
 	fmt.Println("ALERTS:    alerts | alerts --all | alerts --clear")
 	fmt.Println("REPORTS:   preview-report | send-report | save-report")
+	fmt.Println("ACCOUNT:   login | logout | whoami | license | terms | telemetry [on|off]")
 	fmt.Println()
 	fmt.Println("Run 'devtrack help' for full usage.")
 	fmt.Println()

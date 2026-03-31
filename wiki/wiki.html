@@ -524,7 +524,7 @@
         <span class="current" id="breadcrumbCurrent">Home</span>
       </div>
       <div class="topbar-actions">
-        <span class="version-chip">v1.1</span>
+        <span class="version-chip">v1.2</span>
         <button class="icon-btn" id="themeToggle" title="Toggle theme">
           <svg id="themeIcon" viewBox="0 0 20 20" fill="currentColor"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>
         </button>
@@ -605,6 +605,13 @@ const NAV = [
       { id: 'TELEMETRY',       label: 'Telemetry',        icon: '📊' },
       { id: 'CLOUD_MODE',      label: 'Cloud Mode',       icon: '☁️' },
       { id: 'TUI_DASHBOARD',   label: 'TUI Dashboard',    icon: terminal_icon() },
+    ]
+  },
+  {
+    group: 'Account & Licensing',
+    items: [
+      { id: 'LICENSE',         label: 'License',          icon: '📄' },
+      { id: 'AUTH',            label: 'Login & Auth',     icon: user_icon() },
     ]
   },
   {
@@ -1116,6 +1123,44 @@ curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
 
   WHATS_NEW: `<div class="md-body">
 <h1>What's New</h1>
+<div class="home-badge" style="margin-bottom:24px;background:var(--callout-tip);border-color:var(--callout-tip-border);color:#166534;">v1.2 — March 31, 2026 — Community License &amp; Auth</div>
+
+<h2>v1.2 — Community License, Login &amp; Auth, Telemetry opt-in</h2>
+<p>DevTrack v1.2 introduces the Community License model, an optional identity layer with magic-link login, and tightens the AI-commit guard so it only activates when the daemon is running.</p>
+
+<div class="feature-list" style="margin-bottom:32px;">
+  <div class="feature-item"><div class="feature-dot">1</div><div><h4>Community License — free personal &amp; team, paid enterprise</h4><p>DevTrack is now released under a <strong>Community License</strong>: free for personal use and self-hosted teams up to 10 users; a commercial enterprise licence is required for 11+ users or hosted/SaaS deployments. See the <a href="#LICENSE" onclick="navigate('LICENSE');return false;">License</a> page for full tier details.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">2</div><div><h4>TERMS.md — first-run T&amp;C acceptance flow</h4><p>On first start, DevTrack prints a Terms of Service summary and prompts the user to accept before the daemon starts. Acceptance is stored in <code>Data/license/acceptance.json</code>. Use <code>devtrack terms</code> to review or re-accept; <code>devtrack terms --accept</code> for non-interactive/CI environments. The <code>DEVTRACK_AUTO_ACCEPT_TERMS=1</code> env var also suppresses the prompt.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">3</div><div><h4>backend/license_manager.py — tier detection</h4><p>New <code>LicenseManager</code> class handles all acceptance checks and tier detection locally — no network required. Tier enforcement is advisory in local mode; strict when <code>DEVTRACK_API_URL</code> is set (SaaS mode). Acceptance records include <code>terms_version</code> so a future T&amp;C update automatically re-prompts.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">4</div><div><h4>backend/auth/ — optional magic-link login</h4><p>New <code>backend/auth/</code> package provides an optional identity layer. Run <code>devtrack login</code> to start a magic-link email flow — enter your email, receive a one-time code, confirm it, get a JWT session. Sessions persist in <code>Data/license/session.json</code> (chmod 0600) for 30 days. Fully offline when <code>DEVTRACK_API_URL</code> is not set — falls back to a local-only session. See <a href="#AUTH" onclick="navigate('AUTH');return false;">Login &amp; Auth</a>.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">5</div><div><h4>backend/telemetry.py — opt-in usage analytics</h4><p>The previously-planned telemetry module is now implemented in Python. Works alongside the Go-side <code>devtrack telemetry on/off</code> commands already documented. Receives events from the CLI and stores them in the <code>telemetry_events</code> SQLite table. The Admin Console telemetry panel is updated to show live data once this module is wired up.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">6</div><div><h4>New CLI commands: login, logout, whoami, license, terms [--accept], telemetry [on|off]</h4>
+<p>Six new top-level commands:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Command</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>devtrack login</code></td><td>Start magic-link login flow</td></tr>
+<tr><td><code>devtrack logout</code></td><td>Clear local session and token</td></tr>
+<tr><td><code>devtrack whoami</code></td><td>Show active session email (or "not logged in")</td></tr>
+<tr><td><code>devtrack license</code></td><td>Show active tier and acceptance status</td></tr>
+<tr><td><code>devtrack terms [--accept]</code></td><td>Print T&amp;C summary and prompt (or auto-accept)</td></tr>
+<tr><td><code>devtrack telemetry [on|off|status]</code></td><td>Enable/disable opt-in usage analytics</td></tr>
+</tbody>
+</table></div>
+</div></div>
+  <div class="feature-item"><div class="feature-dot">7</div><div><h4>AI-enhanced git commit only activates when daemon is running</h4><p>The <code>devtrack git commit</code> shell wrapper now checks daemon state before invoking the AI pipeline. If the daemon is not running, the commit completes immediately with no AI enhancement and no blocking prompt — identical behaviour to a plain <code>git commit</code>. This prevents hangs in environments where the daemon is intentionally stopped.</p></div></div>
+</div>
+
+<h2>New .env Variables (v1.2)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Variable</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>DEVTRACK_API_URL</code></td><td>Cloud API endpoint for magic-link auth and enterprise licence validation. Omit for fully local operation.</td></tr>
+<tr><td><code>DEVTRACK_AUTO_ACCEPT_TERMS</code></td><td>Set to <code>1</code> to auto-accept T&amp;C on first run — for CI/scripts.</td></tr>
+</tbody>
+</table></div>
+
+<hr>
 <div class="home-badge" style="margin-bottom:24px;background:var(--callout-tip);border-color:var(--callout-tip-border);color:#166534;">March 30, 2026 — Docs &amp; Config polish</div>
 
 <h2>Docs &amp; Configuration polish (March 30)</h2>
@@ -1199,7 +1244,7 @@ curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
 </tbody>
 </table></div>
 
-<h2>Coming in v1.2</h2>
+<h2>Coming in v1.3</h2>
 <ul>
 <li><strong>Autonomous Communication</strong> — AI drafts and sends standup messages via Power Automate / email</li>
 <li><strong>CS-4 SaaS tier</strong> — Multi-tenant managed backend; billing; <code>DEVTRACK_API_KEY</code> subscription auth</li>
@@ -1332,6 +1377,132 @@ SENTIMENT_ANALYSIS_WINDOW_MINUTES=120</code></pre>
 </table></div>
 
 <blockquote><p>Full variable reference with descriptions and examples: <a href="#CONFIGURATION" onclick="loadMarkdown('CONFIGURATION');return false;">docs/CONFIGURATION.md</a> (requires HTTP server — run <code>python3 -m http.server 8080</code> from project root).</p></blockquote>
+</div>`,
+
+  LICENSE: `<div class="md-body">
+<h1>License</h1>
+<p>DevTrack uses a <strong>Community License</strong> — free for individuals and small teams, with a commercial licence required for larger organisations and hosted deployments.</p>
+
+<h2>Tiers at a Glance</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Tier</th><th>Cost</th><th>Who it is for</th></tr></thead>
+<tbody>
+<tr><td><strong>Personal</strong></td><td>Free</td><td>Single developer, personal use</td></tr>
+<tr><td><strong>Team</strong></td><td>Free</td><td>Self-hosted, up to 10 users</td></tr>
+<tr><td><strong>Enterprise</strong></td><td>Commercial licence required</td><td>11+ users, or any hosted/SaaS deployment</td></tr>
+</tbody>
+</table></div>
+
+<blockquote><p>All tiers work fully offline. Login is optional for Personal and Team. No licence server call is ever made in local mode.</p></blockquote>
+
+<h2>First-Run T&amp;C Acceptance</h2>
+<p>The first time DevTrack starts (or when you run <code>devtrack terms</code>), a summary of the Terms of Service is printed to the terminal and you are asked to accept before the daemon starts. Acceptance is stored in <code>Data/license/acceptance.json</code> — no network call is required.</p>
+
+<h3>CLI Commands</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Command</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>devtrack terms</code></td><td>Print the T&amp;C summary and prompt for acceptance</td></tr>
+<tr><td><code>devtrack terms --accept</code></td><td>Accept non-interactively (useful for CI/scripts — same as <code>DEVTRACK_AUTO_ACCEPT_TERMS=1</code>)</td></tr>
+<tr><td><code>devtrack license</code></td><td>Show the active tier and acceptance status</td></tr>
+</tbody>
+</table></div>
+
+<h3>Non-Interactive / CI Mode</h3>
+<p>Set <code>DEVTRACK_AUTO_ACCEPT_TERMS=1</code> in your environment or pass <code>--accept</code> to <code>devtrack terms</code> to suppress the interactive prompt. A warning is printed to stderr so the auto-acceptance is visible in CI logs.</p>
+
+<h3>Acceptance Record</h3>
+<p>The acceptance file is stored at <code>Data/license/acceptance.json</code> (path resolves from <code>DATA_DIR</code> if set):</p>
+<pre><code class="language-json">{
+  "terms_version": "1.0",
+  "accepted_at": "2026-03-31T10:00:00+00:00",
+  "user_identifier": "sraj",
+  "mode": "local"
+}</code></pre>
+<p>The daemon checks <code>terms_version</code> on startup. If a new version of the terms is released, you will be prompted again on the next start.</p>
+
+<h2>Enterprise Licensing</h2>
+<p>If you are deploying DevTrack for 11 or more users, or running it as a hosted/SaaS service, a commercial enterprise licence is required. Contact <a href="mailto:enterprise@devtrack.dev" target="_blank" rel="noopener">enterprise@devtrack.dev</a> or visit <a href="https://devtrack.dev/enterprise" target="_blank" rel="noopener">devtrack.dev/enterprise</a>.</p>
+<p>In a self-hosted deployment, <code>backend/license_manager.py</code> detects the tier from the user count in the Admin Console. Tier enforcement is advisory in local mode — the daemon will warn but not block. In SaaS mode, the tier is enforced server-side.</p>
+
+<h2>Privacy Summary</h2>
+<ul>
+<li><strong>Offline/local mode</strong>: zero data collection (default).</li>
+<li><strong>Telemetry</strong>: strictly opt-in — only when you run <code>devtrack telemetry on</code> explicitly.</li>
+<li><strong>Your code, commits, and work updates</strong> never leave your machine unless you enable cloud features.</li>
+<li><strong>Login</strong>: optional for Personal and Team tiers. Magic-link login is used only if <code>DEVTRACK_API_URL</code> is set.</li>
+</ul>
+
+<p>Full terms: <code>TERMS.md</code> in the DevTrack installation directory, or <a href="https://devtrack.dev/terms" target="_blank" rel="noopener">devtrack.dev/terms</a>.</p>
+</div>`,
+
+  AUTH: `<div class="md-body">
+<h1>Login &amp; Auth</h1>
+<p>DevTrack's authentication system is <strong>optional and offline-first</strong>. The daemon works fully without any login. Login is only needed for cloud features — syncing settings across machines, SaaS team management, or enterprise licence validation.</p>
+
+<h2>Overview</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Scenario</th><th>Login needed?</th></tr></thead>
+<tbody>
+<tr><td>Local single-user (Personal/Team)</td><td>No — works offline without any auth</td></tr>
+<tr><td>Cloud-backed settings sync</td><td>Yes — <code>devtrack login</code></td></tr>
+<tr><td>Enterprise team management</td><td>Yes — admin login via Admin Console</td></tr>
+</tbody>
+</table></div>
+
+<h2>CLI Commands</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Command</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>devtrack login</code></td><td>Start the magic-link login flow — enter your email, receive a one-time code, confirm it</td></tr>
+<tr><td><code>devtrack logout</code></td><td>Clear the local session and token</td></tr>
+<tr><td><code>devtrack whoami</code></td><td>Show the currently logged-in email (or "not logged in")</td></tr>
+</tbody>
+</table></div>
+
+<h2>Magic-Link Flow</h2>
+<ol>
+<li>Run <code>devtrack login</code> and enter your email address.</li>
+<li>The backend (<code>DEVTRACK_API_URL</code>) sends a one-time code to that address.</li>
+<li>Enter the code in the terminal — you receive a JWT session token.</li>
+<li>The token and session are saved locally in <code>Data/license/session.json</code> (chmod 0600).</li>
+</ol>
+
+<p>If <code>DEVTRACK_API_URL</code> is not set, the login command falls back to creating a <strong>local-only session</strong> — no network call is made and no token is issued, but your email is stored as a local identifier (useful for personalisation features).</p>
+
+<h3>Session File</h3>
+<p>Sessions are stored at <code>Data/license/session.json</code>:</p>
+<pre><code class="language-json">{
+  "email": "you@example.com",
+  "token": "eyJ...",
+  "logged_in_at": "2026-03-31T10:00:00+00:00",
+  "expires_at": "2026-04-30T10:00:00+00:00"
+}</code></pre>
+<p>Sessions expire after 30 days. Run <code>devtrack login</code> again to refresh.</p>
+
+<h2>Local-Only Sessions</h2>
+<p>If you want personalisation features (e.g. "Talk Like You") to identify you without cloud connectivity, run <code>devtrack login</code> with no <code>DEVTRACK_API_URL</code> set. The system creates an offline session with your email stored locally — used as the identifier for MongoDB sample storage and the personalization profile.</p>
+
+<h2>Configuration</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Variable</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>DEVTRACK_API_URL</code></td><td>Cloud API endpoint for magic-link auth. Omit for local-only sessions.</td></tr>
+</tbody>
+</table></div>
+
+<h2>Implementation Files</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td><code>backend/auth/__init__.py</code></td><td>Package init; exports <code>get_session()</code>, <code>require_login()</code></td></tr>
+<tr><td><code>backend/auth/local_auth.py</code></td><td>Read/write <code>Data/license/session.json</code>; no network calls</td></tr>
+<tr><td><code>backend/auth/cloud_auth.py</code></td><td>Magic-link flow: <code>request_magic_link()</code>, <code>verify_code()</code>; degrades gracefully offline</td></tr>
+<tr><td><code>backend/auth/session.py</code></td><td><code>AuthSession</code> dataclass; <code>make_offline_session()</code>; 30-day TTL</td></tr>
+</tbody>
+</table></div>
+
+<blockquote><p><strong>Security note:</strong> The session file is written with <code>chmod 0600</code> — readable only by the current user. Tokens are JWTs issued by the DevTrack cloud server; they are verified server-side on each cloud API call. Local-only sessions have no token and no server-side state.</p></blockquote>
 </div>`,
 
   MULTI_REPO: `<div class="md-body">
@@ -1581,7 +1752,7 @@ function renderHome() {
   const content = document.getElementById('content');
   content.innerHTML = `
     <div class="home-hero">
-      <div class="home-badge">Local-First · v1.1</div>
+      <div class="home-badge">Local-First · v1.2</div>
       <h1 class="home-title">Developer automation<br>that handles the <span>overhead</span>.</h1>
       <p class="home-sub">DevTrack monitors your Git activity, prompts for work updates, routes them through AI, and keeps your project management systems in sync — all running locally on your machine.</p>
     </div>
@@ -1589,7 +1760,7 @@ function renderHome() {
     <div class="home-grid">
       ${[
         // ── Get Started ────────────────────────────────────────────────────────
-        { id:'WHATS_NEW',        icon:'🎉', title:"What's New",         desc:'Cloud Mode, TUI Dashboard, GitLab Webhook Auto-Registration, Alert SQLite Dual-Write, and all v1.0 features.' },
+        { id:'WHATS_NEW',        icon:'🎉', title:"What's New",         desc:'Community License, magic-link login, T&amp;C acceptance flow, and AI-commit daemon guard — plus all prior features.' },
         { id:'GETTING_STARTED',  icon:'🚀', title:'Getting Started',    desc:'New to DevTrack? Start here — concepts, setup, and first run.' },
         { id:'QUICK_START',      icon:'⚡', title:'Quick Start',        desc:'Get running in 5 minutes with the minimal setup guide.' },
         // ── Reference ─────────────────────────────────────────────────────────
@@ -1620,6 +1791,9 @@ function renderHome() {
         { id:'TELEMETRY',       icon:'📊', title:'Telemetry',           desc:'Optional usage tracking: download counts, command frequencies, version adoption. Fully transparent, no PII. Designed for a real-time admin dashboard via Server-Sent Events. See the plan in <code>docs/TELEMETRY_PLAN.md</code>.' },
         { id:'CLOUD_MODE',      icon:'☁️', title:'Cloud Mode',          desc:'Connect your local daemon to a remote managed backend. <code>devtrack cloud login --url URL --key KEY</code> saves credentials to <code>~/.devtrack/cloud.json</code>. Bypasses cert-pinning for CA-signed remote certs.' },
         { id:'TUI_DASHBOARD',   icon:'📟', title:'TUI Dashboard',       desc:'Bubble Tea full-screen dashboard. 4 tabs: Overview (uptime, latency, counts), Activity (last 30 triggers), Workspaces (all repos + PM platform), Alerts (last 30 notifications). Tab/1–4 to switch, <code>r</code> refresh, <code>q</code> quit.' },
+        // ── Account & Licensing ───────────────────────────────────────────────
+        { id:'LICENSE',         icon:'📄', title:'License',             desc:'Community License: free for personal use and teams up to 10 users. Enterprise licence required for 11+ users or hosted/SaaS deployments. First-run T&amp;C acceptance stored locally.' },
+        { id:'AUTH',            icon:'👤', title:'Login &amp; Auth',        desc:'Optional identity layer. Run <code>devtrack login</code> to connect an email via magic-link; <code>devtrack whoami</code> to see the active session; <code>devtrack logout</code> to clear it. Fully offline without a login.' },
         // ── Advanced ──────────────────────────────────────────────────────────
         { id:'TROUBLESHOOTING', icon:'🔍', title:'Troubleshooting',     desc:'Common problems, error messages, and solutions.' },
       ].map(c => `
