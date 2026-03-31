@@ -65,6 +65,24 @@ if [ "$GIT_COMMAND" = "add" ]; then
 
 # Handle git commit with AI enhancement
 elif [ "$GIT_COMMAND" = "commit" ]; then
+    # Only engage AI enhancement when the DevTrack daemon is running.
+    # If daemon is stopped, fall through to plain git commit.
+    _DAEMON_RUNNING=false
+    _PID_DIR="${PID_DIR:-${DATA_DIR:-$PROJECT_ROOT/Data}/pids}"
+    _PID_FILE_NAME="${PID_FILE_NAME:-daemon.pid}"
+    _PID_FILE="$_PID_DIR/$_PID_FILE_NAME"
+    if [ -f "$_PID_FILE" ]; then
+        _PID=$(cat "$_PID_FILE" 2>/dev/null)
+        if [ -n "$_PID" ] && kill -0 "$_PID" 2>/dev/null; then
+            _DAEMON_RUNNING=true
+        fi
+    fi
+
+    if [ "$_DAEMON_RUNNING" = false ]; then
+        # Daemon not running — plain git commit, no AI wrapper
+        exec git commit "$@"
+    fi
+
     # Check if there are staged changes
     if git diff --cached --quiet 2>/dev/null; then
         echo "No changes staged for commit."

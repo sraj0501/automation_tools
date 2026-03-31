@@ -1,21 +1,76 @@
-MIT License
+DevTrack Community License
+Version 1.0 — Effective March 31, 2026
+Copyright (c) 2026 sraj0501 and DevTrack contributors
 
-Copyright (c) 2026 sraj0501
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GRANT OF LICENSE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Subject to the terms and conditions of this License, you are
+granted a non-exclusive, non-transferable, limited license to
+use, copy, and modify DevTrack as follows:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+  TIER 1 — PERSONAL (Free)
+  ─────────────────────────
+  Use by a single individual for personal, non-commercial
+  purposes. No seat limit. No payment required. Includes all
+  core features and self-hosted deployment.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+  TIER 2 — TEAM (Free up to 10 users)
+  ─────────────────────────────────────
+  Use by an organisation or team of up to ten (10) active
+  users. Includes shared workspaces, multi-repo monitoring,
+  and all self-hosted features. No payment required.
+
+  TIER 3 — ENTERPRISE (Commercial licence required)
+  ──────────────────────────────────────────────────
+  Use by an organisation with more than ten (10) active users,
+  OR any use in a hosted / SaaS offering provided to third
+  parties, requires a separate commercial licence agreement.
+  Contact: license@devtrack.dev
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CONDITIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. ATTRIBUTION
+   All copies or substantial portions of the Software must
+   retain this licence notice, copyright notice, and the
+   following attribution in documentation or About screens:
+   "Powered by DevTrack — devtrack.dev"
+
+2. NO SUBLICENSING
+   You may not sublicense, sell, rent, or lease the Software
+   or any derivative work without a commercial licence.
+
+3. MODIFICATIONS
+   You may modify the Software for your own use. Modified
+   versions must be clearly marked as such and may not be
+   distributed as the original DevTrack product.
+
+4. OFFLINE / SELF-HOSTED USE
+   Self-hosted and fully offline deployments are explicitly
+   permitted under Tier 1 and Tier 2 without any network
+   dependency or licence server requirement.
+
+5. TELEMETRY
+   Telemetry is strictly opt-in. No data is collected without
+   explicit user consent. See TERMS.md for details.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DISCLAIMER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY
+KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
+OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+For commercial licensing: license@devtrack.dev
+For support and documentation: https://devtrack.dev
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
