@@ -78,6 +78,14 @@
 
 ---
 
+## Strategy
+
+| Guide | What it covers |
+|-------|---------------|
+| [LAUNCH_STRATEGY.md](LAUNCH_STRATEGY.md) | Research-driven release plan: wedge feature, positioning, first-run UX, channel sequence, risk register, decision framework |
+
+---
+
 ## For Developers
 
 - **[CLAUDE.md](../CLAUDE.md)** — Architecture, build commands, key patterns, debugging guide. Start here if you want to contribute or modify DevTrack.
