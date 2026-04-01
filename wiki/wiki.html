@@ -524,7 +524,7 @@
         <span class="current" id="breadcrumbCurrent">Home</span>
       </div>
       <div class="topbar-actions">
-        <span class="version-chip">v1.2</span>
+        <span class="version-chip">v1.3</span>
         <button class="icon-btn" id="themeToggle" title="Toggle theme">
           <svg id="themeIcon" viewBox="0 0 20 20" fill="currentColor"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>
         </button>
@@ -620,6 +620,7 @@ const NAV = [
       { id: 'OFFLINE_RESILIENCE', label: 'Offline Resilience', icon: offline_icon() },
       { id: 'ADVANCED_FEATURES',  label: 'Advanced Features',  icon: advanced_icon() },
       { id: 'TROUBLESHOOTING',    label: 'Troubleshooting',    icon: bug_icon() },
+      { id: 'TEST_SUITE',         label: 'Test Suite',         icon: commit_icon() },
       { id: 'VISION',             label: 'Roadmap',            icon: map_icon() },
     ]
   },
@@ -1123,6 +1124,32 @@ curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
 
   WHATS_NEW: `<div class="md-body">
 <h1>What's New</h1>
+<div class="home-badge" style="margin-bottom:24px;background:var(--callout-tip);border-color:var(--callout-tip-border);color:#166534;">v1.3 — April 2026 — HTTP Trigger Validation &amp; Test Coverage</div>
+
+<h2>v1.3 — HTTP Trigger Validation, Bug Fixes &amp; 133 New Tests</h2>
+<p>DevTrack v1.3 focuses on correctness and reliability: comprehensive test coverage for the HTTP trigger layer and admin subsystems, two daemon startup bugs fixed, and a hardened test harness that catches FIFO-related hangs before they reach CI.</p>
+
+<div class="feature-list" style="margin-bottom:32px;">
+  <div class="feature-item"><div class="feature-dot">1</div><div><h4>CS-1 HTTP trigger validation — 133 new tests</h4><p>Full test coverage for the Go daemon's HTTP trigger dispatch and the FastAPI webhook server's trigger ingestion. Tests verify correct payloads are accepted, malformed or unauthenticated requests are rejected with the right status codes, and all edge cases (missing fields, invalid JSON, wrong content-type) are handled consistently. See the <a href="#TEST_SUITE" onclick="navigate('TEST_SUITE');return false;">Test Suite</a> page for details.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">2</div><div><h4>Admin subsystem tests — auth, user manager, license manager</h4><p>Three new Python test files cover the Admin Console authentication flow (JWT issuance, expiry, bad-credential rejection), user lifecycle (create/delete/list/key rotation), and the license manager (tier detection, T&amp;C acceptance recording, <code>DEVTRACK_AUTO_ACCEPT_TERMS</code> flag). These tests run fully offline — no cloud endpoint required.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">3</div><div><h4>Bug fix: .env FIFO causes daemon startup hang</h4><p>When <code>.env</code> was a named pipe (created by a broken shell redirect or <code>mkfifo</code>), the daemon would block indefinitely trying to read it. The fix detects this condition at startup and aborts with a clear error message. The <code>conftest.py</code> session fixture also guards against this in the test suite so the bug can never silently hang CI collection.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">4</div><div><h4>Bug fix: RuntimeNarrativeMiddleware unknown kwarg crash</h4><p>The FastAPI webhook server crashed on startup with <code>TypeError: __init__() got an unexpected keyword argument 'failure_diagnostics'</code>. The <code>failure_diagnostics</code> parameter was removed from <code>RuntimeNarrativeMiddleware</code> to match the current API signature. The new HTTP trigger tests catch this class of startup error automatically.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">5</div><div><h4>Test harness: conftest.py session fixture</h4><p>The shared <code>backend/tests/conftest.py</code> gains a session-scoped autouse fixture that inspects the <code>.env</code> file's stat type before any test runs. If <code>.env</code> is a FIFO, collection is aborted immediately with a clear error rather than hanging the entire pytest process. LLM provider isolation (<code>reset_provider_cache()</code>) is also documented as the required pattern for any test that modifies <code>LLM_PROVIDER</code>.</p></div></div>
+</div>
+
+<h2>New Test Files (v1.3)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Layer</th><th>Tests added</th></tr></thead>
+<tbody>
+<tr><td><code>devtrack-bin/http_trigger_test.go</code></td><td>Go</td><td>HTTP trigger validation (auth, payload schema, edge cases)</td></tr>
+<tr><td><code>backend/tests/test_http_triggers.py</code></td><td>Python</td><td>FastAPI webhook trigger routes end-to-end</td></tr>
+<tr><td><code>backend/tests/test_admin_auth.py</code></td><td>Python</td><td>Admin Console login, JWT sessions</td></tr>
+<tr><td><code>backend/tests/test_admin_user_manager.py</code></td><td>Python</td><td>User create/delete/list/key rotation</td></tr>
+<tr><td><code>backend/tests/test_license_manager.py</code></td><td>Python</td><td>License tier, T&amp;C acceptance, auto-accept flag</td></tr>
+</tbody>
+</table></div>
+
+<hr>
 <div class="home-badge" style="margin-bottom:24px;background:var(--callout-tip);border-color:var(--callout-tip-border);color:#166534;">v1.2 — March 31, 2026 — Community License &amp; Auth</div>
 
 <h2>v1.2 — Community License, Login &amp; Auth, Telemetry opt-in</h2>
@@ -1244,7 +1271,7 @@ curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
 </tbody>
 </table></div>
 
-<h2>Coming in v1.3</h2>
+<h2>Coming in v1.4</h2>
 <ul>
 <li><strong>Autonomous Communication</strong> — AI drafts and sends standup messages via Power Automate / email</li>
 <li><strong>CS-4 SaaS tier</strong> — Multi-tenant managed backend; billing; <code>DEVTRACK_API_KEY</code> subscription auth</li>
@@ -1505,6 +1532,87 @@ SENTIMENT_ANALYSIS_WINDOW_MINUTES=120</code></pre>
 <blockquote><p><strong>Security note:</strong> The session file is written with <code>chmod 0600</code> — readable only by the current user. Tokens are JWTs issued by the DevTrack cloud server; they are verified server-side on each cloud API call. Local-only sessions have no token and no server-side state.</p></blockquote>
 </div>`,
 
+  TEST_SUITE: `<div class="md-body">
+<h1>Test Suite</h1>
+<p>DevTrack ships a comprehensive test suite covering the Go daemon, the Python backend, and the HTTP trigger layer. As of <strong>v1.3</strong>, the suite contains <strong>133+ tests</strong> spread across Go and Python, with full coverage of HTTP trigger validation, admin authentication, user management, and license enforcement.</p>
+
+<h2>Running the Tests</h2>
+<h3>Go tests</h3>
+<pre><code class="language-bash">cd devtrack-bin
+go test ./...        # run all Go tests
+go test -run TestHTTPTrigger ./...   # run only HTTP trigger tests</code></pre>
+
+<h3>Python tests</h3>
+<pre><code class="language-bash"># Install / sync dependencies first
+uv sync
+
+# Run the full Python test suite
+uv run pytest backend/tests/
+
+# Run a single test file
+uv run pytest backend/tests/test_http_triggers.py
+uv run pytest backend/tests/test_admin_auth.py
+uv run pytest backend/tests/test_admin_user_manager.py
+uv run pytest backend/tests/test_license_manager.py
+
+# Run by name filter
+uv run pytest backend/tests/ -k test_name</code></pre>
+
+<h2>Test Files</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Layer</th><th>What it covers</th></tr></thead>
+<tbody>
+<tr><td><code>devtrack-bin/http_trigger_test.go</code></td><td>Go</td><td>HTTP trigger validation — correct payloads accepted, malformed or unauthenticated requests rejected, edge cases for missing fields and invalid JSON</td></tr>
+<tr><td><code>backend/tests/test_http_triggers.py</code></td><td>Python</td><td>End-to-end HTTP trigger handling in the FastAPI webhook server — commit and timer trigger routes, auth header validation, payload schema enforcement</td></tr>
+<tr><td><code>backend/tests/test_admin_auth.py</code></td><td>Python</td><td>Admin console authentication — login flow, JWT session cookie issuance, expiry, and rejection of bad credentials</td></tr>
+<tr><td><code>backend/tests/test_admin_user_manager.py</code></td><td>Python</td><td>User lifecycle via the Admin Console — create, delete, list, and API key rotation; enforces that duplicate usernames are rejected</td></tr>
+<tr><td><code>backend/tests/test_license_manager.py</code></td><td>Python</td><td>License tier detection, T&amp;C acceptance recording and re-prompt logic, offline vs SaaS mode enforcement, <code>DEVTRACK_AUTO_ACCEPT_TERMS</code> flag behaviour</td></tr>
+</tbody>
+</table></div>
+
+<h2>Test Infrastructure</h2>
+
+<h3>conftest.py — session fixture</h3>
+<p>The shared <code>backend/tests/conftest.py</code> adds the repo root to <code>sys.path</code> and provides a <strong>session-scoped fixture</strong> that blocks any attempt to load a <code>.env</code> that is a named pipe (FIFO). This prevents the Go daemon's FIFO <code>.env</code> bug from silently hanging the test process during collection.</p>
+<pre><code class="language-python"># conftest.py (excerpt)
+@pytest.fixture(scope="session", autouse=True)
+def block_fifo_env(tmp_path_factory):
+    """Ensure .env is never a FIFO during the test run — prevents daemon-startup hangs."""
+    env_path = Path(".env")
+    if env_path.exists() and stat.S_ISFIFO(env_path.stat().st_mode):
+        raise RuntimeError(
+            ".env is a named pipe (FIFO). Replace it with a regular file before running tests."
+        )
+    yield</code></pre>
+
+<h3>LLM provider isolation</h3>
+<p>Tests that change <code>LLM_PROVIDER</code> must call <code>reset_provider_cache()</code> in their setup and teardown to prevent provider state leaking between test cases:</p>
+<pre><code class="language-python">from backend.llm.provider_factory import reset_provider_cache
+
+def setup_function():
+    reset_provider_cache()
+
+def teardown_function():
+    reset_provider_cache()</code></pre>
+
+<h2>Known Bugs Fixed by These Tests</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Bug</th><th>Symptom</th><th>Fix verified by</th></tr></thead>
+<tbody>
+<tr><td><strong>.env FIFO bug</strong></td><td>Daemon startup hangs indefinitely when <code>.env</code> is a named pipe (e.g. created by <code>mkfifo</code> or a broken shell redirect)</td><td><code>conftest.py</code> session fixture; <code>test_http_triggers.py</code> startup assertions</td></tr>
+<tr><td><strong>RuntimeNarrativeMiddleware unknown kwarg</strong></td><td><code>TypeError: __init__() got an unexpected keyword argument 'failure_diagnostics'</code> on FastAPI startup</td><td><code>test_http_triggers.py</code> — server startup smoke test runs as part of the fixture setup and would surface this error</td></tr>
+</tbody>
+</table></div>
+
+<h2>Troubleshooting</h2>
+<ul>
+<li><strong>Tests hang at collection</strong> — likely caused by the <code>.env</code> FIFO bug. Run <code>file .env</code>; if it shows <em>fifo (named pipe)</em>, delete and recreate: <code>rm .env &amp;&amp; cp .env_sample .env</code>.</li>
+<li><strong>"provider not found" errors</strong> — call <code>reset_provider_cache()</code> in test setup/teardown when changing <code>LLM_PROVIDER</code>.</li>
+<li><strong>Admin auth tests fail with 500</strong> — confirm <code>ADMIN_SECRET_KEY</code> is set in the test environment (can be any non-empty string for tests).</li>
+<li><strong>License manager tests fail offline</strong> — expected: tests that require <code>DEVTRACK_API_URL</code> are skipped automatically when the variable is absent. Set <code>DEVTRACK_AUTO_ACCEPT_TERMS=1</code> to prevent interactive prompts during CI runs.</li>
+</ul>
+</div>`,
+
   MULTI_REPO: `<div class="md-body">
 <h1>Multi-Repo Monitoring</h1>
 <p>By default DevTrack monitors a single repository (<code>DEVTRACK_WORKSPACE</code>). <strong>Multi-repo mode</strong> lets you monitor any number of repositories simultaneously, each routing to its own project management platform.</p>
@@ -1752,7 +1860,7 @@ function renderHome() {
   const content = document.getElementById('content');
   content.innerHTML = `
     <div class="home-hero">
-      <div class="home-badge">Local-First · v1.2</div>
+      <div class="home-badge">Local-First · v1.3</div>
       <h1 class="home-title">Developer automation<br>that handles the <span>overhead</span>.</h1>
       <p class="home-sub">DevTrack monitors your Git activity, prompts for work updates, routes them through AI, and keeps your project management systems in sync — all running locally on your machine.</p>
     </div>
@@ -1760,7 +1868,7 @@ function renderHome() {
     <div class="home-grid">
       ${[
         // ── Get Started ────────────────────────────────────────────────────────
-        { id:'WHATS_NEW',        icon:'🎉', title:"What's New",         desc:'Community License, magic-link login, T&amp;C acceptance flow, and AI-commit daemon guard — plus all prior features.' },
+        { id:'WHATS_NEW',        icon:'🎉', title:"What's New",         desc:'v1.3: HTTP trigger validation, 133 new tests, .env FIFO fix, RuntimeNarrativeMiddleware fix. v1.2: Community License, magic-link login, T&amp;C acceptance flow.' },
         { id:'GETTING_STARTED',  icon:'🚀', title:'Getting Started',    desc:'New to DevTrack? Start here — concepts, setup, and first run.' },
         { id:'QUICK_START',      icon:'⚡', title:'Quick Start',        desc:'Get running in 5 minutes with the minimal setup guide.' },
         // ── Reference ─────────────────────────────────────────────────────────

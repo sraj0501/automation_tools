@@ -63,9 +63,9 @@ app = FastAPI(title="DevTrack Webhooks", version="1.0", lifespan=lifespan)
 
 try:
     from runtime_narrative import RuntimeNarrativeMiddleware
-    app.add_middleware(RuntimeNarrativeMiddleware, failure_diagnostics="lean")
+    app.add_middleware(RuntimeNarrativeMiddleware)
     logger.info("runtime-narrative middleware enabled for webhook server")
-except ImportError:
+except (ImportError, TypeError):
     pass
 
 _handler: WebhookEventHandler | None = None

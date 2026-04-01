@@ -116,6 +116,8 @@ devtrack start           # starts the Go daemon + Python backend together
 devtrack status
 ```
 
+> **Important — `.env` must be a regular file, not a named pipe.** If you previously created `.env` via process substitution or another method that produces a FIFO, the daemon will hang at startup reading it. Fix: `rm .env && cp .env_sample .env`, then fill in your credentials again.
+
 #### Docker / external mode
 
 Run the Python backend in a container; the Go daemon connects to it over HTTP.
@@ -398,6 +400,8 @@ ADMIN_USERNAME=admin
 ADMIN_PASSWORD=changeme
 ```
 
+The admin console (`backend/admin/`) and the license manager (`backend/license_manager.py`) are covered by the automated test suite — all routes and license validation paths are tested.
+
 ### TUI Dashboard
 
 ```bash
@@ -474,6 +478,37 @@ A `Dockerfile.server` is provided for containerising the Python backend.
 | Admin Console | FastAPI + HTMX, JWT auth, port 8090 |
 | Server TUI | Textual (Python TUI framework) |
 | Observability | runtime-narrative — structured story/stage traces; auto-wraps webhook requests and produces failure reports |
+
+---
+
+## Testing
+
+DevTrack ships with a comprehensive automated test suite covering both the Go daemon and the Python backend.
+
+```bash
+# Go layer
+cd devtrack-bin && go test ./...
+
+# Python backend
+uv run pytest backend/tests/
+```
+
+### CS-1 HTTP Trigger Validation (133 tests)
+
+The CS-1 validation suite fully covers the HTTP trigger path end-to-end: the Go client posting triggers to the Python `webhook_server`, request routing, middleware, and all response codes. Run it with:
+
+```bash
+uv run pytest backend/tests/ -k cs1
+```
+
+Key areas covered:
+
+| Area | Notes |
+|------|-------|
+| HTTP trigger routing | All trigger types (commit, timer, manual) |
+| `RuntimeNarrativeMiddleware` | Structured trace wrapping; kwarg handling fixed |
+| Admin console (`backend/admin/`) | All routes, auth, audit log |
+| License manager (`backend/license_manager.py`) | Tier validation, seat limits, expiry |
 
 ---
 
