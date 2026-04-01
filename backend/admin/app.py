@@ -8,6 +8,7 @@ Entry points:
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -15,10 +16,18 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.admin.routes import router, startup
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    startup()
+    yield
+
+
 app = FastAPI(
     title="DevTrack Admin Console",
     docs_url=None,    # no Swagger UI for admin — keep the attack surface small
     redoc_url=None,
+    lifespan=lifespan,
 )
 
 # Mount static files
@@ -27,11 +36,6 @@ app.mount("/admin/static", StaticFiles(directory=str(_STATIC_DIR)), name="admin-
 
 # Mount all admin routes under /admin
 app.include_router(router, prefix="/admin")
-
-
-@app.on_event("startup")
-async def on_startup() -> None:
-    startup()
 
 
 def main() -> None:

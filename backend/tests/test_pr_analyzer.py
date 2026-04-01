@@ -94,6 +94,10 @@ class TestPRSummary:
 # ---------------------------------------------------------------------------
 
 class TestSummarizePR:
+    def setup_method(self):
+        import os
+        os.environ.setdefault("HTTP_TIMEOUT_SHORT", "10")
+
     def _make_pr_summary(self, **kwargs):
         from backend.github.pr_analyzer import PRSummary
         defaults = dict(
@@ -266,6 +270,8 @@ class TestSummarizeAuthorPRs:
         assert len(result["prs"]) == 2
 
     def test_ai_summary_populated_on_each_pr(self):
+        import os
+        os.environ.setdefault("HTTP_TIMEOUT_SHORT", "10")
         from backend.github.pr_analyzer import PRAnalyzer
         analyzer = PRAnalyzer(token="ghp_test", provider=_MockProvider("AI summary."))
         prs = [self._make_pr_summary(1)]
