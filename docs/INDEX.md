@@ -24,6 +24,7 @@
 | [GIT_FEATURES.md](GIT_FEATURES.md) | Enhanced commits, conflict resolution, work update parsing |
 | [GIT_COMMIT_WORKFLOW.md](GIT_COMMIT_WORKFLOW.md) | Detailed interactive AI commit workflow (Accept/Enhance/Regenerate) |
 | [GIT_SAGE.md](GIT_SAGE.md) | Local LLM git agent — ask/do/interactive modes, undo, approval modes |
+| [COMMIT_WORKFLOW_DESIGN.md](COMMIT_WORKFLOW_DESIGN.md) | **Planned redesign** — context-aware ticket ranking, shadow branches, approval TUI, in-terminal PM updates |
 
 ### Project Management Integrations
 | Guide | What it covers |
@@ -75,6 +76,15 @@
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Solutions to common problems, error messages, and edge cases |
 | [VISION.md](VISION.md) | Project vision, roadmap, and planned features |
 | [REFACTORING.md](REFACTORING.md) | Config philosophy — why there are no hardcoded defaults |
+
+---
+
+## Strategy
+
+| Guide | What it covers |
+|-------|---------------|
+| [LAUNCH_STRATEGY.md](LAUNCH_STRATEGY.md) | **Governing doc** — wedge, positioning, first-run UX, channel sequence, risk register, decision framework |
+| [TUI_NAVIGATION_DESIGN.md](TUI_NAVIGATION_DESIGN.md) | **Planned** — ESC=back, Ctrl+C=cancel, FlowController + RawInput architecture |
 
 ---
 
