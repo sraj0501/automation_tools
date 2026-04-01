@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DevTrack — Developer Automation Platform</title>
+  <title>DevTrack — Writes your standup update from your git commits</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -607,12 +607,12 @@
   </div>
 
   <h1 class="hero-title">
-    Stop managing.<br>
-    <span class="grad-text">Start shipping.</span>
+    Your standup,<br>
+    <span class="grad-text">written for you.</span>
   </h1>
 
   <p class="hero-sub">
-    From a single problem statement, DevTrack plans your entire sprint — breaking it into Epics, Stories, and Tasks, assigning them based on team workload, and pushing everything to Azure DevOps, GitLab, or GitHub. Then it keeps every ticket in sync as you commit. All of it controllable from your phone.
+    DevTrack writes your standup update when you commit. Runs on your machine — no account, no cloud, no setup. Then syncs to GitHub, Azure DevOps, or Jira when you're ready.
   </p>
 
   <div class="hero-cta">
@@ -640,25 +640,26 @@
       </div>
     </div>
   </div>
+
 </section>
 
 <!-- ── Proof Strip ────────────────────────────────────────────────────────── -->
 <div class="proof-strip">
   <div class="proof-item reveal">
+    <div class="proof-num grad-text">&lt; 60s</div>
+    <div class="proof-label">Time to your first standup update</div>
+  </div>
+  <div class="proof-item reveal reveal-delay-1">
     <div class="proof-num grad-text">100%</div>
     <div class="proof-label">Local — your data stays on your machine</div>
   </div>
-  <div class="proof-item reveal reveal-delay-1">
-    <div class="proof-num grad-text">3+</div>
-    <div class="proof-label">PM integrations (Azure, GitLab, GitHub)</div>
-  </div>
   <div class="proof-item reveal reveal-delay-2">
-    <div class="proof-num grad-text">1</div>
-    <div class="proof-label">Sentence to a fully planned sprint</div>
+    <div class="proof-num grad-text">0</div>
+    <div class="proof-label">Account required to get started</div>
   </div>
   <div class="proof-item reveal reveal-delay-3">
-    <div class="proof-num grad-text">📱</div>
-    <div class="proof-label">Full control from your phone via Telegram</div>
+    <div class="proof-num grad-text">MIT</div>
+    <div class="proof-label">Open source — fork it, own it</div>
   </div>
 </div>
 
@@ -666,14 +667,22 @@
 <section class="features-section" id="features">
   <div class="container">
     <div class="features-header">
-      <div class="section-label reveal">Everything you need</div>
-      <h2 class="section-title reveal reveal-delay-1">Built for developers<br>too busy to do admin work</h2>
+      <div class="section-label reveal">What it does</div>
+      <h2 class="section-title reveal reveal-delay-1">Built for the code you write,<br>not the admin around it</h2>
       <p class="section-sub reveal reveal-delay-2">DevTrack handles the gap between writing code and keeping your team in the loop — automatically.</p>
     </div>
 
     <div class="features-grid">
 
-      <div class="feat-card large reveal">
+      <div class="feat-card large reveal" style="border-color:rgba(59,130,246,.28);background:linear-gradient(145deg,#0d1520 0%,var(--bg1) 60%);">
+        <div style="position:absolute;top:14px;right:14px;font-size:.65rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#3b82f6;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.25);padding:2px 8px;border-radius:99px;">The Wedge</div>
+        <div class="feat-icon" style="background:rgba(59,130,246,.12);">📋</div>
+        <div class="feat-title">Standup from Commits</div>
+        <div class="feat-desc">Make a commit — DevTrack logs it. Run <code style="font-family:var(--mono);font-size:.82rem;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px;">devtrack standup</code> — get a plain-English summary of what you did, ready to paste. No notes, no memory required. Works without any account or cloud setup.</div>
+        <span class="feat-tag" style="color:#3b82f6;border-color:rgba(59,130,246,.3);">git hooks · SQLite · zero config</span>
+      </div>
+
+      <div class="feat-card reveal reveal-delay-1">
         <div class="feat-icon" style="background:rgba(59,130,246,.12);">⚡</div>
         <div class="feat-title">Git-Aware Automation</div>
         <div class="feat-desc">Every commit you push is detected in real time. DevTrack extracts the ticket number, time, branch context, and PR info — then routes it through AI to update the right work item automatically. No copy-pasting.</div>
@@ -681,25 +690,24 @@
       </div>
 
       <div class="feat-card reveal reveal-delay-1">
+        <div class="feat-icon" style="background:rgba(239,68,68,.12);">🔌</div>
+        <div class="feat-title">Offline-First</div>
+        <div class="feat-desc">Everything runs locally. DevTrack queues commits and updates when you're offline and syncs when connectivity returns. No cloud dependency.</div>
+        <span class="feat-tag" style="color:#ef4444;border-color:rgba(239,68,68,.3);">SQLite · store-and-forward</span>
+      </div>
+
+      <div class="feat-card reveal">
         <div class="feat-icon" style="background:rgba(139,92,246,.12);">🤖</div>
         <div class="feat-title">git-sage Agent</div>
         <div class="feat-desc">A local LLM-powered git agent that plans and executes complex operations autonomously — squash, rebase, resolve conflicts — with full undo support.</div>
         <span class="feat-tag" style="color:#8b5cf6;border-color:rgba(139,92,246,.3);">Ollama · local LLM</span>
       </div>
 
-      <div class="feat-card reveal" style="border-color:rgba(20,184,166,.28);background:linear-gradient(145deg,#0f1a19 0%,var(--bg1) 60%);">
-        <div style="position:absolute;top:14px;right:14px;font-size:.65rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#14b8a6;background:rgba(20,184,166,.1);border:1px solid rgba(20,184,166,.25);padding:2px 8px;border-radius:99px;">Featured</div>
+      <div class="feat-card reveal reveal-delay-1">
         <div class="feat-icon" style="background:rgba(20,184,166,.15);">🗂️</div>
         <div class="feat-title">End-to-End PM Agent</div>
         <div class="feat-desc">Describe a problem in plain English and DevTrack plans the entire workstream — decomposing it into Epics, Stories, and Tasks, then assigning each item to the right person based on current workload. Works across <strong style="color:var(--text)">Azure DevOps, GitLab, and GitHub</strong>. Trigger it from your desk or straight from your phone via Telegram.</div>
         <span class="feat-tag" style="color:#14b8a6;border-color:rgba(20,184,166,.3);">plan · assign · create · sync · mobile</span>
-      </div>
-
-      <div class="feat-card reveal reveal-delay-1">
-        <div class="feat-icon" style="background:rgba(34,197,94,.12);">📱</div>
-        <div class="feat-title">Remote via Telegram</div>
-        <div class="feat-desc">Full remote control from your phone. View work items, create tickets, trigger updates, read logs — all without opening your laptop.</div>
-        <span class="feat-tag" style="color:#22c55e;border-color:rgba(34,197,94,.3);">Telegram bot</span>
       </div>
 
       <div class="feat-card reveal">
@@ -710,10 +718,10 @@
       </div>
 
       <div class="feat-card reveal reveal-delay-1">
-        <div class="feat-icon" style="background:rgba(239,68,68,.12);">🔌</div>
-        <div class="feat-title">Offline-First</div>
-        <div class="feat-desc">Everything runs locally. DevTrack queues commits and updates when you're offline and syncs when connectivity returns. No cloud dependency.</div>
-        <span class="feat-tag" style="color:#ef4444;border-color:rgba(239,68,68,.3);">SQLite · store-and-forward</span>
+        <div class="feat-icon" style="background:rgba(34,197,94,.12);">📱</div>
+        <div class="feat-title">Remote via Telegram</div>
+        <div class="feat-desc">Full remote control from your phone. View work items, create tickets, trigger updates, read logs — all without opening your laptop.</div>
+        <span class="feat-tag" style="color:#22c55e;border-color:rgba(34,197,94,.3);">Telegram bot</span>
       </div>
 
     </div>
@@ -754,8 +762,8 @@
           <div class="how-step" data-step="3">
             <div class="how-step-num">4</div>
             <div class="how-step-body">
-              <h4>You Get Notified</h4>
-              <p>Telegram bot pushes a summary to your phone. Your standup writes itself.</p>
+              <h4>Your Standup Writes Itself</h4>
+              <p>Run <code style="font-family:var(--mono);font-size:.8rem;background:rgba(255,255,255,.05);padding:1px 4px;border-radius:3px;">devtrack standup</code> — get a plain-English summary of your day, ready to paste. Telegram bot delivers it to your phone too.</p>
             </div>
           </div>
         </div>
@@ -842,7 +850,8 @@
     <h2 class="section-title reveal reveal-delay-1">A day in the life<br>with <span class="grad-text">DevTrack</span>.</h2>
 
     <div class="demo-grid">
-      <div class="demo-item reveal">
+
+<div class="demo-item reveal">
         <div class="demo-item-header">
           <span class="demo-item-icon">⚡</span>
           <span class="demo-item-title">Smart Commit Messages</span>
@@ -920,15 +929,15 @@
       <div class="reveal">
         <div class="about-avatar">👨‍💻</div>
         <div class="about-name">Shashank Raj</div>
-        <div class="about-role">Software Engineer · Creator of DevTrack</div>
+        <div class="about-role">Software Engineer · Founder, <a href="#" style="color:var(--blue);text-decoration:none;" title="Coming soon">Mogrov</a></div>
         <p class="about-bio">
           I built DevTrack because I was spending too much time on the overhead that surrounds coding — updating tickets, writing standup notes, keeping PM tools in sync. The actual coding was the easy part.
           <br><br>
-          DevTrack is my attempt at a developer-first automation layer: one that runs locally, respects your privacy, and handles the bureaucracy so you can stay in flow.
+          DevTrack is the first product under <strong style="color:var(--text)">Mogrov</strong>, a developer tooling company I'm building. The goal: tools that run locally, respect your privacy, and handle the bureaucracy so you can stay in flow.
           <br><br>
-          It also helps by offloading trivial work to low cost / no cost llm while allowing the frontier models to use up the precious tokens.
+          DevTrack offloads the admin to low-cost local LLMs, reserving frontier models for the work that actually needs them.
           <br><br>
-          In fact, this project was planned and developed using Devtrack.
+          This project was planned and built using DevTrack itself.
         </p>
         <div class="about-links">
           <a class="about-link" href="https://github.com/sraj0501" target="_blank" rel="noopener">
@@ -948,11 +957,14 @@
 
       <div class="reveal reveal-delay-2">
         <div class="about-vision">
-          <div class="about-vision-label">The vision</div>
+          <div class="about-vision-label">Built under Mogrov</div>
           <blockquote>
             DevTrack should be like a senior engineer who never forgets to update the ticket — who knows what you're working on from your commits, writes the update in your voice, and keeps every stakeholder in the loop without you lifting a finger.
           </blockquote>
           <div class="about-vision-author">— The goal driving every feature decision</div>
+          <div style="margin-top:16px;padding:12px 14px;background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.18);border-radius:var(--radius);font-size:.78rem;color:var(--muted);line-height:1.6;">
+            DevTrack is a product of <strong style="color:var(--text)">Mogrov</strong> — a developer tooling company currently in stealth. More at <span style="color:var(--blue);">mogrov.com</span> (coming soon).
+          </div>
           <div class="about-stats">
             <div>
               <div class="about-stat-num grad-text">3+</div>
@@ -1001,11 +1013,11 @@
             </div>
             <span class="contact-channel-arrow">→</span>
           </a>
-          <a class="contact-channel" href="mailto:shashank_raj28@hotmail.com">
+          <a class="contact-channel" href="mailto:admin@mogrov.com">
             <div class="contact-channel-icon" style="background:rgba(139,92,246,.1);">✉️</div>
             <div>
               <div class="contact-channel-title">Email</div>
-              <div class="contact-channel-sub">shashank_raj28@hotmail.com</div>
+              <div class="contact-channel-sub">admin@mogrov.com</div>
             </div>
             <span class="contact-channel-arrow">→</span>
           </a>
@@ -1084,24 +1096,38 @@
 // ── Terminal typewriter ───────────────────────────────────────────────────────
 const sequences = [
   {
+    // Open source — the wedge: commit → AI enhance → GitHub PR updated
     cmd: 'git commit -m "fix auth redirect"',
     lines: [
       { text: '✦ Detected PR #142 · branch: fix/oauth-loop', cls: 'term-info', delay: 600 },
       { text: '✦ AI enhancing message...', cls: 'term-info', delay: 1000 },
       { text: '✓ "Fix OAuth redirect loop on token expiry"', cls: 'term-success', delay: 1500 },
       { text: '  Accept [A] · Enhance [E] · Regen [R]: A', cls: 'term-warn', delay: 2000 },
-      { text: '✓ Committed · Azure DevOps PR #142 updated', cls: 'term-success', delay: 2600 },
+      { text: '✓ Committed · GitHub PR #142 updated', cls: 'term-success', delay: 2600 },
     ]
   },
   {
-    cmd: 'devtrack gitlab-list --state opened',
+    // Open source — standup writes itself
+    cmd: 'devtrack standup',
     lines: [
-      { text: '#88  Fix login timeout   [In Progress]', cls: 'term-out', delay: 400 },
-      { text: '#91  Add dark mode        [To Do]', cls: 'term-out', delay: 600 },
-      { text: '#95  Perf: reduce bundle  [To Do]', cls: 'term-out', delay: 800 },
+      { text: 'Yesterday: Fixed OAuth redirect loop (PR #142)', cls: 'term-out', delay: 400 },
+      { text: 'Today:     Refresh token rotation in progress', cls: 'term-out', delay: 700 },
+      { text: 'Blockers:  None', cls: 'term-out', delay: 1000 },
+      { text: '✓ Ready to paste — no notes needed', cls: 'term-success', delay: 1400 },
     ]
   },
   {
+    // Enterprise — Azure DevOps work item sync
+    cmd: 'devtrack azure-sync',
+    lines: [
+      { text: '✦ Fetching sprint AB#2847...', cls: 'term-info', delay: 400 },
+      { text: '✓ "Fix auth timeout" → Active', cls: 'term-success', delay: 900 },
+      { text: '  45 min logged · PR #142 linked', cls: 'term-out', delay: 1200 },
+      { text: '✓ Sprint: 5 / 12 tasks complete', cls: 'term-success', delay: 1600 },
+    ]
+  },
+  {
+    // git-sage — local LLM git agent
     cmd: 'devtrack sage ask "how many commits since main?"',
     lines: [
       { text: '✦ Checking git log...', cls: 'term-info', delay: 400 },
@@ -1278,7 +1304,7 @@ function handleFormSubmit(btn) {
   }
   const subject = encodeURIComponent(`[DevTrack] ${topic || 'Message'} from ${name}`);
   const body    = encodeURIComponent(`Name: ${name}\nEmail: ${email}\nTopic: ${topic}\n\n${message}`);
-  window.location.href = `mailto:hello@devtrack.dev?subject=${subject}&body=${body}`;
+  window.location.href = `mailto:admin@mogrov.com?subject=${subject}&body=${body}`;
 }
 
 // ── Nav scroll tint ────────────────────────────────────────────────────────────
