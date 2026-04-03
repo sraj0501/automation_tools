@@ -1,38 +1,34 @@
 """
 Centralized configuration for DevTrack backend.
 
-Loads all configurable values from .env file at project root.
-All backend modules should import from this module instead of using os.getenv directly.
+Reads entirely from the process environment. No file loading.
+Inject secrets via whatever mechanism you use (op run, direnv, launchd
+EnvironmentVariables, Docker env, etc.) before starting the process.
+
+All backend modules should use backend.config.get() instead of os.getenv() directly.
 """
 
 import os
 from pathlib import Path
 from typing import Optional
 
-# Load .env from project root - must be called before any config access
-_env_loaded = False
-
 
 def _find_project_root() -> Path:
-    """Find project root by looking for .env or .git in parent directories."""
-    # Check DEVTRACK_ENV_FILE or PROJECT_ROOT first
-    env_file = os.getenv("DEVTRACK_ENV_FILE")
-    if env_file and Path(env_file).exists():
-        return Path(env_file).parent
+    """Find project root without loading any .env file.
 
-    project_root = os.getenv("PROJECT_ROOT")
-    if project_root:
-        p = Path(project_root).expanduser()
+    Priority:
+    1. PROJECT_ROOT env var
+    2. Walk up from this file looking for .git
+    3. Parent of backend/
+    """
+    proot = os.getenv("PROJECT_ROOT")
+    if proot:
+        p = Path(proot).expanduser()
         if p.exists():
             return p
 
-    # Walk up from this file's location
-    current = Path(__file__).resolve().parent
-    for _ in range(5):
-        if (current / ".env").exists():
-            return current
-        if (current / ".env_sample").exists():
-            return current
+    current = Path(__file__).resolve().parent  # backend/
+    for _ in range(6):
         if (current / ".git").exists():
             return current
         parent = current.parent
@@ -40,40 +36,11 @@ def _find_project_root() -> Path:
             break
         current = parent
 
-    # Fallback: parent of backend/ is project root
     return Path(__file__).resolve().parent.parent
 
 
-def _load_env() -> None:
-    """Load .env from project root. Idempotent."""
-    global _env_loaded
-    if _env_loaded:
-        return
-
-    try:
-        from dotenv import load_dotenv
-    except ImportError:
-        _env_loaded = True
-        return
-
-    project_root = _find_project_root()
-    env_paths = [
-        project_root / ".env",
-        project_root / ".env_sample",
-    ]
-
-    for env_path in env_paths:
-        if env_path.exists():
-            load_dotenv(env_path)
-            _env_loaded = True
-            return
-
-    _env_loaded = True
-
-
 def get(key: str, default: Optional[str] = None) -> str:
-    """Get config value. Loads .env on first access."""
-    _load_env()
+    """Get a configuration value from the process environment."""
     return os.getenv(key, default or "")
 
 

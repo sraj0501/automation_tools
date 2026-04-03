@@ -18,16 +18,3 @@ def pytest_configure(config):
     pass
 
 
-@pytest.fixture(scope="session", autouse=True)
-def _block_env_file_load():
-    """Prevent load_dotenv from opening .env (which may be a named pipe / FIFO).
-
-    On this machine .env is a FIFO; open() on a FIFO blocks indefinitely.
-    Mark the config as already-loaded so _load_env() is a no-op for all tests.
-    This fixture applies to the entire test session before any imports.
-    """
-    import backend.config as _cfg
-    _cfg._env_loaded = True
-    yield
-    # Reset so any test that explicitly needs real env loading can do so.
-    _cfg._env_loaded = False
