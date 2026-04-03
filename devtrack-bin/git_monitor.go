@@ -28,6 +28,7 @@ type CommitInfo struct {
 	Author    string
 	Timestamp time.Time
 	Files     []string
+	Branch    string // current branch name at commit time ("" if detached HEAD)
 }
 
 // NewGitMonitor creates a new GitMonitor instance
@@ -181,12 +182,18 @@ func (gm *GitMonitor) getLatestCommit() (*CommitInfo, error) {
 		files = []string{}
 	}
 
+	branch := ""
+	if ref.Name().IsBranch() {
+		branch = ref.Name().Short()
+	}
+
 	return &CommitInfo{
 		Hash:      commit.Hash.String(),
 		Message:   strings.TrimSpace(commit.Message),
 		Author:    commit.Author.Name,
 		Timestamp: commit.Author.When,
 		Files:     files,
+		Branch:    branch,
 	}, nil
 }
 

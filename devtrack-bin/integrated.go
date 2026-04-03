@@ -23,6 +23,8 @@ type WorkspaceMonitor struct {
 	pmIterationPath string
 	pmAreaPath      string
 	pmMilestone     int
+	// Filtering
+	ignoreBranches  []string // commits on these branches are silently skipped
 }
 
 // IntegratedMonitor combines Git monitoring and time-based scheduling
@@ -74,6 +76,7 @@ func NewIntegratedMonitor(repoPath string) (*IntegratedMonitor, error) {
 				pmIterationPath: ws.PMIterationPath,
 				pmAreaPath:      ws.PMAreaPath,
 				pmMilestone:     ws.PMMilestone,
+				ignoreBranches:  ws.IgnoreBranches,
 			})
 			log.Printf("  ✓ Workspace %q → %s (platform: %q)", ws.Name, ws.Path, ws.PMPlatform)
 		}
@@ -162,9 +165,10 @@ func (im *IntegratedMonitor) Stop() {
 // workspaceKey returns a string that uniquely identifies a workspace's config.
 // If the key changes, the monitor must be restarted.
 func workspaceKey(ws WorkspaceConfig) string {
-	return fmt.Sprintf("%s|%s|%s|%s|%s|%s|%d",
+	return fmt.Sprintf("%s|%s|%s|%s|%s|%s|%d|%s",
 		ws.Name, ws.Path, ws.PMPlatform, ws.PMProject,
-		ws.PMAssignee, ws.PMIterationPath, ws.PMMilestone)
+		ws.PMAssignee, ws.PMIterationPath, ws.PMMilestone,
+		strings.Join(ws.IgnoreBranches, ","))
 }
 
 // ReloadWorkspaces hot-reloads the workspace configuration.
@@ -197,9 +201,10 @@ func (im *IntegratedMonitor) ReloadWorkspaces() {
 	// Stop monitors for removed or changed workspaces
 	for name, wm := range oldByName {
 		ws, stillWanted := desiredByName[name]
-		if !stillWanted || workspaceKey(ws) != fmt.Sprintf("%s|%s|%s|%s|%s|%s|%d",
+		if !stillWanted || workspaceKey(ws) != fmt.Sprintf("%s|%s|%s|%s|%s|%s|%d|%s",
 			wm.workspaceName, wm.gitMonitor.repoPath, wm.pmPlatform, wm.pmProject,
-			wm.pmAssignee, wm.pmIterationPath, wm.pmMilestone) {
+			wm.pmAssignee, wm.pmIterationPath, wm.pmMilestone,
+			strings.Join(wm.ignoreBranches, ",")) {
 			log.Printf("Stopping monitor for workspace %q", name)
 			wm.gitMonitor.Stop()
 			delete(oldByName, name)
@@ -231,6 +236,7 @@ func (im *IntegratedMonitor) ReloadWorkspaces() {
 			pmIterationPath: ws.PMIterationPath,
 			pmAreaPath:      ws.PMAreaPath,
 			pmMilestone:     ws.PMMilestone,
+			ignoreBranches:  ws.IgnoreBranches,
 		}
 		wmCopy := wm
 		if err := wmCopy.gitMonitor.Start(func(commit CommitInfo) {
@@ -268,6 +274,16 @@ func getBoolFromMap(m map[string]interface{}, key string) bool {
 
 // handleCommitForWorkspace is called when a Git commit is detected on a specific workspace
 func (im *IntegratedMonitor) handleCommitForWorkspace(commit CommitInfo, ws *WorkspaceMonitor) {
+	// Honour ignore_branches: silently skip commits on branches the user opted out of
+	if commit.Branch != "" {
+		for _, ignored := range ws.ignoreBranches {
+			if strings.EqualFold(commit.Branch, strings.TrimSpace(ignored)) {
+				log.Printf("Skipping commit on ignored branch %q for workspace %q", commit.Branch, ws.workspaceName)
+				return
+			}
+		}
+	}
+
 	im.lastActiveWorkspaceMu.Lock()
 	im.lastActiveWorkspace = ws
 	im.lastActiveWorkspaceMu.Unlock()
@@ -323,7 +339,7 @@ func (im *IntegratedMonitor) handleTrigger(event TriggerEvent) {
 				Author:          commit.Author,
 				Timestamp:       commit.Timestamp.Format(time.RFC3339),
 				FilesChanged:    commit.Files,
-				Branch:          "", // Branch info not available in CommitInfo
+				Branch:          commit.Branch,
 				WorkspaceName:   event.WorkspaceName,
 				PMPlatform:      event.PMPlatform,
 				PMProject:       event.PMProject,
