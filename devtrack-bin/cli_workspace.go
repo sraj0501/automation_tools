@@ -203,6 +203,36 @@ func (wc *WorkspaceCommands) Reload() error {
 	return nil
 }
 
+// InstallHooks installs the post-commit hook in every enabled workspace repo.
+// Idempotent — safe to run multiple times. Prints a result line per workspace.
+func (wc *WorkspaceCommands) InstallHooks() error {
+	cfg, err := LoadWorkspacesConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load workspaces.yaml: %w", err)
+	}
+	if cfg == nil || len(cfg.GetEnabledWorkspaces()) == 0 {
+		fmt.Println("No workspaces configured. Add repos with: devtrack workspace add <name> <path>")
+		return nil
+	}
+
+	ok, failed := 0, 0
+	for _, ws := range cfg.GetEnabledWorkspaces() {
+		if err := InstallPostCommitHook(ws.Path); err != nil {
+			fmt.Printf("  ✗ %-20s %s — %v\n", ws.Name, ws.Path, err)
+			failed++
+		} else {
+			fmt.Printf("  ✓ %-20s %s\n", ws.Name, ws.Path)
+			ok++
+		}
+	}
+	fmt.Printf("\n%d hook(s) installed", ok)
+	if failed > 0 {
+		fmt.Printf(", %d failed", failed)
+	}
+	fmt.Println()
+	return nil
+}
+
 // readDaemonPID reads the daemon PID from the PID file.
 func readDaemonPID() (int, error) {
 	data, err := os.ReadFile(GetPIDFilePath())

@@ -308,6 +308,7 @@ func (cli *CLI) handleStart() error {
 	fmt.Println("\nUse 'devtrack status' to check status")
 
 	enableGitForWorkspaces()
+	SendActivePingIfDue()
 
 	return nil
 }
@@ -1632,6 +1633,8 @@ func (cli *CLI) handleWorkspace() error {
 		return wc.Disable(os.Args[3])
 	case "reload":
 		return wc.Reload()
+	case "install-hooks":
+		return wc.InstallHooks()
 	default:
 		fmt.Printf("Unknown workspace subcommand: %s\n", subCmd)
 		fmt.Println("Usage:")
@@ -1641,6 +1644,7 @@ func (cli *CLI) handleWorkspace() error {
 		fmt.Println("  devtrack workspace enable <name>                Enable a workspace")
 		fmt.Println("  devtrack workspace disable <name>               Disable a workspace")
 		fmt.Println("  devtrack workspace reload                        Reload workspaces in running daemon")
+		fmt.Println("  devtrack workspace install-hooks                Install post-commit hooks in all workspaces")
 		return fmt.Errorf("unknown workspace subcommand: %s", subCmd)
 	}
 }
@@ -1863,8 +1867,8 @@ func (cli *CLI) handleIsWorkspace() error {
 	return nil
 }
 
-// enableGitForWorkspaces sets devtrack.enabled=true in all enabled workspaces.
-// Called automatically on `devtrack start` so users never need to run enable-git manually.
+// enableGitForWorkspaces sets devtrack.enabled=true and installs the post-commit
+// hook in all enabled workspaces. Called automatically on `devtrack start`.
 func enableGitForWorkspaces() {
 	cfg, err := LoadWorkspacesConfig()
 	if err != nil || cfg == nil {
@@ -1872,7 +1876,12 @@ func enableGitForWorkspaces() {
 	}
 	for _, ws := range cfg.GetEnabledWorkspaces() {
 		cmd := exec.Command("git", "-C", ws.Path, "config", "--local", "devtrack.enabled", "true")
-		if err := cmd.Run(); err == nil {
+		if err := cmd.Run(); err != nil {
+			continue
+		}
+		if err := InstallPostCommitHook(ws.Path); err != nil {
+			fmt.Printf("  ⚠ Git integration enabled for %s but hook install failed: %v\n", ws.Name, err)
+		} else {
 			fmt.Printf("  ✓ Git integration enabled: %s\n", ws.Name)
 		}
 	}
