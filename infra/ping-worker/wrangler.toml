@@ -1,0 +1,14 @@
+name = "devtrack-ping"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+[[kv_namespaces]]
+binding = "INSTALLS"
+id = "REPLACE_WITH_INSTALLS_KV_ID"
+
+[[kv_namespaces]]
+binding = "ACTIVE"
+id = "REPLACE_WITH_ACTIVE_KV_ID"
+
+[vars]
+MAX_NEW_FP_PER_IP_PER_HOUR = "5"
