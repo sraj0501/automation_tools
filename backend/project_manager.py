@@ -17,6 +17,13 @@ from backend.models.project import (
 logger = logging.getLogger(__name__)
 
 try:
+    from backend.db import project_store as _project_store
+    _store_available = True
+except Exception:
+    _project_store = None  # type: ignore
+    _store_available = False
+
+try:
     from backend.personalization import inject_style as _inject_style
 except ImportError:
     def _inject_style(prompt: str, context_type: str = "general") -> str:
@@ -128,9 +135,82 @@ class ProjectManager:
                       If not provided, some AI features will be unavailable.
         """
         self._provider = provider
-        self._projects: Dict[str, Project] = {}  # In-memory cache during session
+        self._projects: Dict[str, Project] = {}  # In-memory cache
         self._sync_provider = None  # External sync provider (e.g. AzureProjectSync)
+        self._load_from_db()
         logger.info("ProjectManager initialized")
+
+    def _load_from_db(self) -> None:
+        """Populate in-memory cache from SQLite on startup."""
+        if not _store_available:
+            return
+        try:
+            rows = _project_store.load_all_projects()
+            for row in rows:
+                project = self._row_to_project(row)
+                self._projects[project.id] = project
+            if rows:
+                logger.info("ProjectManager: loaded %d project(s) from DB", len(rows))
+        except Exception as exc:
+            logger.warning("ProjectManager: could not load from DB: %s", exc)
+
+    def _row_to_project(self, row: Dict[str, Any]) -> Project:
+        """Convert a project_store row dict back to a Project dataclass."""
+        def _dt(v):
+            if v is None:
+                return None
+            if isinstance(v, datetime):
+                return v
+            try:
+                return datetime.fromisoformat(v)
+            except Exception:
+                return None
+
+        goals = [
+            ProjectGoal(description=g) if isinstance(g, str) else ProjectGoal(**g)
+            for g in (row.get("goals") or [])
+        ]
+        stakeholders = [
+            ProjectStakeholder(**s) if isinstance(s, dict) else s
+            for s in (row.get("stakeholders") or [])
+        ]
+        return Project(
+            id=row["id"],
+            name=row["name"],
+            description=row.get("description", ""),
+            status=ProjectStatus(row.get("status", "setup")),
+            template_type=ProjectTemplate(row["template_type"]) if row.get("template_type") else ProjectTemplate.GENERIC,
+            start_date=_dt(row.get("start_date")),
+            end_date=_dt(row.get("end_date")),
+            goals=goals,
+            stakeholders=stakeholders,
+            budget_estimate=row.get("budget_estimate"),
+            risk_level=RiskLevel(row.get("risk_level", "low")),
+            risk_description=row.get("risk_description", ""),
+            external_id=row.get("external_id"),
+            external_source=row.get("external_source"),
+            external_sync_at=_dt(row.get("external_sync_at")),
+            related_project_ids=row.get("related_project_ids") or [],
+            metadata=row.get("metadata") or {},
+            created_at=_dt(row.get("created_at")) or datetime.utcnow(),
+            updated_at=_dt(row.get("updated_at")) or datetime.utcnow(),
+        )
+
+    def _save_to_db(self, project: Project) -> None:
+        if not _store_available:
+            return
+        try:
+            _project_store.save_project(project.to_dict())
+        except Exception as exc:
+            logger.warning("ProjectManager: DB save failed for %s: %s", project.id, exc)
+
+    def _delete_from_db(self, project_id: str) -> None:
+        if not _store_available:
+            return
+        try:
+            _project_store.delete_project(project_id)
+        except Exception as exc:
+            logger.warning("ProjectManager: DB delete failed for %s: %s", project_id, exc)
 
     def _get_provider(self):
         """Lazily load LLM provider if needed."""
@@ -221,7 +301,8 @@ class ProjectManager:
         if ai_enhance and self.is_ai_available():
             self._enhance_project_with_ai(project)
 
-        # Cache in memory
+        # Persist and cache
+        self._save_to_db(project)
         self._projects[project_id] = project
 
         logger.info(f"Created project {project_id}: {name} (template: {template.value})")
@@ -299,6 +380,7 @@ class ProjectManager:
                 setattr(project, key, value)
 
         project.updated_at = datetime.utcnow()
+        self._save_to_db(project)
         logger.info(f"Updated project {project_id}")
         return project
 
@@ -317,6 +399,7 @@ class ProjectManager:
             return False
 
         del self._projects[project_id]
+        self._delete_from_db(project_id)
         logger.info(f"Deleted project {project_id}")
         return True
 
