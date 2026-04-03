@@ -1960,8 +1960,128 @@ func launchdPlistTemplatePath() (string, error) {
 	return tmplPath, nil
 }
 
+// launchdEnvVarPrefixes lists the env var prefixes that should be captured into
+// the launchd plist. launchd starts processes with a minimal environment, so
+// all vars devtrack needs must be embedded at install time.
+var launchdEnvVarPrefixes = []string{
+	"PROJECT_ROOT", "DEVTRACK_", "DATA_", "DATABASE_", "LOG_", "PID_",
+	"CONFIG_", "LEARNING_", "WORKSPACES_", "CLI_",
+	"IPC_", "WEBHOOK_",
+	"LLM_", "OLLAMA_", "LMSTUDIO_", "OPENAI_", "ANTHROPIC_", "GROQ_",
+	"GIT_SAGE_", "HTTP_", "PROMPT_",
+	"AZURE_", "GITHUB_", "GITLAB_", "JIRA_", "TEAMS_",
+	"EMAIL_", "TELEGRAM_", "SLACK_",
+	"ALERT_", "ADMIN_",
+	"WORK_", "TIMEZONE", "PROMPT_INTERVAL", "AUTO_SYNC", "OUTPUT_TYPE",
+	"DAILY_REPORT_TIME", "WEEKLY_REPORT_DAY", "SEND_ON_TRIGGER", "SEND_DAILY_SUMMARY",
+	"PYTHON_BRIDGE_SCRIPT",
+	"MONGODB_", "REDIS_",
+	"NEWPROJECT_", "SPEC_", "VACATION_", "EOD_", "WORK_SESSION_",
+	"SENTIMENT_", "IPC_RETRY_", "LLM_REQUEST_", "QUEUE_", "DEFERRED_",
+	"HEALTH_",
+}
+
+// shouldCaptureForLaunchd returns true if the env var name should be included
+// in the launchd plist's EnvironmentVariables.
+func shouldCaptureForLaunchd(name string) bool {
+	// Always include PATH and HOME so child processes work correctly.
+	if name == "PATH" || name == "HOME" || name == "USER" || name == "SHELL" {
+		return true
+	}
+	for _, prefix := range launchdEnvVarPrefixes {
+		if strings.HasPrefix(name, prefix) {
+			return true
+		}
+		if name == strings.TrimRight(prefix, "_") {
+			return true
+		}
+	}
+	return false
+}
+
+// xmlEscape escapes special XML characters in an attribute/text value.
+func xmlEscape(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	s = strings.ReplaceAll(s, "\"", "&quot;")
+	return s
+}
+
+// buildLaunchdPlist generates a launchd plist that embeds all current devtrack
+// env vars so launchd can start the daemon with the correct environment.
+func buildLaunchdPlist(binaryPath, projectRoot string) string {
+	// Collect env vars to inject.
+	type envEntry struct{ key, val string }
+	var entries []envEntry
+	for _, kv := range os.Environ() {
+		parts := strings.SplitN(kv, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key, val := parts[0], parts[1]
+		if shouldCaptureForLaunchd(key) {
+			entries = append(entries, envEntry{key, val})
+		}
+	}
+	// Sort for deterministic output.
+	for i := 0; i < len(entries); i++ {
+		for j := i + 1; j < len(entries); j++ {
+			if entries[i].key > entries[j].key {
+				entries[i], entries[j] = entries[j], entries[i]
+			}
+		}
+	}
+
+	var envXML strings.Builder
+	for _, e := range entries {
+		fmt.Fprintf(&envXML, "        <key>%s</key>\n        <string>%s</string>\n",
+			xmlEscape(e.key), xmlEscape(e.val))
+	}
+
+	logPath := filepath.Join(projectRoot, "Data", "logs", "launchd.log")
+
+	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>dev.devtrack</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>%s</string>
+        <string>start</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+%s    </dict>
+
+    <key>WorkingDirectory</key>
+    <string>%s</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>%s</string>
+
+    <key>StandardErrorPath</key>
+    <string>%s</string>
+</dict>
+</plist>
+`, xmlEscape(binaryPath), envXML.String(), xmlEscape(projectRoot),
+		xmlEscape(logPath), xmlEscape(logPath))
+}
+
 // handleLaunchdInstall installs the launchd plist to ~/Library/LaunchAgents
 // and loads it with launchctl so DevTrack auto-starts on login.
+// All current devtrack env vars are baked into the plist so launchd can start
+// the daemon with the correct environment (environment-first config).
 func (cli *CLI) handleLaunchdInstall() error {
 	// Resolve project root (used as WorkingDirectory and in env paths)
 	projectRoot := os.Getenv("PROJECT_ROOT")
@@ -1980,7 +2100,7 @@ func (cli *CLI) handleLaunchdInstall() error {
 		execPath, _ = filepath.Abs(execPath)
 		dir := filepath.Dir(execPath)
 		for i := 0; i < 6; i++ {
-			if _, err := os.Stat(filepath.Join(dir, "Data", "configs", "dev.devtrack.plist")); err == nil {
+			if _, err := os.Stat(filepath.Join(dir, "Data", "configs")); err == nil {
 				projectRoot = dir
 				break
 			}
@@ -1992,7 +2112,7 @@ func (cli *CLI) handleLaunchdInstall() error {
 		}
 	}
 	if projectRoot == "" {
-		return fmt.Errorf("cannot determine PROJECT_ROOT; set it in .env or as an environment variable")
+		return fmt.Errorf("cannot determine PROJECT_ROOT; export it or run from the DevTrack directory")
 	}
 	projectRoot, _ = filepath.Abs(projectRoot)
 
@@ -2003,19 +2123,8 @@ func (cli *CLI) handleLaunchdInstall() error {
 	}
 	binaryPath, _ = filepath.Abs(binaryPath)
 
-	// Read the plist template
-	tmplPath, err := launchdPlistTemplatePath()
-	if err != nil {
-		return err
-	}
-	tmplData, err := os.ReadFile(tmplPath)
-	if err != nil {
-		return fmt.Errorf("failed to read plist template: %w", err)
-	}
-
-	// Substitute placeholders
-	plistContent := strings.ReplaceAll(string(tmplData), "DEVTRACK_BINARY_PLACEHOLDER", binaryPath)
-	plistContent = strings.ReplaceAll(plistContent, "PROJECT_ROOT_PLACEHOLDER", projectRoot)
+	// Generate plist content with current env vars embedded.
+	plistContent := buildLaunchdPlist(binaryPath, projectRoot)
 
 	// Determine destination: ~/Library/LaunchAgents/dev.devtrack.plist
 	homeDir, err := os.UserHomeDir()
@@ -2050,6 +2159,7 @@ func (cli *CLI) handleLaunchdInstall() error {
 	fmt.Printf("  Root:    %s\n", projectRoot)
 	fmt.Println()
 	fmt.Println("DevTrack will now start automatically at login.")
+	fmt.Println("Tip: re-run 'devtrack autostart-install' after changing env vars.")
 	fmt.Println("Use 'devtrack status' to verify it is running.")
 	fmt.Println("Use 'devtrack launchd-uninstall' to remove auto-start.")
 	return nil
@@ -2190,17 +2300,48 @@ func resolveProjectRootForAutostart() (string, error) {
 	return abs, nil
 }
 
-// installSystemdService writes the unit file and enables + starts it.
-func installSystemdService(projectRoot, binaryPath, envFilePath string) error {
-	tmplPath := filepath.Join(projectRoot, "Data", "configs", "dev.devtrack.service")
-	tmplData, err := os.ReadFile(tmplPath)
-	if err != nil {
-		return fmt.Errorf("systemd service template not found at %s: %w", tmplPath, err)
+// buildSystemdService generates a systemd user unit file that embeds all current
+// devtrack env vars as Environment= lines.
+func buildSystemdService(binaryPath, projectRoot string) string {
+	var envLines strings.Builder
+	for _, kv := range os.Environ() {
+		parts := strings.SplitN(kv, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key, val := parts[0], parts[1]
+		if shouldCaptureForLaunchd(key) {
+			// systemd requires quoting values that contain special chars.
+			// Use double-quotes; escape any existing double-quotes.
+			escaped := strings.ReplaceAll(val, `"`, `\"`)
+			fmt.Fprintf(&envLines, "Environment=\"%s=%s\"\n", key, escaped)
+		}
 	}
 
-	svcContent := strings.ReplaceAll(string(tmplData), "DEVTRACK_BINARY_PLACEHOLDER", binaryPath)
-	svcContent = strings.ReplaceAll(svcContent, "PROJECT_ROOT_PLACEHOLDER", projectRoot)
-	svcContent = strings.ReplaceAll(svcContent, "DEVTRACK_ENV_FILE_PLACEHOLDER", envFilePath)
+	logPath := filepath.Join(projectRoot, "Data", "logs", "systemd.log")
+
+	return fmt.Sprintf(`[Unit]
+Description=DevTrack Developer Automation
+After=default.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=%s start
+%sWorkingDirectory=%s
+StandardOutput=append:%s
+StandardError=append:%s
+
+[Install]
+WantedBy=default.target
+`, binaryPath, envLines.String(), projectRoot, logPath, logPath)
+}
+
+// installSystemdService writes the unit file and enables + starts it.
+// All current devtrack env vars are embedded as Environment= lines so systemd
+// starts the daemon with the correct environment (environment-first config).
+func installSystemdService(projectRoot, binaryPath, _ string) error {
+	svcContent := buildSystemdService(binaryPath, projectRoot)
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -2234,6 +2375,7 @@ func installSystemdService(projectRoot, binaryPath, envFilePath string) error {
 	fmt.Printf("  Root:    %s\n", projectRoot)
 	fmt.Println()
 	fmt.Println("DevTrack will now start automatically at login.")
+	fmt.Println("Tip: re-run 'devtrack autostart-install' after changing env vars.")
 	fmt.Println("Use 'devtrack status' to verify it is running.")
 	fmt.Println("Use 'devtrack autostart-uninstall' to remove auto-start.")
 	return nil
@@ -2299,7 +2441,9 @@ const (
 )
 
 // installProfileAutostart appends a startup block to the shell profile.
-func installProfileAutostart(binaryPath, envFilePath string) error {
+// The block simply calls 'devtrack start'; env vars must already be set in
+// the shell profile (via direnv, manual export, etc.) before this line runs.
+func installProfileAutostart(binaryPath, _ string) error {
 	profilePath, err := profileShellFile()
 	if err != nil {
 		return err
@@ -2316,8 +2460,8 @@ func installProfileAutostart(binaryPath, envFilePath string) error {
 		return nil
 	}
 
-	block := fmt.Sprintf("\n%s\nDEVTRACK_ENV_FILE=%s %s start 2>/dev/null || true\n%s\n",
-		autostartMarkerBegin, envFilePath, binaryPath, autostartMarkerEnd)
+	block := fmt.Sprintf("\n%s\n%s start 2>/dev/null || true\n%s\n",
+		autostartMarkerBegin, binaryPath, autostartMarkerEnd)
 
 	f, err := os.OpenFile(profilePath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
@@ -2395,6 +2539,8 @@ func uninstallProfileAutostart() error {
 }
 
 // handleAutostartInstall installs the OS-appropriate auto-start mechanism.
+// All required env vars are captured from the current environment and baked
+// into the service file / plist at install time.
 func (cli *CLI) handleAutostartInstall() error {
 	projectRoot, err := resolveProjectRootForAutostart()
 	if err != nil {
@@ -2407,19 +2553,13 @@ func (cli *CLI) handleAutostartInstall() error {
 	}
 	binaryPath, _ = filepath.Abs(binaryPath)
 
-	envFilePath := os.Getenv("DEVTRACK_ENV_FILE")
-	if envFilePath == "" {
-		envFilePath = filepath.Join(projectRoot, ".env")
-	}
-	envFilePath, _ = filepath.Abs(envFilePath)
-
 	switch detectOSType() {
 	case osDarwin:
 		return cli.handleLaunchdInstall()
 	case osLinuxSystemd, osWSLSystemd:
-		return installSystemdService(projectRoot, binaryPath, envFilePath)
+		return installSystemdService(projectRoot, binaryPath, "")
 	case osWSLNoSystemd:
-		return installProfileAutostart(binaryPath, envFilePath)
+		return installProfileAutostart(binaryPath, "")
 	default:
 		return cli.handleLaunchdInstall()
 	}
