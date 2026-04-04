@@ -171,9 +171,13 @@ devtrack alerts --all
 devtrack alerts --clear
 ```
 
-Background poller watches GitHub, Azure DevOps, and **Jira** for assigned issues, new comments, review requests, and state changes. Delivers macOS OS notifications and terminal output. Jira alerter polls assigned issues, new comments, and status changes using the Jira REST API (`ALERT_JIRA_ENABLED=true`).
+Background poller watches **GitHub**, **Azure DevOps**, and **Jira** for assigned issues, new comments, review requests, and status changes. Delivers macOS OS notifications and terminal output.
 
-Alert state (`last_checked` timestamps per source) is persisted to SQLite when MongoDB is unavailable, so poll continuity survives daemon restarts even without a MongoDB connection.
+- **GitHub**: Issue/PR assigned, review requested, comment on involved issue
+- **Azure DevOps**: Work item assigned, comment added, state changed
+- **Jira**: Assigned to you, new comments, status transitions (via REST API)
+
+Alert state (`last_checked` timestamps per source) persists to **SQLite** when MongoDB is unavailable, so poll continuity survives daemon restarts even without a MongoDB connection.
 
 ### AI project planning (via Telegram)
 
@@ -290,9 +294,9 @@ docker compose up -d   # starts Python backend + MongoDB, Redis, PostgreSQL
 ## Testing
 
 ```bash
-cd devtrack-bin && go test ./...          # Go layer
-uv run pytest backend/tests/             # Python backend (159 tests)
-uv run pytest backend/tests/ -k cs1     # CS-1 HTTP trigger suite
+cd devtrack-bin && go test ./...          # Go layer (20+ tests)
+uv run pytest backend/tests/             # Python backend (159+ tests)
+uv run pytest backend/tests/ -k cs1     # CS-1 HTTP trigger suite (28 tests)
 ```
 
 ---
