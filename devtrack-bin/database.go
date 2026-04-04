@@ -383,6 +383,15 @@ func (d *Database) initSchema() error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_notifications_read    ON notifications(read);
 	CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at);
+
+	-- Alert state table: delta tracking for alert pollers (SQLite fallback when MongoDB unavailable)
+	CREATE TABLE IF NOT EXISTS alert_state (
+		id           TEXT PRIMARY KEY,  -- "<user_id>:<source>"
+		user_id      TEXT NOT NULL,
+		source       TEXT NOT NULL,
+		last_checked DATETIME NOT NULL,
+		updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
 	`
 
 	_, err := d.db.Exec(schema)
@@ -1715,4 +1724,42 @@ func scanNotifications(rows interface{ Next() bool; Scan(...interface{}) error; 
 		out = append(out, r)
 	}
 	return out, nil
+}
+
+// GetAlertLastChecked returns the last-checked time for a (userID, source) pair.
+// Returns zero time and false when no record exists.
+func (d *Database) GetAlertLastChecked(userID, source string) (time.Time, bool, error) {
+	key := userID + ":" + source
+	var ts string
+	err := d.db.QueryRow(
+		`SELECT last_checked FROM alert_state WHERE id=?`, key,
+	).Scan(&ts)
+	if err == sql.ErrNoRows {
+		return time.Time{}, false, nil
+	}
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	t, parseErr := time.Parse(time.RFC3339, ts)
+	if parseErr != nil {
+		t, parseErr = time.Parse("2006-01-02 15:04:05", ts)
+	}
+	if parseErr != nil {
+		return time.Time{}, false, parseErr
+	}
+	return t.UTC(), true, nil
+}
+
+// SetAlertLastChecked persists the last-checked timestamp for a (userID, source) pair.
+func (d *Database) SetAlertLastChecked(userID, source string, ts time.Time) error {
+	key := userID + ":" + source
+	_, err := d.db.Exec(
+		`INSERT INTO alert_state (id, user_id, source, last_checked, updated_at)
+		 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+		 ON CONFLICT(id) DO UPDATE SET
+		     last_checked=excluded.last_checked,
+		     updated_at=CURRENT_TIMESTAMP`,
+		key, userID, source, ts.UTC().Format(time.RFC3339),
+	)
+	return err
 }

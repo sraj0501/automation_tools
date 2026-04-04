@@ -184,8 +184,12 @@ class TriggerProcessor:
         repo_path   = data.get("repo_path", "")
         author      = data.get("author", "")
         branch      = data.get("branch", "")
-        pm_platform = data.get("pm_platform", "")
-        pm_project  = data.get("pm_project", "")
+        pm_platform       = data.get("pm_platform", "")
+        pm_project        = data.get("pm_project", "")
+        pm_assignee       = data.get("pm_assignee", "")
+        pm_iteration_path = data.get("pm_iteration_path", "")
+        pm_area_path      = data.get("pm_area_path", "")
+        pm_milestone      = data.get("pm_milestone", "")
 
         logger.info(f"[HTTP commit] {commit_hash[:12]} — {commit_msg[:60]}")
 
@@ -221,6 +225,10 @@ class TriggerProcessor:
                     ticket_id=task_data.get("ticket_id", ""),
                     status=task_data.get("status", ""),
                     pm_project=pm_project,
+                    pm_assignee=pm_assignee,
+                    pm_iteration_path=pm_iteration_path,
+                    pm_area_path=pm_area_path,
+                    pm_milestone=pm_milestone,
                     commit_info={
                         "hash": commit_hash,
                         "message": commit_msg,
