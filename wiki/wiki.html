@@ -524,7 +524,7 @@
         <span class="current" id="breadcrumbCurrent">Home</span>
       </div>
       <div class="topbar-actions">
-        <span class="version-chip">v1.3</span>
+        <span class="version-chip">v1.4-dev</span>
         <button class="icon-btn" id="themeToggle" title="Toggle theme">
           <svg id="themeIcon" viewBox="0 0 20 20" fill="currentColor"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>
         </button>
@@ -994,9 +994,11 @@ devtrack cloud logout</code></pre>
 
   TELEMETRY: `<div class="md-body">
 <h1>Telemetry</h1>
-<div class="home-badge" style="margin-bottom:24px;background:var(--callout-warn);border-color:var(--callout-warn-border);color:#92400e;">Planned — not yet implemented</div>
+<div class="home-badge" style="margin-bottom:24px;background:var(--callout-tip);border-color:var(--callout-tip-border);color:#166534;">Tier 2 implemented (v1.4-dev) — Tier 1 &amp; 3 planned</div>
 
 <p>DevTrack's telemetry system is a <strong>privacy-first, three-tier</strong> approach to understanding how many people download and use the tool — without ever collecting personal data. Telemetry is always opt-in and the binary works identically with it on or off.</p>
+
+<blockquote><p><strong>Status (v1.4-dev):</strong> Tier-2 anonymous install and active pings are now implemented in <code>devtrack-bin/ping.go</code> and sent to <code>https://ping.devtrack.dev</code> (Cloudflare Worker). Two events fire: <code>install</code> on first run and <code>active</code> at most once per 24 hours. Tier-1 (GitHub Releases download stats) and Tier-3 (registered-user heartbeats) remain planned.</p></blockquote>
 
 <h2>Three Tiers at a Glance</h2>
 <div class="table-wrap"><table>
@@ -1119,11 +1121,43 @@ curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
 </tbody>
 </table></div>
 
-<blockquote><p><strong>Implementation status:</strong> The telemetry system is fully designed and documented in <code>docs/TELEMETRY_PLAN.md</code>. No code has been written yet. The plan covers four implementation phases: server-side foundation (1 day), real-time admin dashboard (1 day), Go binary instrumentation (1 day), and polish including a first-run opt-in prompt (half day).</p></blockquote>
+<blockquote><p><strong>Implementation status (v1.4-dev):</strong> Tier-2 anonymous pings are now implemented in <code>devtrack-bin/ping.go</code>. The <code>install</code> event fires on the first daemon start; the <code>active</code> event fires at most once per 24 hours. Both are fire-and-forget goroutines to a Cloudflare Worker at <code>https://ping.devtrack.dev</code>. The server-side foundation, real-time admin dashboard (Tier 1 GitHub stats, Tier 2 SSE live feed), and Tier-3 registered-user heartbeats described above remain planned. The four-phase implementation plan is documented in <code>docs/TELEMETRY_PLAN.md</code>.</p></blockquote>
 </div>`,
 
   WHATS_NEW: `<div class="md-body">
 <h1>What's New</h1>
+<div class="home-badge" style="margin-bottom:24px;background:var(--callout-warn);border-color:var(--callout-warn-border);color:#92400e;">v1.4-dev — unreleased — on features/release_ready</div>
+
+<h2>v1.4-dev — Jira Alerter, Env-First Config, PM Persistence &amp; More</h2>
+<p>These changes are on the <code>features/release_ready</code> branch and have not yet been tagged as a release. They represent the next batch of production-readiness improvements.</p>
+
+<div class="feature-list" style="margin-bottom:32px;">
+  <div class="feature-item"><div class="feature-dot">1</div><div><h4>Jira Alerter — 26 new tests</h4><p><code>backend/alerters/jira_alerter.py</code> is now implemented and fully tested. The <code>JiraAlerter</code> class polls Jira Cloud for three event types: <strong>assigned to me</strong>, <strong>comment added</strong>, and <strong>status changed</strong>. 26 tests covering all polling paths, deduplication, and edge cases are in <code>backend/tests/test_jira_alerter.py</code>. The alert poller is updated to include Jira alongside GitHub and Azure DevOps. See the <a href="#TICKET_ALERTER" onclick="navigate('TICKET_ALERTER');return false;">Ticket Alerter</a> page.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">2</div><div><h4>Environment-first config — dotenv file loading removed</h4><p>The Go daemon no longer reads a <code>.env</code> file at startup. All configuration must be provided as real environment variables (exported in the shell, baked into the launchd/systemd plist, or set by a wrapper script). This eliminates the class of bugs caused by FIFO-flavoured <code>.env</code> files and makes the daemon safe to run as a system service. Run <code>devtrack autostart-install</code> to migrate — the command bakes all current env vars into the plist automatically. See <a href="#CONFIGURATION" onclick="navigate('CONFIGURATION');return false;">Configuration</a>.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">3</div><div><h4>Post-commit hook auto-install on <code>devtrack start</code></h4><p><code>devtrack start</code> now automatically installs the DevTrack post-commit hook in every enabled workspace repository on daemon startup. Previously the hook was only installed when running <code>devtrack workspace install-hooks</code> manually. No action required for existing setups — the hook is idempotent and will not overwrite a hook that already exists.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">4</div><div><h4>Multi-repo: <code>ignore_branches</code> and branch tracking</h4><p>Workspaces in <code>workspaces.yaml</code> now support an <code>ignore_branches</code> list. Commits on listed branches (e.g. <code>main</code>, <code>release/**</code>) are silently skipped — no prompt, no trigger, no log entry. The daemon also tracks the active branch per workspace and surfaces it in the TUI Workspaces tab. See <a href="#MULTI_REPO" onclick="navigate('MULTI_REPO');return false;">Multi-Repo Setup</a>.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">5</div><div><h4>Phase 4B — SQLite persistence for PM projects, backlog &amp; sprints</h4><p>The Go daemon's SQLite schema gains three new tables: <code>pm_projects</code> (synced project/repo metadata per workspace), <code>backlog_items</code> (cached issue/ticket records), and <code>sprints</code> (iteration metadata). These tables are written by the Go daemon from PM API responses and read by the TUI Workspaces tab to show project status without an API round-trip. No migration needed for clean installs.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">6</div><div><h4>Autostart env-baking — launchd/systemd/profile</h4><p><code>devtrack autostart-install</code> has been upgraded to <strong>bake all current environment variables</strong> into the generated plist (macOS) or systemd unit (Linux). This means the daemon, when started by the OS at login, inherits the exact same configuration that was active when you ran <code>autostart-install</code> — no wrapper scripts, no <code>EnvironmentFile=</code> hacks. Re-run <code>devtrack autostart-install</code> after changing <code>.env</code> values to refresh the baked env. See <a href="#AUTOSTART" onclick="navigate('AUTOSTART');return false;">Auto-Start</a>.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">7</div><div><h4>Anonymous install &amp; active telemetry ping (Tier 2 implemented)</h4><p><code>devtrack-bin/ping.go</code> implements the Tier-2 anonymous usage pings described in the Telemetry plan. On install, a random UUID is created at <code>~/.devtrack/id</code>. A SHA-256 of the hardware platform UUID is computed as a stable fingerprint (raw value never leaves the machine). Two events are fired: <code>install</code> on first run, and <code>active</code> at most once per 24 hours when the daemon is running. Both POSTs are fire-and-forget goroutines — failures are silent. The telemetry endpoint is <code>https://ping.devtrack.dev</code> (Cloudflare Worker). Disabled by a sentinel file written by <code>devtrack telemetry off</code>. See <a href="#TELEMETRY" onclick="navigate('TELEMETRY');return false;">Telemetry</a>.</p></div></div>
+</div>
+
+<h2>New .env Variables (v1.4-dev)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Variable</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><em>none</em></td><td>v1.4-dev adds no new required env vars. The env-first refactor removes the requirement for a <code>.env</code> file — all vars must now be exported into the process environment before starting the daemon.</td></tr>
+</tbody>
+</table></div>
+
+<h2>New workspaces.yaml Fields (v1.4-dev)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>ignore_branches</code></td><td><code>[]string</code></td><td>Branch names (or glob patterns) whose commits are silently skipped. Example: <code>["main", "release/*"]</code></td></tr>
+</tbody>
+</table></div>
+
+<hr>
 <div class="home-badge" style="margin-bottom:24px;background:var(--callout-tip);border-color:var(--callout-tip-border);color:#166534;">v1.3 — April 2026 — HTTP Trigger Validation &amp; Test Coverage</div>
 
 <h2>v1.3 — HTTP Trigger Validation, Bug Fixes &amp; 133 New Tests</h2>
@@ -1271,10 +1305,17 @@ curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
 </tbody>
 </table></div>
 
-<h2>Coming in v1.4</h2>
+<h2>In v1.4 (partial — see v1.4-dev above)</h2>
 <ul>
-<li><strong>Autonomous Communication</strong> — AI drafts and sends standup messages via Power Automate / email</li>
-<li><strong>CS-4 SaaS tier</strong> — Multi-tenant managed backend; billing; <code>DEVTRACK_API_KEY</code> subscription auth</li>
+<li>Jira alerter with 26 tests ✅ (shipped in v1.4-dev)</li>
+<li>Environment-first config — dotenv file loading removed ✅</li>
+<li>Post-commit hook auto-install on <code>devtrack start</code> ✅</li>
+<li><code>ignore_branches</code> and branch tracking for multi-repo ✅</li>
+<li>Phase 4B SQLite PM persistence ✅</li>
+<li>Autostart env-baking ✅</li>
+<li>Anonymous telemetry ping (Tier 2) ✅</li>
+<li><strong>Autonomous Communication</strong> — AI drafts and sends standup messages via Power Automate / email (planned)</li>
+<li><strong>CS-4 SaaS tier</strong> — Multi-tenant managed backend; billing; <code>DEVTRACK_API_KEY</code> subscription auth (planned)</li>
 </ul>
 
 <blockquote><p>DevTrack follows a local-first design principle: everything in v1.0 works fully offline on your machine. Cloud features (CS-4) are opt-in upgrades — they extend capability without replacing the local-first core.</p></blockquote>
@@ -1282,7 +1323,9 @@ curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
 
   CONFIGURATION: `<div class="md-body">
 <h1>Configuration Reference</h1>
-<p>DevTrack is configured via a single <code>.env</code> file. Copy <code>.env_sample</code> to <code>.env</code>, fill in your values, then run <code>devtrack start</code>. All path values must be absolute. Restart the daemon after changes.</p>
+<p>DevTrack is configured entirely through environment variables. Copy <code>.env_sample</code> to <code>.env</code>, fill in your values, then <strong>export them</strong> before running <code>devtrack start</code>. All path values must be absolute. Restart the daemon after changes.</p>
+
+<blockquote><p><strong>v1.4-dev — Env-first config:</strong> The Go daemon no longer reads a <code>.env</code> file at startup. All variables must be exported into the process environment beforehand (e.g. via <code>source .env</code> in your shell profile, or baked into the launchd/systemd plist by running <code>devtrack autostart-install</code>). Running <code>set -a; source .env; set +a</code> before <code>devtrack start</code> is the quickest migration path for interactive use.</p></blockquote>
 
 <h2>Minimum Required Setup</h2>
 <pre><code class="language-bash">PROJECT_ROOT=/path/to/automation_tools
@@ -1710,9 +1753,23 @@ workspaces:
     pm_platform: azure
     enabled: false</code></pre>
 
+<h2>ignore_branches Field <span style="font-size:.75rem;font-weight:400;background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent);border-radius:99px;padding:1px 8px;margin-left:6px;">v1.4-dev</span></h2>
+<p>List branch name patterns to exclude from commit monitoring. When the active branch of a workspace matches any entry, the commit event is silently discarded — no work-update prompt, no trigger, no log entry.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Pattern</th><th>Matches</th></tr></thead>
+<tbody>
+<tr><td><code>main</code></td><td>The branch named exactly <code>main</code></td></tr>
+<tr><td><code>release/*</code></td><td>Any branch starting with <code>release/</code></td></tr>
+<tr><td><code>dependabot/*</code></td><td>All Dependabot auto-update branches</td></tr>
+<tr><td><code>renovate/*</code></td><td>All Renovate auto-update branches</td></tr>
+</tbody>
+</table></div>
+<p>The daemon also tracks and displays the <strong>current branch</strong> for each workspace — visible in the TUI Workspaces tab alongside PM platform and enabled status.</p>
+
 <h2>How Routing Works</h2>
 <ol>
 <li>Go daemon detects a commit in a workspace path</li>
+<li>If the current branch matches an <code>ignore_branches</code> pattern, the event is dropped immediately</li>
 <li>The trigger message includes <code>pm_platform</code>, <code>pm_project</code>, <code>pm_milestone</code>, and <code>workspace_name</code></li>
 <li>Python bridge reads <code>pm_platform</code> and calls only that platform's sync handler</li>
 <li>Azure, GitHub, GitLab, and Jira are all skipped for platform values that don't match</li>
@@ -1860,7 +1917,7 @@ function renderHome() {
   const content = document.getElementById('content');
   content.innerHTML = `
     <div class="home-hero">
-      <div class="home-badge">Local-First · v1.3</div>
+      <div class="home-badge">Local-First · v1.4-dev</div>
       <h1 class="home-title">Developer automation<br>that handles the <span>overhead</span>.</h1>
       <p class="home-sub">DevTrack monitors your Git activity, prompts for work updates, routes them through AI, and keeps your project management systems in sync — all running locally on your machine.</p>
     </div>
@@ -1868,7 +1925,7 @@ function renderHome() {
     <div class="home-grid">
       ${[
         // ── Get Started ────────────────────────────────────────────────────────
-        { id:'WHATS_NEW',        icon:'🎉', title:"What's New",         desc:'v1.3: HTTP trigger validation, 133 new tests, .env FIFO fix, RuntimeNarrativeMiddleware fix. v1.2: Community License, magic-link login, T&amp;C acceptance flow.' },
+        { id:'WHATS_NEW',        icon:'🎉', title:"What's New",         desc:'v1.4-dev: Jira alerter, env-first config, post-commit hook auto-install, ignore_branches, Phase 4B SQLite PM persistence, env-baking autostart, anonymous telemetry ping. v1.3: 133 new tests, .env FIFO fix.' },
         { id:'GETTING_STARTED',  icon:'🚀', title:'Getting Started',    desc:'New to DevTrack? Start here — concepts, setup, and first run.' },
         { id:'QUICK_START',      icon:'⚡', title:'Quick Start',        desc:'Get running in 5 minutes with the minimal setup guide.' },
         // ── Reference ─────────────────────────────────────────────────────────

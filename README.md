@@ -95,7 +95,7 @@ After that, `git commit` routes through DevTrack automatically for monitored rep
 | **Azure DevOps** | Post commit comments, transition work item states, create missing items |
 | **GitHub** | Comment on issues/PRs, sync recent activity, alert on review requests |
 | **GitLab** | Comment on issues, list and view issues assigned to you |
-| **Jira** | Alert on assignments, comments, and status changes *(alerter)* |
+| **Jira** | Alert on assignments, comments, and status changes |
 | **Microsoft Teams** | Learn your communication style for personalized AI output |
 | **Outlook / MS Graph** | Send EOD reports by email |
 | **Telegram** | Remote control from your phone — `/workstart`, `/workreport`, `/plan` |
@@ -125,6 +125,7 @@ workspaces:
 ```bash
 devtrack workspace list
 devtrack workspace add my-project ~/code/project --pm github
+devtrack workspace install-hooks   # push post-commit hooks to all enabled workspaces
 ```
 
 ### Work session tracking
@@ -167,7 +168,7 @@ devtrack alerts --all
 devtrack alerts --clear
 ```
 
-Background poller watches GitHub, Azure DevOps, and Jira for assigned issues, new comments, review requests, and state changes. Delivers macOS OS notifications and terminal output.
+Background poller watches GitHub, Azure DevOps, and **Jira** for assigned issues, new comments, review requests, and state changes. Delivers macOS OS notifications and terminal output. Jira alerter polls assigned issues, new comments, and status changes using the Jira REST API (`ALERT_JIRA_ENABLED=true`).
 
 ### AI project planning (via Telegram)
 
@@ -181,6 +182,40 @@ Background poller watches GitHub, Azure DevOps, and Jira for assigned issues, ne
 → AI fetches team workload · Generates sprint YAML
 → PM approves via email link · Sprints created with dependencies
 ```
+
+### Auto-start at login
+
+One command installs the right service for your OS — no manual plist or unit file editing:
+
+```bash
+devtrack autostart-install    # macOS → launchd LaunchAgent
+                              # Linux/systemd → ~/.config/systemd/user/devtrack.service
+                              # WSL without systemd → shell profile block
+devtrack autostart-status     # show current auto-start status
+devtrack autostart-uninstall  # remove auto-start
+```
+
+All current `.env` variables are baked into the service file at install time so the daemon starts with the correct environment even in a login session without a shell profile. Re-run `autostart-install` after changing `.env`.
+
+### Post-commit hooks for all workspaces
+
+```bash
+devtrack workspace install-hooks    # install post-commit hook in every enabled workspace
+```
+
+Normally DevTrack installs hooks when the daemon starts. Use this command to push hooks to all workspaces at once — useful after adding new repos to `workspaces.yaml`.
+
+### Anonymous telemetry
+
+DevTrack sends an anonymous install and daily-active ping (no code, no commit text, no personal data). To opt out:
+
+```bash
+devtrack telemetry off      # disable all pings
+devtrack telemetry on       # re-enable
+devtrack telemetry status   # show current setting
+```
+
+The ping sends: a random install UUID, a hashed hardware fingerprint, the event type (`install` / `active`), OS, arch, and version. Nothing else leaves your machine.
 
 ### Server management
 
@@ -213,7 +248,7 @@ docker compose up -d   # starts Python backend + MongoDB, Redis, PostgreSQL
 | Daemon / CLI | Go 1.24+, fsnotify, robfig/cron, modernc/sqlite |
 | AI backend | Python 3.12+, uv, spaCy, aiohttp |
 | Local LLM | Ollama (default) · OpenAI · Anthropic · Groq · LM Studio |
-| Storage | SQLite (app state), ChromaDB (RAG), optional MongoDB |
+| Storage | SQLite (app state + projects/backlog/sprints), ChromaDB (RAG), optional MongoDB |
 | Remote control | Telegram (python-telegram-bot) · Slack (slack-bolt Socket Mode) |
 | PM integrations | Azure DevOps · GitLab · GitHub · Jira REST APIs |
 | Admin console | FastAPI + HTMX, JWT auth |
@@ -236,10 +271,11 @@ docker compose up -d   # starts Python backend + MongoDB, Redis, PostgreSQL
 | Set up Telegram / Slack | [Telegram](docs/TELEGRAM_BOT.md) · [Slack](docs/SLACK_BOT.md) |
 | Set up AI providers | [LLM Guide](docs/LLM_GUIDE.md) |
 | Enable "Talk Like You" | [Personalization](docs/PERSONALIZATION.md) |
-| Auto-start at login | [Auto-Start Guide](docs/AUTOSTART.md) |
+| Auto-start at login (macOS/Linux/WSL) | [Auto-Start Guide](docs/AUTOSTART.md) |
 | Track time / EOD report | [Work Tracker](docs/WORK_TRACKER.md) |
-| Get ticket alerts | [Ticket Alerter](docs/TICKET_ALERTER.md) |
+| Get ticket alerts (GitHub / Azure / Jira) | [Ticket Alerter](docs/TICKET_ALERTER.md) |
 | Plan a project with AI | [AI Project Planning](docs/PROJECT_PLANNING.md) |
+| Manage opt-out telemetry | [Telemetry](docs/TELEMETRY_PLAN.md) |
 | Fix a problem | [Troubleshooting](docs/TROUBLESHOOTING.md) |
 | Understand the architecture | [Architecture](docs/ARCHITECTURE.md) |
 | Full documentation index | [docs/INDEX.md](docs/INDEX.md) |
@@ -250,7 +286,7 @@ docker compose up -d   # starts Python backend + MongoDB, Redis, PostgreSQL
 
 ```bash
 cd devtrack-bin && go test ./...          # Go layer
-uv run pytest backend/tests/             # Python backend (133 tests)
+uv run pytest backend/tests/             # Python backend (159 tests)
 uv run pytest backend/tests/ -k cs1     # CS-1 HTTP trigger suite
 ```
 
