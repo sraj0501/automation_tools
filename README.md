@@ -116,11 +116,14 @@ workspaces:
     pm_platform: azure
     pm_assignee: jane@example.com
     pm_iteration_path: "MyProject\\Sprint 5"
+    pm_area_path: "MyProject\\Backend"
   - name: oss-lib
     path: ~/oss/my-lib
     pm_platform: github
     pm_milestone: 3
 ```
+
+Per-workspace PM overrides (`pm_assignee`, `pm_iteration_path`, `pm_area_path`, `pm_milestone`) are applied when DevTrack creates work items or issues for that repo — Azure uses `assigned_to`/`area_path`/`iteration_path`, GitHub/GitLab use `assignees` and `milestone`. Omit any field to use the global default.
 
 ```bash
 devtrack workspace list
@@ -169,6 +172,8 @@ devtrack alerts --clear
 ```
 
 Background poller watches GitHub, Azure DevOps, and **Jira** for assigned issues, new comments, review requests, and state changes. Delivers macOS OS notifications and terminal output. Jira alerter polls assigned issues, new comments, and status changes using the Jira REST API (`ALERT_JIRA_ENABLED=true`).
+
+Alert state (`last_checked` timestamps per source) is persisted to SQLite when MongoDB is unavailable, so poll continuity survives daemon restarts even without a MongoDB connection.
 
 ### AI project planning (via Telegram)
 

@@ -1157,6 +1157,14 @@ curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
 </tbody>
 </table></div>
 
+<h2>New Test Files (v1.4-dev)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Layer</th><th>Tests added</th></tr></thead>
+<tbody>
+<tr><td><code>backend/tests/test_jira_alerter.py</code></td><td>Python</td><td>26 tests for <code>JiraAlerter</code> — assigned, comment, and status-change polling; deduplication; all edge cases mocked</td></tr>
+</tbody>
+</table></div>
+
 <hr>
 <div class="home-badge" style="margin-bottom:24px;background:var(--callout-tip);border-color:var(--callout-tip-border);color:#166534;">v1.3 — April 2026 — HTTP Trigger Validation &amp; Test Coverage</div>
 
@@ -1577,7 +1585,7 @@ SENTIMENT_ANALYSIS_WINDOW_MINUTES=120</code></pre>
 
   TEST_SUITE: `<div class="md-body">
 <h1>Test Suite</h1>
-<p>DevTrack ships a comprehensive test suite covering the Go daemon, the Python backend, and the HTTP trigger layer. As of <strong>v1.3</strong>, the suite contains <strong>133+ tests</strong> spread across Go and Python, with full coverage of HTTP trigger validation, admin authentication, user management, and license enforcement.</p>
+<p>DevTrack ships a comprehensive test suite covering the Go daemon, the Python backend, and the HTTP trigger layer. As of <strong>v1.4-dev</strong>, the suite contains <strong>159+ tests</strong> spread across Go and Python, with full coverage of HTTP trigger validation, admin authentication, user management, license enforcement, and Jira alerter polling.</p>
 
 <h2>Running the Tests</h2>
 <h3>Go tests</h3>
@@ -1597,6 +1605,7 @@ uv run pytest backend/tests/test_http_triggers.py
 uv run pytest backend/tests/test_admin_auth.py
 uv run pytest backend/tests/test_admin_user_manager.py
 uv run pytest backend/tests/test_license_manager.py
+uv run pytest backend/tests/test_jira_alerter.py
 
 # Run by name filter
 uv run pytest backend/tests/ -k test_name</code></pre>
@@ -1610,6 +1619,7 @@ uv run pytest backend/tests/ -k test_name</code></pre>
 <tr><td><code>backend/tests/test_admin_auth.py</code></td><td>Python</td><td>Admin console authentication — login flow, JWT session cookie issuance, expiry, and rejection of bad credentials</td></tr>
 <tr><td><code>backend/tests/test_admin_user_manager.py</code></td><td>Python</td><td>User lifecycle via the Admin Console — create, delete, list, and API key rotation; enforces that duplicate usernames are rejected</td></tr>
 <tr><td><code>backend/tests/test_license_manager.py</code></td><td>Python</td><td>License tier detection, T&amp;C acceptance recording and re-prompt logic, offline vs SaaS mode enforcement, <code>DEVTRACK_AUTO_ACCEPT_TERMS</code> flag behaviour</td></tr>
+<tr><td><code>backend/tests/test_jira_alerter.py</code></td><td>Python</td><td>26 tests for <code>JiraAlerter</code> — assigned polling, comment detection, status-change events, deduplication, and all edge cases. No real network calls — all <code>JiraClient</code> methods are mocked.</td></tr>
 </tbody>
 </table></div>
 
@@ -1787,6 +1797,94 @@ workspaces:
 <li><strong>pm_project not applied for GitLab</strong> — must be a numeric string (e.g., <code>"12345"</code>); strings that fail int conversion are silently ignored</li>
 </ul>
 </div>`,
+
+  AUTOSTART: `<div class="md-body">
+<h1>Auto-Start</h1>
+<p>Automatically start the DevTrack daemon when you log in, using the right mechanism for your operating system.</p>
+
+<div class="home-badge" style="margin-bottom:24px;background:var(--callout-note);border-color:var(--callout-note-border);color:#1d4ed8;">v1.4-dev — Env-baking: all current env vars are now baked into the generated plist/service unit automatically</div>
+
+<h2>Quick Start</h2>
+<pre><code class="language-bash">devtrack autostart-install    # Install and enable auto-start (bakes env vars)
+devtrack autostart-status     # Verify it is registered
+devtrack autostart-uninstall  # Remove auto-start at any time</code></pre>
+
+<p>DevTrack detects your OS and picks the appropriate mechanism automatically:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>OS</th><th>Mechanism</th><th>Location</th></tr></thead>
+<tbody>
+<tr><td>macOS</td><td>launchd LaunchAgent</td><td><code>~/Library/LaunchAgents/dev.devtrack.plist</code></td></tr>
+<tr><td>Linux with systemd</td><td>systemd user service</td><td><code>~/.config/systemd/user/devtrack.service</code></td></tr>
+<tr><td>WSL with systemd</td><td>systemd user service</td><td><code>~/.config/systemd/user/devtrack.service</code></td></tr>
+<tr><td>WSL without systemd</td><td>Shell profile block</td><td><code>~/.zshrc</code> or <code>~/.bashrc</code></td></tr>
+</tbody>
+</table></div>
+
+<h2>Env-Baking (v1.4-dev)</h2>
+<p>As of v1.4-dev, <code>devtrack autostart-install</code> <strong>bakes all current environment variables</strong> into the generated plist (macOS) or systemd unit (Linux) at install time. This means the daemon inherits the exact same configuration that was active when you ran <code>autostart-install</code> — no wrapper scripts, no <code>EnvironmentFile=</code> hacks, and no separate <code>.env</code> file needed at runtime.</p>
+
+<blockquote><p><strong>Important:</strong> Re-run <code>devtrack autostart-install</code> after changing any environment variable to refresh the baked configuration in the plist or service unit.</p></blockquote>
+
+<pre><code class="language-bash"># First time (or after changing env vars):
+set -a; source .env; set +a   # export all vars into the shell
+devtrack autostart-install    # bakes them into the plist/service unit
+
+# Verify
+devtrack autostart-status</code></pre>
+
+<h2>macOS — launchd</h2>
+<p>DevTrack registers as a <strong>user-level LaunchAgent</strong>, which starts when you log in and runs with your permissions.</p>
+
+<h3>Install</h3>
+<pre><code class="language-bash">devtrack autostart-install</code></pre>
+<p>This command:</p>
+<ol>
+<li>Captures all currently exported environment variables</li>
+<li>Generates a plist at <code>~/Library/LaunchAgents/dev.devtrack.plist</code> with all env vars inline under <code>EnvironmentVariables</code></li>
+<li>Runs <code>launchctl load</code> to register and start the service immediately</li>
+</ol>
+
+<h3>Status &amp; Manual Control</h3>
+<pre><code class="language-bash">devtrack autostart-status
+launchctl list | grep devtrack          # PID column: number = running
+launchctl start dev.devtrack            # Start without waiting for next login
+launchctl stop  dev.devtrack            # Stop (will restart on next login)
+cat ~/Library/LaunchAgents/dev.devtrack.plist  # Inspect baked env vars</code></pre>
+
+<h3>Uninstall</h3>
+<pre><code class="language-bash">devtrack autostart-uninstall</code></pre>
+
+<h2>Linux — systemd user service</h2>
+<p>DevTrack installs a <strong>systemd user service</strong> (<code>--user</code> scope), which starts at login and runs as your user account.</p>
+
+<h3>Install</h3>
+<pre><code class="language-bash">devtrack autostart-install</code></pre>
+<p>Generates <code>~/.config/systemd/user/devtrack.service</code> with all env vars inlined as <code>Environment=</code> lines, then runs <code>systemctl --user daemon-reload &amp;&amp; enable &amp;&amp; start</code>.</p>
+
+<h3>Status &amp; Manual Control</h3>
+<pre><code class="language-bash">devtrack autostart-status
+systemctl --user status devtrack
+systemctl --user restart devtrack
+journalctl --user -u devtrack -f        # Follow logs</code></pre>
+
+<h3>Uninstall</h3>
+<pre><code class="language-bash">devtrack autostart-uninstall</code></pre>
+
+<h2>WSL — Shell Profile Fallback</h2>
+<p>When systemd is not available in WSL, DevTrack appends a startup block to <code>~/.zshrc</code> (or <code>~/.bashrc</code>). The block is idempotent — running <code>autostart-install</code> again when the block is already present is a no-op.</p>
+<pre><code class="language-bash"># DevTrack auto-start
+devtrack start 2&gt;/dev/null || true
+# End DevTrack auto-start</code></pre>
+<p>After installation, re-source your profile or open a new terminal to start DevTrack in the current session.</p>
+
+<h2>Troubleshooting</h2>
+<ul>
+<li><strong>Daemon did not start after login (macOS)</strong> — run <code>tail -50 Data/logs/launchd.log</code> and <code>plutil ~/Library/LaunchAgents/dev.devtrack.plist</code>. If env vars are missing, re-run <code>autostart-install</code> after sourcing <code>.env</code>.</li>
+<li><strong>Daemon did not start after login (Linux)</strong> — run <code>systemctl --user status devtrack</code> and <code>journalctl --user -u devtrack --no-pager | tail -50</code>. Check the <code>Environment=</code> lines in the unit file match your expected values.</li>
+<li><strong>Config changes not taking effect</strong> — remember to re-run <code>devtrack autostart-install</code> after changing env vars; the new values are only baked in on reinstall.</li>
+<li><strong>"autostart-install already present" warning (WSL no-systemd)</strong> — run <code>devtrack autostart-uninstall</code> first, then reinstall.</li>
+</ul>
+</div>`,
 };
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -1950,7 +2048,7 @@ function renderHome() {
         { id:'LLM_GUIDE',       icon:'🧠', title:'LLM Setup',           desc:'Configure local (Ollama, LM Studio) or cloud (OpenAI, Anthropic, Groq) AI providers. Automatic fallback chain. Per-use-case temperature and token limits.' },
         { id:'PERSONALIZATION', icon:'🎨', title:'Personalization',     desc:'"Talk Like You" — AI that learns your communication style from Teams messages and writes in your voice using RAG-powered few-shot examples.' },
         // ── System Integration ────────────────────────────────────────────────
-        { id:'AUTOSTART',       icon:'🔌', title:'Auto-Start',          desc:'Auto-start DevTrack at login — OS-aware. Run <code>devtrack autostart-install</code>: launchd LaunchAgent on macOS, systemd user service on Linux/WSL with systemd, or a shell profile block on WSL without systemd.' },
+        { id:'AUTOSTART',       icon:'🔌', title:'Auto-Start',          desc:'Auto-start DevTrack at login — OS-aware. Run <code>devtrack autostart-install</code>: launchd LaunchAgent on macOS, systemd user service on Linux/WSL, or a shell profile block on WSL without systemd. <strong>v1.4-dev:</strong> all env vars are now baked into the plist/unit at install time — no separate <code>.env</code> file needed at runtime.' },
         { id:'SERVER_TUI',      icon:'🖥️', title:'Server TUI',          desc:'Textual process monitor for the Python backend. Shows all server processes with live CPU/MEM/status and a health bar. Navigate with ↑↓, restart with r, toggle logs with l.' },
         { id:'ADMIN_CONSOLE',   icon:'🛡️', title:'Admin Console',       desc:'Web UI at <code>http://localhost:8090/admin/</code> — manage users, API keys, review server health, LLM config, integration credentials, and a full audit log. Run with <code>devtrack admin-start</code>.' },
         { id:'TELEMETRY',       icon:'📊', title:'Telemetry',           desc:'Optional usage tracking: download counts, command frequencies, version adoption. Fully transparent, no PII. Designed for a real-time admin dashboard via Server-Sent Events. See the plan in <code>docs/TELEMETRY_PLAN.md</code>.' },
@@ -2013,7 +2111,7 @@ cd automation_tools
         { n:'Richer AI Messages',  d:'In the commit refinement loop, pressing <kbd>E</kbd> to enhance gives the AI double the normal token allowance for that call, producing more detailed and thorough commit messages.' },
         { n:'Personalized AI',     d:'Learns your style from Teams messages and writes in your voice.' },
         { n:'Ticket Alerter',      d:'Polls GitHub, Azure DevOps, and Jira for events relevant to you — assigned issues/PRs/work items, comments on threads you are in, state changes, and review requests. Delivers macOS OS notifications (via osascript) and terminal output. Delta-synced via MongoDB so you never see the same notification twice. Configure with <code>ALERT_ENABLED=true</code>, <code>ALERT_GITHUB_ENABLED=true</code>, <code>ALERT_AZURE_ENABLED=true</code>, <code>ALERT_JIRA_ENABLED=true</code> and the <code>ALERT_*</code> variables in <code>.env</code>.' },
-        { n:'OS-Aware Auto-Start', d:'Run <code>devtrack autostart-install</code> — DevTrack detects your OS and picks the right mechanism: launchd LaunchAgent on macOS, systemd user service on Linux/WSL with systemd, or a shell profile block on WSL without systemd. The daemon starts automatically each time you log in — no cron, no manual <code>devtrack start</code> after reboot.' },
+        { n:'OS-Aware Auto-Start', d:'Run <code>devtrack autostart-install</code> — DevTrack detects your OS and picks the right mechanism: launchd LaunchAgent on macOS, systemd user service on Linux/WSL with systemd, or a shell profile block on WSL without systemd. The daemon starts automatically each time you log in — no cron, no manual <code>devtrack start</code> after reboot. v1.4-dev: all env vars are baked into the plist/unit at install time so the daemon gets the right config without a <code>.env</code> file.' },
         { n:'Offline-First',       d:'Queues everything and syncs when connectivity returns.' },
         { n:'Remote Control',      d:'Full Telegram bot: status, logs, create items, trigger updates. Plus a Slack bot (<code>/devtrack &lt;cmd&gt;</code>) via Socket Mode — no public URL required.' },
         { n:'AI Project Planning', d:'<code>/newproject</code> in Telegram — describe a project in plain text, pick developers from the live team roster, and let AI auto-fetch each person\'s workload from the PM tool. Generates a full YAML spec (features, stories, sprints, capacity analysis, skill-gap risks), emails it to the PM with an approve/edit link, and creates everything in Azure/GitHub/GitLab on approval.' },
