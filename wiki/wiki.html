@@ -1267,10 +1267,10 @@ curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
 
   WHATS_NEW: `<div class="md-body">
 <h1>What's New</h1>
-<div class="home-badge" style="margin-bottom:24px;background:var(--callout-warn);border-color:var(--callout-warn-border);color:#92400e;">v1.4-dev — unreleased — on features/release_ready</div>
+<div class="home-badge" style="margin-bottom:24px;background:var(--callout-warn);border-color:var(--callout-warn-border);color:#92400e;">v1.4-dev — merged to main — not yet tagged as a release</div>
 
-<h2>v1.4-dev — Jira Alerter, Env-First Config, PM Persistence &amp; More</h2>
-<p>These changes are on the <code>features/release_ready</code> branch and have not yet been tagged as a release. They represent the next batch of production-readiness improvements.</p>
+<h2>v1.4-dev — Webhook Server, Alert Poller, Jira Alerter, Env-First Config &amp; More</h2>
+<p>These changes have been merged from <code>features/release_ready</code> into <code>main</code> and are ready for release tagging. They represent the full production-readiness batch for v1.4.</p>
 
 <div class="feature-list" style="margin-bottom:32px;">
   <div class="feature-item"><div class="feature-dot">1</div><div><h4>Jira Alerter — 26 new tests</h4><p><code>backend/alerters/jira_alerter.py</code> is now implemented and fully tested. The <code>JiraAlerter</code> class polls Jira Cloud for three event types: <strong>assigned to me</strong>, <strong>comment added</strong>, and <strong>status changed</strong>. 26 tests covering all polling paths, deduplication, and edge cases are in <code>backend/tests/test_jira_alerter.py</code>. The alert poller is updated to include Jira alongside GitHub and Azure DevOps. See the <a href="#TICKET_ALERTER" onclick="navigate('TICKET_ALERTER');return false;">Ticket Alerter</a> page.</p></div></div>
@@ -1282,6 +1282,8 @@ curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
   <div class="feature-item"><div class="feature-dot">7</div><div><h4>Anonymous install &amp; active telemetry ping (Tier 2 implemented)</h4><p><code>devtrack-bin/ping.go</code> implements the Tier-2 anonymous usage pings described in the Telemetry plan. On install, a random UUID is created at <code>~/.devtrack/id</code>. A SHA-256 of the hardware platform UUID is computed as a stable fingerprint (raw value never leaves the machine). Two events are fired: <code>install</code> on first run, and <code>active</code> at most once per 24 hours when the daemon is running. Both POSTs are fire-and-forget goroutines — failures are silent. The telemetry endpoint is <code>https://ping.devtrack.dev</code> (Cloudflare Worker). Disabled by a sentinel file written by <code>devtrack telemetry off</code>. See <a href="#TELEMETRY" onclick="navigate('TELEMETRY');return false;">Telemetry</a>.</p></div></div>
   <div class="feature-item"><div class="feature-dot">8</div><div><h4>SQLite alert_state fallback for ticket alerter</h4><p>The ticket alerter now persists <code>last_checked</code> timestamps to SQLite when MongoDB is unavailable. The <code>alert_state</code> table in <code>Data/devtrack.db</code> tracks the last poll time per source (github/azure/jira), enabling full delta-sync functionality in offline-first mode. Go accessors <code>GetAlertLastChecked</code>/<code>SetAlertLastChecked</code> added to <code>database.go</code>. See <a href="#TICKET_ALERTER" onclick="navigate('TICKET_ALERTER');return false;">Ticket Alerter</a>.</p></div></div>
   <div class="feature-item"><div class="feature-dot">9</div><div><h4>Per-workspace PM overrides (WorkspaceRouter)</h4><p>Workspaces now support per-platform PM overrides: <code>pm_assignee</code>, <code>pm_iteration_path</code> (Azure), <code>pm_area_path</code> (Azure), and <code>pm_milestone</code> (GitHub/GitLab). These are extracted from commit trigger POST data and forwarded to the appropriate platform API when creating work items or issues. Azure gets assigned_to/area_path/iteration_path; GitHub gets assignees/milestone; GitLab gets assignee_ids/milestone_id. See <a href="#MULTI_REPO" onclick="navigate('MULTI_REPO');return false;">Multi-Repo Setup</a>.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">10</div><div><h4>Webhook + Trigger Server added (<code>backend/webhook_server.py</code>)</h4><p>The CS-1 FastAPI webhook and trigger server is now present in the repository as <code>backend/webhook_server.py</code>. It serves as the single HTTP entry-point for both inbound platform webhooks (Azure DevOps, GitHub, GitLab, Jira) and outbound trigger calls from the Go daemon (<code>commit_trigger</code>, <code>timer_trigger</code>, and the full IPC message vocabulary). All <code>/trigger/*</code> endpoints require the <code>X-DevTrack-API-Key</code> header. Run with <code>python -m backend.webhook_server</code> or via the Server TUI. The <code>alert_poller</code> background service is also now present as <code>backend/alert_poller.py</code> — start it as a subprocess or via <code>devtrack server-tui</code>. See the <a href="#SERVER_TUI" onclick="navigate('SERVER_TUI');return false;">Server TUI</a> page.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">11</div><div><h4>Bug fix: stale <code>config._load_env()</code> call removed</h4><p>After the env-first config refactor (item 2 above), a residual <code>config._load_env()</code> call remained in one Python module. This caused an <code>AttributeError</code> at import time for any code path that hit that module while running in env-first mode. The call has been removed. No configuration changes are required; all existing env var exports continue to work as before.</p></div></div>
 </div>
 
 <h2>New .env Variables (v1.4-dev)</h2>
@@ -1297,6 +1299,19 @@ curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
 <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
 <tbody>
 <tr><td><code>ignore_branches</code></td><td><code>[]string</code></td><td>Branch names (or glob patterns) whose commits are silently skipped. Example: <code>["main", "release/*"]</code></td></tr>
+</tbody>
+</table></div>
+
+<h2>New Source Files (v1.4-dev)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>backend/webhook_server.py</code></td><td>CS-1 FastAPI webhook + trigger server — single HTTP entry-point for inbound platform webhooks and Go daemon trigger calls</td></tr>
+<tr><td><code>backend/alert_poller.py</code></td><td>Async background poller — polls GitHub, Azure DevOps, and Jira for developer-relevant events; stores to MongoDB or SQLite fallback</td></tr>
+<tr><td><code>backend/alerters/jira_alerter.py</code></td><td>Jira-specific alerter — assigned, comment, and status-change polling via Jira Cloud REST API</td></tr>
+<tr><td><code>devtrack-bin/ping.go</code></td><td>Anonymous install + active telemetry pings (Tier 2)</td></tr>
+<tr><td><code>backend/db/project_store.py</code></td><td>SQLite CRUD store for PM projects, backlog items, and sprints (Phase 4B)</td></tr>
+<tr><td><code>backend/workspace_router.py</code></td><td>Routes commit triggers to the correct PM platform with per-workspace PM override support</td></tr>
 </tbody>
 </table></div>
 
@@ -2190,7 +2205,7 @@ function renderHome() {
     <div class="home-grid">
       ${[
         // ── Get Started ────────────────────────────────────────────────────────
-        { id:'WHATS_NEW',        icon:'🎉', title:"What's New",         desc:'v1.4-dev: Jira alerter (26 tests), SQLite alert_state fallback, per-workspace PM overrides, env-first config, post-commit hook auto-install, ignore_branches, Phase 4B SQLite PM persistence, env-baking autostart, anonymous telemetry ping. v1.3: 133 new tests, .env FIFO fix.' },
+        { id:'WHATS_NEW',        icon:'🎉', title:"What's New",         desc:'v1.4-dev: webhook+trigger server added, alert_poller added, stale _load_env() fix, Jira alerter (26 tests), SQLite alert_state fallback, per-workspace PM overrides, env-first config, post-commit hook auto-install, ignore_branches, Phase 4B SQLite PM persistence, env-baking autostart, anonymous telemetry ping. v1.3: 133 new tests, .env FIFO fix.' },
         { id:'GETTING_STARTED',  icon:'🚀', title:'Getting Started',    desc:'New to DevTrack? Start here — concepts, setup, and first run.' },
         { id:'QUICK_START',      icon:'⚡', title:'Quick Start',        desc:'Get running in 5 minutes with the minimal setup guide.' },
         // ── Reference ─────────────────────────────────────────────────────────

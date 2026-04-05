@@ -94,7 +94,7 @@ After that, `git commit` routes through DevTrack automatically for monitored rep
 |-------------|-------------------|
 | **Azure DevOps** | Post commit comments, transition work item states, create missing items |
 | **GitHub** | Comment on issues/PRs, sync recent activity, alert on review requests |
-| **GitLab** | Comment on issues, list and view issues assigned to you |
+| **GitLab** | Comment on issues, list and view issues assigned to you, alert on assignments/notes/MR reviews |
 | **Jira** | Alert on assignments, comments, and status changes |
 | **Microsoft Teams** | Learn your communication style for personalized AI output |
 | **Outlook / MS Graph** | Send EOD reports by email |
@@ -171,11 +171,12 @@ devtrack alerts --all
 devtrack alerts --clear
 ```
 
-Background poller watches **GitHub**, **Azure DevOps**, and **Jira** for assigned issues, new comments, review requests, and status changes. Delivers macOS OS notifications and terminal output.
+Background poller watches **GitHub**, **Azure DevOps**, **Jira**, and **GitLab** for assigned issues, new comments, review requests, and status changes. Delivers macOS OS notifications and terminal output.
 
 - **GitHub**: Issue/PR assigned, review requested, comment on involved issue
 - **Azure DevOps**: Work item assigned, comment added, state changed
 - **Jira**: Assigned to you, new comments, status transitions (via REST API)
+- **GitLab**: Issue assigned, new notes (comments), merge request review requested (`ALERT_GITLAB_ENABLED=true`)
 
 Alert state (`last_checked` timestamps per source) persists to **SQLite** when MongoDB is unavailable, so poll continuity survives daemon restarts even without a MongoDB connection.
 
@@ -213,6 +214,21 @@ devtrack workspace install-hooks    # install post-commit hook in every enabled 
 ```
 
 Normally DevTrack installs hooks when the daemon starts. Use this command to push hooks to all workspaces at once — useful after adding new repos to `workspaces.yaml`.
+
+### Webhook + Trigger server (HTTP mode)
+
+When running in external or Docker mode (`DEVTRACK_SERVER_MODE=external`), the Go daemon sends commit and timer triggers over HTTPS instead of the local TCP IPC socket. The Python backend exposes a FastAPI server that handles both:
+
+- **Inbound webhooks** from Azure DevOps, GitHub, GitLab, and Jira at `/webhooks/<source>`
+- **Outbound triggers** from the Go daemon at `/trigger/commit` and `/trigger/timer`
+
+```bash
+python -m backend.webhook_server         # start the webhook + trigger server
+```
+
+All trigger endpoints require the `X-DevTrack-API-Key` header (set `DEVTRACK_API_KEY` in `.env`). Webhook signature verification uses source-specific secrets (`AZURE_WEBHOOK_SECRET`, `GITHUB_WEBHOOK_SECRET`, etc.). GitLab webhooks are registered automatically at startup when `GITLAB_WEBHOOK_URL` is configured.
+
+> In the default managed mode (local daemon + Python subprocess over TCP IPC) this server is not needed.
 
 ### Anonymous telemetry
 
@@ -285,6 +301,7 @@ docker compose up -d   # starts Python backend + MongoDB, Redis, PostgreSQL
 | Get ticket alerts (GitHub / Azure / Jira) | [Ticket Alerter](docs/TICKET_ALERTER.md) |
 | Plan a project with AI | [AI Project Planning](docs/PROJECT_PLANNING.md) |
 | Manage opt-out telemetry | [Telemetry](docs/TELEMETRY_PLAN.md) |
+| Use external/Docker mode (HTTP triggers + webhooks) | [Webhook Server](docs/WEBHOOK_SERVER.md) |
 | Fix a problem | [Troubleshooting](docs/TROUBLESHOOTING.md) |
 | Understand the architecture | [Architecture](docs/ARCHITECTURE.md) |
 | Full documentation index | [docs/INDEX.md](docs/INDEX.md) |
