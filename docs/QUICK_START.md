@@ -44,8 +44,8 @@ DATA_DIR=${PROJECT_ROOT}/Data
 IPC_HOST=127.0.0.1
 IPC_PORT=35893
 LLM_PROVIDER=ollama
-OLLAMA_URL=http://localhost:11434
-OLLAMA_MODEL=mistral
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_MODEL=llama3.2
 ```
 
 Leave credential variables empty for now (OPENAI_API_KEY, AZURE_DEVOPS_TOKEN, etc.).
@@ -87,9 +87,13 @@ Or run devtrack from the devtrack-bin directory:
 
 ### Start the Daemon
 
+The daemon does not load `.env` itself — source it first:
+
 ```bash
-# Navigate to automation_tools directory
 cd /path/to/automation_tools
+
+# Load env vars into the current shell
+set -a && source .env && set +a
 
 # Start background daemon
 devtrack start
@@ -195,13 +199,13 @@ Should show:
 - Monitoring location
 - IPC server status
 
-### 2. Check Python Bridge
+### 2. Check Python Backend
 
 ```bash
-tail Data/logs/python_bridge.log | head -20
+tail Data/logs/daemon.log | head -30
 ```
 
-Should show imports and initialization messages.
+Should show the Python webhook server startup messages (e.g. `✓ Python server started`).
 
 ### 3. Check NLP Model
 
@@ -247,12 +251,11 @@ GITHUB_REPO=username/repo-name
 ### Teams
 
 ```bash
-TEAMS_BOT_ID=your-bot-id
-TEAMS_BOT_PASSWORD=your-bot-password
-TEAMS_CHANNEL_ID=your-channel-id
+TEAMS_WEBHOOK_URL=https://outlook.office.com/webhook/your-webhook-url
+TEAMS_CHANNEL_ID=your_channel_id
+TEAMS_CHAT_ID=your_chat_id
+TEAMS_CHAT_TYPE=channel
 ```
-
-[Setup Teams bot integration](https://docs.microsoft.com/en-us/azure/bot-service/)
 
 ---
 
@@ -322,14 +325,14 @@ After `devtrack start`, here's what's happening:
 ├─ Go daemon (PID: 12345)
 │  ├─ Git file monitor (watches for commits)
 │  ├─ Cron scheduler (periodic triggers)
-│  ├─ IPC server (listens on 127.0.0.1:35893)
+│  ├─ HTTP trigger client (HTTPS POST to Python)
 │  └─ SQLite database (stores history)
 │
-└─ Python bridge (subprocess)
-   ├─ IPC client (connects to daemon)
+└─ Python webhook server (subprocess — backend/webhook_server.py)
+   ├─ FastAPI HTTP server (port 8089, TLS)
    ├─ NLP processor (spaCy)
-   ├─ LLM client (Ollama)
-   ├─ API integrations (Azure, GitHub, Teams)
+   ├─ LLM client (Ollama / OpenAI / Anthropic)
+   ├─ API integrations (Azure, GitHub, Jira, Teams)
    └─ Report generator
 ```
 
