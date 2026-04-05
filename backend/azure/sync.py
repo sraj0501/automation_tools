@@ -60,7 +60,8 @@ class AzureSync:
             clear_sync_items(_PLATFORM)
         else:
             # Incremental default: read window from env
-            window_hours = int(os.getenv("AZURE_SYNC_WINDOW_HOURS", "0") or "0")
+            from backend.config import get_azure_sync_window_hours
+            window_hours = get_azure_sync_window_hours()
             if window_hours > 0:
                 changed_after = datetime.now(timezone.utc) - timedelta(hours=window_hours)
                 existing = load_sync_items(_PLATFORM)

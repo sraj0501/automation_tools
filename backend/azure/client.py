@@ -41,15 +41,13 @@ _load_env()
 
 
 def _env(key: str, default: str = "") -> str:
-    return os.getenv(key, default)
+    from backend.config import get
+    return get(key, default)
 
 
 def _env_int(key: str, default: int = 0) -> int:
-    val = os.getenv(key, "")
-    try:
-        return int(val) if val else default
-    except ValueError:
-        return default
+    from backend.config import get_int
+    return get_int(key, default)
 
 
 # ---------------------------------------------------------------------------
