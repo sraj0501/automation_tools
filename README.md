@@ -245,10 +245,12 @@ The ping sends: a random install UUID, a hashed hardware fingerprint, the event 
 ### Server management
 
 ```bash
-devtrack server-tui    # live process monitor (CPU%, memory, health)
+devtrack server-tui    # live process monitor — CPU%, memory, health + trigger throughput stats
 devtrack admin-start   # web admin console at localhost:8090/admin/
 devtrack tui           # full-screen dashboard: overview, activity, workspaces, alerts
 ```
+
+The `server-tui` panel now includes a **trigger throughput stats** pane that reads directly from the SQLite database and shows triggers fired today, commits today, last trigger time (HH:MM), and unprocessed-trigger error count for the last 24 hours. The pane degrades gracefully — it displays zeroes rather than crashing if the database is unavailable.
 
 ---
 
@@ -278,6 +280,7 @@ docker compose up -d   # starts Python backend + MongoDB, Redis, PostgreSQL
 | PM integrations | Azure DevOps · GitLab · GitHub · Jira REST APIs |
 | Admin console | FastAPI + HTMX, JWT auth |
 | Observability | runtime-narrative — structured story/stage traces on every webhook request |
+| Config discipline | All Python modules use `backend.config.get()` — no `os.getenv()` calls in business logic |
 
 ---
 
@@ -302,6 +305,7 @@ docker compose up -d   # starts Python backend + MongoDB, Redis, PostgreSQL
 | Plan a project with AI | [AI Project Planning](docs/PROJECT_PLANNING.md) |
 | Manage opt-out telemetry | [Telemetry](docs/TELEMETRY_PLAN.md) |
 | Use external/Docker mode (HTTP triggers + webhooks) | [Webhook Server](docs/WEBHOOK_SERVER.md) |
+| Monitor server health and trigger stats | [Server TUI](docs/SERVER_TUI.md) |
 | Fix a problem | [Troubleshooting](docs/TROUBLESHOOTING.md) |
 | Understand the architecture | [Architecture](docs/ARCHITECTURE.md) |
 | Full documentation index | [docs/INDEX.md](docs/INDEX.md) |
@@ -311,9 +315,10 @@ docker compose up -d   # starts Python backend + MongoDB, Redis, PostgreSQL
 ## Testing
 
 ```bash
-cd devtrack-bin && go test ./...          # Go layer (20+ tests)
-uv run pytest backend/tests/             # Python backend (159+ tests)
-uv run pytest backend/tests/ -k cs1     # CS-1 HTTP trigger suite (28 tests)
+cd devtrack-bin && go test ./...              # Go layer (20+ tests)
+uv run pytest backend/tests/                 # Python backend (433+ tests)
+uv run pytest backend/tests/ -k cs1         # CS-1 HTTP trigger suite (28 tests)
+uv run pytest backend/tests/test_server_tui.py  # server_tui helpers (37 headless tests)
 ```
 
 ---

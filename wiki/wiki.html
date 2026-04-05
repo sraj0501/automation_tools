@@ -524,7 +524,7 @@
         <span class="current" id="breadcrumbCurrent">Home</span>
       </div>
       <div class="topbar-actions">
-        <span class="version-chip">v1.4-dev</span>
+        <span class="version-chip">v1.5-dev</span>
         <button class="icon-btn" id="themeToggle" title="Toggle theme">
           <svg id="themeIcon" viewBox="0 0 20 20" fill="currentColor"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>
         </button>
@@ -667,7 +667,26 @@ const CONTENT = {
 <p>Requires <code>PROJECT_ROOT</code> to be set in your <code>.env</code> file so the TUI knows where to find the server processes. The daemon does not need to be running first — the TUI can also be used to start individual processes from cold.</p>
 
 <h2>What It Shows</h2>
-<p>The main panel is a table with one row per server process:</p>
+<p>The screen is divided into three stacked sections:</p>
+
+<h3>Health Bar (top)</h3>
+<p>Shows the aggregate status of the webhook server and Ollama — a quick glance tells you if the two most latency-sensitive services are reachable.</p>
+
+<h3>Trigger Stats Panel</h3>
+<p>A row of four live counters, refreshed every 15 seconds by <code>backend/server_tui/stats_client.py</code>:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Counter</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><strong>Triggers today</strong></td><td>Total trigger events (commit + timer) fired since midnight</td></tr>
+<tr><td><strong>Commits today</strong></td><td>Commit-type triggers fired since midnight</td></tr>
+<tr><td><strong>Last trigger</strong></td><td>Timestamp of the most recent trigger event</td></tr>
+<tr><td><strong>Errors (24 h)</strong></td><td>Failed trigger dispatches in the last 24 hours — shown in red when non-zero</td></tr>
+</tbody>
+</table></div>
+<p>Stats are read directly from the <code>triggers</code> table in <code>Data/devtrack.db</code>. All counters degrade gracefully to zero when the database is absent or unreadable (e.g. before the daemon has been started for the first time).</p>
+
+<h3>Process Table</h3>
+<p>One row per server process:</p>
 <div class="table-wrap"><table>
 <thead><tr><th>Process</th><th>Description</th></tr></thead>
 <tbody>
@@ -678,7 +697,6 @@ const CONTENT = {
 </tbody>
 </table></div>
 <p>Each row shows live CPU%, memory usage, current status (<strong>running</strong> / <strong>stopped</strong> / <strong>error</strong>), and the process uptime.</p>
-<p>A <strong>health bar</strong> at the top of the screen shows the aggregate status of the webhook server and Ollama — a quick glance tells you if the two most latency-sensitive services are reachable.</p>
 
 <h2>Keyboard Shortcuts</h2>
 <div class="table-wrap"><table>
@@ -1267,6 +1285,43 @@ curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
 
   WHATS_NEW: `<div class="md-body">
 <h1>What's New</h1>
+<div class="home-badge" style="margin-bottom:24px;background:var(--callout-warn);border-color:var(--callout-warn-border);color:#92400e;">v1.5-dev — unreleased — branch features/TASK-008-cs2-stats</div>
+
+<h2>v1.5-dev — Config Refactor, Trigger Stats Panel &amp; Server TUI Test Coverage</h2>
+<p>This batch (TASK-001 through TASK-009) completes the env-first config refactor across the entire Python codebase, adds a live trigger throughput stats panel to the Server TUI, and ships 37 headless tests for the server_tui helper modules. Platform strategy is now recorded: <strong>Linux-first</strong> for the Python server layer, macOS secondary, Windows/WSL last.</p>
+
+<div class="feature-list" style="margin-bottom:32px;">
+  <div class="feature-item"><div class="feature-dot">1</div><div><h4>Config refactor complete — all <code>os.getenv</code> violations eliminated (TASK-001 → TASK-007)</h4><p>Seven commits systematically replaced every direct <code>os.getenv</code> / <code>os.environ.get</code> call across the entire Python backend with typed accessors from <code>backend/config.py</code>. Modules covered: <code>azure/</code> (client, check, sync, list_items, run_sync, assignment_poller), <code>data_collectors.py</code>, <code>github/</code> (client, check, sync, pr_analyzer, ghAnalysis), <code>pm_agent.py</code>, <code>log_work.py</code>, <code>gitlab/</code> (client, check, sync, assignment_poller), <code>admin/</code> (app, auth, routes, server_status, user_manager), <code>server_tui/</code> (health_client, log_viewer), <code>auth/</code>, <code>db/</code>, <code>rag/embedder.py</code>, <code>telemetry.py</code>, <code>license_manager.py</code>, <code>project_spec/</code>, <code>work_tracker/</code>, <code>commit_message_enhancer.py</code>, <code>git_diff_analyzer.py</code>, <code>telegram/</code>, <code>slack/</code>, <code>webhook_server.py</code>, and <code>git_sage/agent.py</code>. TASK-001 added 50+ new typed accessor functions to <code>backend/config.py</code> and filled in all missing <code>.env_sample</code> entries. Exempted by spec: <code>DEVTRACK_ENV_FILE</code> (bootstrap), <code>DEVTRACK_INPUT</code> (test injection), <code>GIT_AUTHOR_NAME</code>/<code>GIT_DIR</code> (git-provided), <code>USER</code>/<code>USERNAME</code>/<code>USER_NAME</code> (OS-level). All 397 tests continue to pass. See <a href="#CONFIGURATION" onclick="navigate('CONFIGURATION');return false;">Configuration</a>.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">2</div><div><h4>Trigger throughput stats panel in Server TUI (TASK-008)</h4><p>A new <strong>StatsRow</strong> widget appears between the health bar and the process table in the Server TUI. It shows four counters refreshed every 15 seconds: <strong>triggers today</strong>, <strong>commits today</strong>, <strong>last trigger timestamp</strong>, and <strong>errors in last 24 h</strong> (displayed in red when non-zero). The data is pulled by <code>backend/server_tui/stats_client.py</code> via a direct SQLite read of the <code>triggers</code> table in <code>Data/devtrack.db</code>; all counters degrade gracefully to zero when the database is absent or unreadable. See the <a href="#SERVER_TUI" onclick="navigate('SERVER_TUI');return false;">Server TUI</a> page.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">3</div><div><h4>37 headless tests for server_tui helper modules (TASK-009)</h4><p>New test file <code>backend/tests/test_server_tui.py</code> covers <code>ProcessMonitor</code>, <code>log_viewer</code>, <code>stats_client</code>, and <code>health_client</code> with 37 tests. All fixtures use POSIX <code>tmp_path</code>, generic process cmdlines, and no macOS-specific process names or service-management APIs — the suite runs cleanly on Linux CI. See the <a href="#TEST_SUITE" onclick="navigate('TEST_SUITE');return false;">Test Suite</a> page.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">4</div><div><h4>Platform strategy: Linux-first</h4><p>The Python server layer is now developed and tested Linux-first (Ubuntu/Debian primary CI target). macOS is supported as a secondary target; Windows/WSL is last priority. This is reflected in the new server_tui tests (POSIX-only fixtures) and will guide future CI matrix decisions. The Go daemon binary continues to build for all three platforms.</p></div></div>
+</div>
+
+<h2>New .env Variables (v1.5-dev)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Variable</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><em>none required</em></td><td>All new config accessors added in TASK-001 use variables already present in <code>.env_sample</code> or variables that were previously read inline — no new required vars are added.</td></tr>
+</tbody>
+</table></div>
+
+<h2>New Source Files (v1.5-dev)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>backend/server_tui/stats_client.py</code></td><td>Reads trigger throughput counters from SQLite; returns a <code>TriggerStats</code> dataclass; degrades to zeros on missing DB</td></tr>
+</tbody>
+</table></div>
+
+<h2>New Test Files (v1.5-dev)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Layer</th><th>Tests added</th></tr></thead>
+<tbody>
+<tr><td><code>backend/tests/test_server_tui.py</code></td><td>Python</td><td>37 headless tests for <code>ProcessMonitor</code>, <code>log_viewer</code>, <code>stats_client</code>, and <code>health_client</code> — POSIX fixtures, no macOS-specific dependencies</td></tr>
+</tbody>
+</table></div>
+
+<hr>
 <div class="home-badge" style="margin-bottom:24px;background:var(--callout-warn);border-color:var(--callout-warn-border);color:#92400e;">v1.4-dev — merged to main — not yet tagged as a release</div>
 
 <h2>v1.4-dev — Webhook Server, Alert Poller, Jira Alerter, Env-First Config &amp; More</h2>
@@ -1471,6 +1526,13 @@ curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
 </tbody>
 </table></div>
 
+<h2>In v1.5 (see v1.5-dev above)</h2>
+<ul>
+<li>Config refactor — all <code>os.getenv</code> violations eliminated across 22+ modules ✅ (TASK-001 → TASK-007)</li>
+<li>Trigger throughput stats panel in Server TUI ✅ (TASK-008)</li>
+<li>37 headless tests for server_tui helpers; Linux-first test strategy ✅ (TASK-009)</li>
+</ul>
+
 <h2>In v1.4 (partial — see v1.4-dev above)</h2>
 <ul>
 <li>Jira alerter with 26 tests ✅ (shipped in v1.4-dev)</li>
@@ -1492,6 +1554,8 @@ curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
 <p>DevTrack is configured entirely through environment variables. Copy <code>.env_sample</code> to <code>.env</code>, fill in your values, then <strong>export them</strong> before running <code>devtrack start</code>. All path values must be absolute. Restart the daemon after changes.</p>
 
 <blockquote><p><strong>v1.4-dev — Env-first config:</strong> The Go daemon no longer reads a <code>.env</code> file at startup. All variables must be exported into the process environment beforehand (e.g. via <code>source .env</code> in your shell profile, or baked into the launchd/systemd plist by running <code>devtrack autostart-install</code>). Running <code>set -a; source .env; set +a</code> before <code>devtrack start</code> is the quickest migration path for interactive use.</p></blockquote>
+
+<blockquote><p><strong>v1.5-dev — Config accessor coverage complete:</strong> All Python modules now access configuration exclusively through typed accessor functions in <code>backend/config.py</code> — no direct <code>os.getenv</code> or <code>os.environ.get</code> calls remain in application code (TASK-001 through TASK-007). Over 50 new typed accessors were added covering Azure, GitHub, GitLab, admin, server_tui, auth, RAG, Telegram, Slack, and more. If you add new environment variables, add a typed accessor to <code>backend/config.py</code> and an entry to <code>.env_sample</code> before using them.</p></blockquote>
 
 <h2>Minimum Required Setup</h2>
 <pre><code class="language-bash">PROJECT_ROOT=/path/to/automation_tools
@@ -1743,7 +1807,7 @@ SENTIMENT_ANALYSIS_WINDOW_MINUTES=120</code></pre>
 
   TEST_SUITE: `<div class="md-body">
 <h1>Test Suite</h1>
-<p>DevTrack ships a comprehensive test suite covering the Go daemon, the Python backend, and the HTTP trigger layer. As of <strong>v1.4-dev</strong>, the suite contains <strong>185+ tests</strong> (159+ CS-1 validation tests + 26 Jira alerter tests) spread across Go and Python, with full coverage of HTTP trigger validation, admin authentication, user management, license enforcement, and Jira alerter polling.</p>
+<p>DevTrack ships a comprehensive test suite covering the Go daemon, the Python backend, and the HTTP trigger layer. As of <strong>v1.5-dev</strong>, the suite contains <strong>222+ tests</strong> (185+ from v1.4-dev + 37 new server_tui headless tests) spread across Go and Python, with full coverage of HTTP trigger validation, admin authentication, user management, license enforcement, Jira alerter polling, and server_tui helper modules.</p>
 
 <h2>Running the Tests</h2>
 <h3>Go tests</h3>
@@ -1764,6 +1828,7 @@ uv run pytest backend/tests/test_admin_auth.py
 uv run pytest backend/tests/test_admin_user_manager.py
 uv run pytest backend/tests/test_license_manager.py
 uv run pytest backend/tests/test_jira_alerter.py
+uv run pytest backend/tests/test_server_tui.py
 
 # Run by name filter
 uv run pytest backend/tests/ -k test_name</code></pre>
@@ -1778,6 +1843,7 @@ uv run pytest backend/tests/ -k test_name</code></pre>
 <tr><td><code>backend/tests/test_admin_user_manager.py</code></td><td>Python</td><td>User lifecycle via the Admin Console — create, delete, list, and API key rotation; enforces that duplicate usernames are rejected</td></tr>
 <tr><td><code>backend/tests/test_license_manager.py</code></td><td>Python</td><td>License tier detection, T&amp;C acceptance recording and re-prompt logic, offline vs SaaS mode enforcement, <code>DEVTRACK_AUTO_ACCEPT_TERMS</code> flag behaviour</td></tr>
 <tr><td><code>backend/tests/test_jira_alerter.py</code></td><td>Python</td><td>26 tests for <code>JiraAlerter</code> — assigned polling, comment detection, status-change events, deduplication, and all edge cases. No real network calls — all <code>JiraClient</code> methods are mocked.</td></tr>
+<tr><td><code>backend/tests/test_server_tui.py</code></td><td>Python</td><td>37 headless tests for server_tui helpers — <code>ProcessMonitor</code> (process discovery, CPU/MEM sampling, start/stop), <code>log_viewer</code> (tail, rotation, missing file), <code>stats_client</code> (SQLite reads, graceful degradation when DB absent), <code>health_client</code> (HTTP health probes, timeout handling). All fixtures use POSIX <code>tmp_path</code>; no macOS-specific dependencies — runs on Linux CI.</td></tr>
 </tbody>
 </table></div>
 
@@ -1815,12 +1881,22 @@ def teardown_function():
 </tbody>
 </table></div>
 
+<h2>Platform Notes</h2>
+<p>The test suite is <strong>Linux-first</strong>. All new tests added from v1.5-dev onward follow these conventions:</p>
+<ul>
+<li>Fixtures use POSIX <code>tmp_path</code> — no platform-specific temp directories</li>
+<li>Process cmdlines use generic names (e.g. <code>python server.py</code>) — no macOS <code>launchd</code> or Windows service references</li>
+<li>Tests pass on Ubuntu/Debian CI without modification; macOS is secondary; Windows/WSL is not a CI target</li>
+</ul>
+<p>If you add new server_tui or system-level tests, follow the same conventions so they run on the primary CI platform.</p>
+
 <h2>Troubleshooting</h2>
 <ul>
 <li><strong>Tests hang at collection</strong> — likely caused by the <code>.env</code> FIFO bug. Run <code>file .env</code>; if it shows <em>fifo (named pipe)</em>, delete and recreate: <code>rm .env &amp;&amp; cp .env_sample .env</code>.</li>
 <li><strong>"provider not found" errors</strong> — call <code>reset_provider_cache()</code> in test setup/teardown when changing <code>LLM_PROVIDER</code>.</li>
 <li><strong>Admin auth tests fail with 500</strong> — confirm <code>ADMIN_SECRET_KEY</code> is set in the test environment (can be any non-empty string for tests).</li>
 <li><strong>License manager tests fail offline</strong> — expected: tests that require <code>DEVTRACK_API_URL</code> are skipped automatically when the variable is absent. Set <code>DEVTRACK_AUTO_ACCEPT_TERMS=1</code> to prevent interactive prompts during CI runs.</li>
+<li><strong>server_tui tests fail on macOS with "process not found"</strong> — the server_tui test fixtures use generic POSIX process names. If you see platform-specific failures, check that your test environment is not injecting macOS service names into the process mock.</li>
 </ul>
 </div>`,
 
@@ -2197,7 +2273,7 @@ function renderHome() {
   const content = document.getElementById('content');
   content.innerHTML = `
     <div class="home-hero">
-      <div class="home-badge">Local-First · v1.4-dev</div>
+      <div class="home-badge">Local-First · v1.5-dev</div>
       <h1 class="home-title">Developer automation<br>that handles the <span>overhead</span>.</h1>
       <p class="home-sub">DevTrack monitors your Git activity, prompts for work updates, routes them through AI, and keeps your project management systems in sync — all running locally on your machine.</p>
     </div>
@@ -2205,7 +2281,7 @@ function renderHome() {
     <div class="home-grid">
       ${[
         // ── Get Started ────────────────────────────────────────────────────────
-        { id:'WHATS_NEW',        icon:'🎉', title:"What's New",         desc:'v1.4-dev: webhook+trigger server added, alert_poller added, stale _load_env() fix, Jira alerter (26 tests), SQLite alert_state fallback, per-workspace PM overrides, env-first config, post-commit hook auto-install, ignore_branches, Phase 4B SQLite PM persistence, env-baking autostart, anonymous telemetry ping. v1.3: 133 new tests, .env FIFO fix.' },
+        { id:'WHATS_NEW',        icon:'🎉', title:"What's New",         desc:'v1.5-dev: config refactor — all os.getenv violations eliminated across azure/, github/, gitlab/, admin/, server_tui/ (50+ new typed accessors); trigger throughput stats panel in Server TUI; 37 new headless tests for server_tui helpers; Linux-first platform strategy. v1.4-dev: webhook+trigger server, Jira alerter, env-first config, autostart env-baking.' },
         { id:'GETTING_STARTED',  icon:'🚀', title:'Getting Started',    desc:'New to DevTrack? Start here — concepts, setup, and first run.' },
         { id:'QUICK_START',      icon:'⚡', title:'Quick Start',        desc:'Get running in 5 minutes with the minimal setup guide.' },
         // ── Reference ─────────────────────────────────────────────────────────
@@ -2231,7 +2307,7 @@ function renderHome() {
         { id:'PERSONALIZATION', icon:'🎨', title:'Personalization',     desc:'"Talk Like You" — AI that learns your communication style from Teams messages and writes in your voice using RAG-powered few-shot examples.' },
         // ── System Integration ────────────────────────────────────────────────
         { id:'AUTOSTART',       icon:'🔌', title:'Auto-Start',          desc:'Auto-start DevTrack at login — OS-aware. Run <code>devtrack autostart-install</code>: launchd LaunchAgent on macOS, systemd user service on Linux/WSL, or a shell profile block on WSL without systemd. <strong>v1.4-dev:</strong> all env vars are now baked into the plist/unit at install time — no separate <code>.env</code> file needed at runtime.' },
-        { id:'SERVER_TUI',      icon:'🖥️', title:'Server TUI',          desc:'Textual process monitor for the Python backend. Shows all server processes with live CPU/MEM/status and a health bar. Navigate with ↑↓, restart with r, toggle logs with l.' },
+        { id:'SERVER_TUI',      icon:'🖥️', title:'Server TUI',          desc:'Textual process monitor for the Python backend. Shows all server processes with live CPU/MEM/status, a health bar, and a trigger throughput stats panel (triggers today, commits today, errors in last 24 h). Navigate with ↑↓, restart with r, toggle logs with l.' },
         { id:'ADMIN_CONSOLE',   icon:'🛡️', title:'Admin Console',       desc:'Web UI at <code>http://localhost:8090/admin/</code> — manage users, API keys, review server health, LLM config, integration credentials, and a full audit log. Run with <code>devtrack admin-start</code>.' },
         { id:'TELEMETRY',       icon:'📊', title:'Telemetry',           desc:'Optional usage tracking: download counts, command frequencies, version adoption. Fully transparent, no PII. Designed for a real-time admin dashboard via Server-Sent Events. See the plan in <code>docs/TELEMETRY_PLAN.md</code>.' },
         { id:'CLOUD_MODE',      icon:'☁️', title:'Cloud Mode',          desc:'Connect your local daemon to a remote managed backend. <code>devtrack cloud login --url URL --key KEY</code> saves credentials to <code>~/.devtrack/cloud.json</code>. Bypasses cert-pinning for CA-signed remote certs.' },
