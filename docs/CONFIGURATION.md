@@ -10,8 +10,14 @@ DevTrack is configured via a single `.env` file with **no hardcoded defaults for
 
 - Copy `.env_sample` to `.env`, then fill in your paths and credentials
 - All path variables must be absolute paths (not relative)
-- The daemon reads `.env` at startup; restart after changes: `devtrack stop && devtrack start`
-- Override `.env` location: `export DEVTRACK_ENV_FILE=/custom/path/.env`
+- **The daemon does not load `.env` itself.** You must load it into the shell before running `devtrack`:
+  ```bash
+  set -a && source .env && set +a
+  devtrack start
+  ```
+  Or use `direnv` (add `dotenv` to `.envrc`) or `op run --env-file=.env -- devtrack start`
+- For production (Linux): `devtrack autostart-install` bakes all vars into the systemd unit — no manual sourcing needed
+- After changing `.env`, reload with: `devtrack stop && source .env && devtrack start`
 
 ---
 
@@ -315,8 +321,17 @@ DEVTRACK_COMMIT_ONLY=false  # skip push prompt after commit
 AZURE_DEVOPS_PAT=your_personal_access_token
 AZURE_ORGANIZATION=your_org_name
 AZURE_PROJECT=your_project_name
+AZURE_API_KEY=your_azure_devops_api_key    # alternative to PAT for some endpoints
 AZURE_API_VERSION=7.1
 EMAIL=your_email@example.com
+
+# Excel task import (optional)
+AZURE_EXCEL_FILE=${PROJECT_ROOT}/backend/data/tasks.xlsx
+AZURE_EXCEL_SHEET=my_tasks
+
+# Work item creation defaults (optional)
+AZURE_PARENT_WORK_ITEM_ID=              # parent ID for newly created work items
+AZURE_STARTING_WORK_ITEM_ID=0           # offset for work item ID lookups
 ```
 
 **Bidirectional sync:**
@@ -356,6 +371,8 @@ GITHUB_MATCH_THRESHOLD=0.6
 GITHUB_DONE_STATE=closed
 GITHUB_SYNC_LABEL=devtrack
 GITHUB_AUTO_UPDATE_DESCRIPTION=false
+GITHUB_SYNC_WINDOW_HOURS=0              # 0 = full resync; N = last N hours only
+GITHUB_LOG_PATH=                        # optional: override branch-analysis log path
 ```
 
 See [GitHub Guide](GITHUB.md).
@@ -418,6 +435,16 @@ TEAMS_CHAT_TYPE=channel
 TEAMS_WEBHOOK_URL=https://outlook.office.com/webhook/your-webhook-url
 TEAMS_MENTION_USER=false
 SENTIMENT_TARGET_SENDER=          # display name for responsiveness tracking
+```
+
+### Azure AD / Microsoft Graph *(optional)*
+
+Required for Teams chat collection (personalization learning) and spec emailer via MS Graph.
+
+```bash
+AZURE_CLIENT_ID=
+AZURE_TENANT_ID=
+AZURE_CLIENT_SECRET=
 ```
 
 ---
@@ -624,6 +651,31 @@ PM_AGENT_DEFAULT_PLATFORM=azure
 
 ---
 
+## Commit Enhancement
+
+AI-powered commit message enhancement via `devtrack git commit`.
+
+```bash
+COMMIT_ENHANCE_MODE=false    # set true to enable AI enhancement on every commit
+```
+
+---
+
+## Telemetry & Cloud
+
+```bash
+# Anonymous install/active ping (disable with: devtrack telemetry off)
+DEVTRACK_PING_URL=https://ping.devtrack.dev   # set empty to disable without CLI
+
+# DevTrack cloud API (empty for self-hosted / local-only use)
+DEVTRACK_API_URL=
+
+# Auto-accept terms of service (for CI/headless installs)
+DEVTRACK_AUTO_ACCEPT_TERMS=false
+```
+
+---
+
 ## Build Metadata
 
 ```bash
@@ -635,11 +687,21 @@ DEVTRACK_BUILD_DATE=2026-03-02
 
 ## Changing Configuration
 
+Edit `.env`, then reload — the daemon does not watch the file for changes:
+
 ```bash
 devtrack stop
 nano .env
+set -a && source .env && set +a
 devtrack start
 devtrack status
+```
+
+If using `autostart-install` (launchd/systemd), re-run it after `.env` changes so the new values are baked into the service unit:
+
+```bash
+devtrack autostart-uninstall
+devtrack autostart-install
 ```
 
 ---

@@ -14,20 +14,10 @@ import time
 import logging
 from pathlib import Path
 
-# Load environment variables from .env at project root (via backend config)
+# Environment variables must be set before this process starts.
+# The Go daemon passes its full environment to this subprocess automatically.
+# For standalone local use: source .env into your shell before running.
 sys.path.insert(0, os.path.dirname(__file__))
-try:
-    from backend.config import _load_env
-    _load_env()
-except ImportError:
-    try:
-        from dotenv import load_dotenv
-        for env_path in [Path(__file__).parent / ".env", Path.home() / ".devtrack" / ".env"]:
-            if env_path.exists():
-                load_dotenv(env_path)
-                break
-    except ImportError:
-        pass
 
 # Set up logging first
 logging.basicConfig(
