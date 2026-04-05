@@ -26,7 +26,8 @@ _PENDING_PROJECTS: dict = {}        # chat_id -> ProjectDraft state for /newproj
 
 def _devtrack_bin() -> str:
     """Resolve the devtrack binary path from PROJECT_ROOT."""
-    project_root = os.environ.get("PROJECT_ROOT", "")
+    from backend.config import get_project_root
+    project_root = get_project_root()
     if project_root:
         candidate = os.path.join(project_root, "devtrack")
         if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
@@ -679,7 +680,8 @@ def _get_azure_state_file() -> str:
         return os.path.join(data_dir, "azure", "sync_state.json")
     except Exception:
         pass
-    project_root = os.environ.get("PROJECT_ROOT", "")
+    from backend.config import get_project_root
+    project_root = get_project_root()
     if project_root:
         return os.path.join(project_root, "Data", "azure", "sync_state.json")
     return ""
@@ -710,7 +712,8 @@ def _get_db_path() -> str:
     from backend.config import get_path
     try:
         db_dir = get_path("DATABASE_DIR")
-        db_file = os.environ.get("DATABASE_FILE_NAME", "devtrack.db")
+        from backend.config import get as _cfg
+        db_file = _cfg("DATABASE_FILE_NAME", "devtrack.db")
         path = os.path.join(db_dir, db_file)
         if os.path.exists(path):
             return path
@@ -745,7 +748,8 @@ def _get_gitlab_state_file() -> str:
         return os.path.join(data_dir, "gitlab", "sync_state.json")
     except Exception:
         pass
-    project_root = os.environ.get("PROJECT_ROOT", "")
+    from backend.config import get_project_root
+    project_root = get_project_root()
     if project_root:
         return os.path.join(project_root, "Data", "gitlab", "sync_state.json")
     return ""
@@ -1401,7 +1405,8 @@ async def _on_plan_cancelled(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 def _np_review_url(spec_id: str) -> str:
     """Build the web review URL for a spec."""
-    base = os.getenv("SPEC_REVIEW_BASE_URL", "").rstrip("/")
+    from backend.config import get_spec_review_base_url
+    base = get_spec_review_base_url().rstrip("/")
     if not base:
         return ""
     return f"{base}/spec/{spec_id}/review"
@@ -1665,7 +1670,8 @@ async def _on_newproject_members_done(update: Update, context: ContextTypes.DEFA
         analyzer = WorkloadAnalyzer()
         workload = await analyzer.analyze(developers, platform, deadline=deadline)
 
-        review_base = os.getenv("SPEC_REVIEW_BASE_URL", "")
+        from backend.config import get_spec_review_base_url
+        review_base = get_spec_review_base_url()
         generator = SpecGenerator()
         spec = await generator.generate(
             requirements=requirements,

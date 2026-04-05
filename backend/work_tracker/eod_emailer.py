@@ -7,8 +7,14 @@ Configuration (via .env):
 """
 
 import logging
-import os
 from typing import TYPE_CHECKING, Optional
+
+from backend.config import (
+    get_eod_report_email as _eod_email,
+    get_azure_client_id as _az_client_id,
+    get_azure_tenant_id as _az_tenant_id,
+    get_azure_client_secret as _az_client_secret,
+)
 
 if TYPE_CHECKING:
     from backend.work_tracker.eod_report_generator import EODReport
@@ -117,7 +123,7 @@ class EODEmailer:
 
         Returns True on success, False on failure (non-fatal).
         """
-        to = recipient or os.getenv("EOD_REPORT_EMAIL", "")
+        to = recipient or _eod_email()
         if not to:
             logger.warning("EODEmailer: no recipient — set EOD_REPORT_EMAIL or pass --email")
             return False
@@ -131,9 +137,9 @@ class EODEmailer:
             import configparser as cp
             parser = cp.ConfigParser()
             parser["graph"] = {
-                "clientId": os.getenv("AZURE_CLIENT_ID", ""),
-                "tenantId": os.getenv("AZURE_TENANT_ID", ""),
-                "clientSecret": os.getenv("AZURE_CLIENT_SECRET", ""),
+                "clientId": _az_client_id(),
+                "tenantId": _az_tenant_id(),
+                "clientSecret": _az_client_secret(),
                 "graphUserScopes": "Mail.Send",
             }
             section = parser["graph"]

@@ -30,7 +30,8 @@ from backend.auth.session import AuthSession, make_offline_session, set_session,
 
 def _api_url() -> Optional[str]:
     """Return the DevTrack cloud API URL, or None for offline-only mode."""
-    return os.getenv("DEVTRACK_API_URL")
+    from backend.config import get_devtrack_api_url
+    return get_devtrack_api_url() or None
 
 
 def _is_cloud_available() -> bool:

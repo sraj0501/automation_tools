@@ -19,8 +19,9 @@ class ServiceHealth:
 
 
 def _webhook_url() -> str:
-    port = os.environ.get("WEBHOOK_PORT", "8089")
-    host = os.environ.get("WEBHOOK_HOST", "localhost")
+    from backend.config import get_webhook_port, get_webhook_host
+    port = get_webhook_port()
+    host = get_webhook_host()
     # Normalise 0.0.0.0 → localhost for outbound checks
     if host == "0.0.0.0":
         host = "localhost"
@@ -28,7 +29,8 @@ def _webhook_url() -> str:
 
 
 def _ollama_url() -> str:
-    raw = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+    from backend.config import ollama_host
+    raw = ollama_host()
     return raw.rstrip("/") + "/api/tags"
 
 

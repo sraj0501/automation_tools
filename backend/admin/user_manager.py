@@ -23,8 +23,9 @@ from backend.admin.auth import hash_password, verify_password
 
 
 def _admin_db_path() -> Path:
-    db_dir = os.environ.get("DATABASE_DIR") or (
-        Path(os.environ.get("PROJECT_ROOT", ".")) / "Data" / "db"
+    from backend.config import get_database_dir, get_project_root
+    db_dir = get_database_dir() or (
+        Path(get_project_root() or ".") / "Data" / "db"
     )
     return Path(db_dir) / "admin.db"
 

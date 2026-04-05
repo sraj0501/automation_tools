@@ -10,8 +10,9 @@ Configuration (via .env):
 """
 
 import logging
-import os
 from typing import Any, Optional
+
+from backend.config import get_azure_client_id as _az_client_id, get_azure_tenant_id as _az_tenant_id, get_azure_client_secret as _az_client_secret
 
 logger = logging.getLogger(__name__)
 
@@ -189,9 +190,9 @@ class SpecEmailer:
             )
             # Build a minimal config object from env vars
             props = {
-                "clientId": os.getenv("AZURE_CLIENT_ID", ""),
-                "tenantId": os.getenv("AZURE_TENANT_ID", ""),
-                "clientSecret": os.getenv("AZURE_CLIENT_SECRET", ""),
+                "clientId": _az_client_id(),
+                "tenantId": _az_tenant_id(),
+                "clientSecret": _az_client_secret(),
                 "graphUserScopes": "Mail.Send",
             }
             # Re-use the existing Graph class

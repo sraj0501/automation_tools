@@ -20,13 +20,13 @@ logger = logging.getLogger(__name__)
 
 def _specs_dir() -> Path:
     """Data directory for spec JSON files."""
-    import os
-    data_dir = os.getenv("DATA_DIR") or os.getenv("PROJECT_ROOT")
+    from backend.config import get_data_dir, get_project_root
+    data_dir = get_data_dir()
+    project_root = get_project_root()
     if data_dir:
-        base = Path(data_dir)
-        if os.getenv("DATA_DIR"):
-            return base / "project_specs"
-        return base / "Data" / "project_specs"
+        return Path(data_dir) / "project_specs"
+    if project_root:
+        return Path(project_root) / "Data" / "project_specs"
     return Path(".") / "Data" / "project_specs"
 
 
@@ -43,12 +43,12 @@ class SpecStore:
             return
         self._init_done = True
         try:
-            import os
-            mongo_uri = os.getenv("MONGODB_URI", "")
+            from backend.config import get_mongodb_uri, get_mongodb_db
+            mongo_uri = get_mongodb_uri()
             if mongo_uri:
                 import motor.motor_asyncio as motor  # type: ignore
                 client = motor.AsyncIOMotorClient(mongo_uri)
-                db_name = os.getenv("MONGODB_DB", "devtrack")
+                db_name = get_mongodb_db()
                 self._collection = client[db_name]["project_specs"]
                 self._mongo_mode = True
                 logger.debug("SpecStore: using MongoDB")

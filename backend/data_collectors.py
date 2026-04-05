@@ -224,14 +224,9 @@ class AzureDevOpsDataCollector:
             from datetime import datetime, timedelta
 
             # Get Azure DevOps credentials from environment/config
-            try:
-                from backend.config import azure_org, azure_pat
-                org = azure_org()
-                pat = azure_pat()
-            except (ImportError, TypeError):
-                import os
-                org = os.getenv('ORGANIZATION') or os.getenv('AZURE_ORG')
-                pat = os.getenv('AZURE_DEVOPS_PAT') or os.getenv('AZURE_API_KEY')
+            from backend.config import azure_org, azure_pat
+            org = azure_org()
+            pat = azure_pat()
 
             if not org or not pat:
                 logger.warning("Azure DevOps credentials not configured")
@@ -321,14 +316,9 @@ class AzureDevOpsDataCollector:
             from requests.auth import HTTPBasicAuth
 
             # Get Azure DevOps credentials
-            try:
-                from backend.config import azure_org, azure_pat
-                org = azure_org()
-                pat = azure_pat()
-            except (ImportError, TypeError):
-                import os
-                org = os.getenv('ORGANIZATION') or os.getenv('AZURE_ORG')
-                pat = os.getenv('AZURE_DEVOPS_PAT') or os.getenv('AZURE_API_KEY')
+            from backend.config import azure_org, azure_pat
+            org = azure_org()
+            pat = azure_pat()
 
             if not org or not pat:
                 logger.warning("Azure DevOps credentials not configured")

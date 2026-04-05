@@ -49,12 +49,8 @@ class PRAnalyzer:
         """
         _token = token
         if _token is None:
-            try:
-                from backend.config import github_token
-                _token = github_token()
-            except Exception:
-                import os
-                _token = os.getenv("GITHUB_TOKEN", "")
+            from backend.config import github_token
+            _token = github_token()
 
         self._token = _token or ""
         self._provider = provider  # None = lazy init on first use
@@ -77,12 +73,8 @@ class PRAnalyzer:
 
     def _default_owner_repo(self) -> tuple:
         """Read GITHUB_OWNER and GITHUB_REPO from config."""
-        try:
-            from backend.config import github_owner, github_repo
-            return github_owner(), github_repo()
-        except Exception:
-            import os
-            return os.getenv("GITHUB_OWNER", ""), os.getenv("GITHUB_REPO", "")
+        from backend.config import github_owner, github_repo
+        return github_owner(), github_repo()
 
     # ------------------------------------------------------------------
     # Public API
