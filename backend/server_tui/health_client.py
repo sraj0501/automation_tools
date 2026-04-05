@@ -3,7 +3,6 @@ Health client — polls GET /health on the webhook server and Ollama.
 """
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Optional
 from urllib import request as urllib_request
