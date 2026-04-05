@@ -28,12 +28,12 @@ def send_work_reminder(
 
     Returns True if at least one message was delivered.
     """
-    bot_token = os.environ.get("SLACK_BOT_TOKEN", "")
-    raw_ids = os.environ.get("SLACK_ALLOWED_CHANNEL_IDS", "")
-    if not bot_token or not raw_ids:
+    from backend.config import get_slack_bot_token, get_slack_allowed_channel_ids
+    bot_token = get_slack_bot_token()
+    channel_ids = get_slack_allowed_channel_ids()
+    if not bot_token or not channel_ids:
         return False
 
-    channel_ids = [c.strip() for c in raw_ids.split(",") if c.strip()]
     if not channel_ids:
         return False
 

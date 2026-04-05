@@ -79,6 +79,55 @@ def _user_id() -> str:
 # Poll one cycle
 # ---------------------------------------------------------------------------
 
+def _sqlite_load_last_checked(user_id: str, source: str) -> Optional[datetime]:
+    """Load last_checked from SQLite alert_state (fallback when MongoDB unavailable)."""
+    try:
+        import sqlite3
+        db_path = cfg.database_path()
+        if not db_path.exists():
+            return None
+        key = f"{user_id}:{source}"
+        with sqlite3.connect(str(db_path)) as conn:
+            row = conn.execute(
+                "SELECT last_checked FROM alert_state WHERE id=?", (key,)
+            ).fetchone()
+            if row:
+                ts_str = row[0]
+                try:
+                    ts = datetime.fromisoformat(ts_str)
+                    if ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=timezone.utc)
+                    return ts
+                except Exception:
+                    return None
+    except Exception as e:
+        logger.debug(f"SQLite alert_state load failed: {e}")
+    return None
+
+
+def _sqlite_save_last_checked(user_id: str, source: str, ts: datetime) -> None:
+    """Save last_checked to SQLite alert_state (fallback when MongoDB unavailable)."""
+    try:
+        import sqlite3
+        db_path = cfg.database_path()
+        if not db_path.exists():
+            return
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        key = f"{user_id}:{source}"
+        with sqlite3.connect(str(db_path)) as conn:
+            conn.execute(
+                """INSERT INTO alert_state (id, user_id, source, last_checked, updated_at)
+                   VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                   ON CONFLICT(id) DO UPDATE SET
+                       last_checked=excluded.last_checked,
+                       updated_at=CURRENT_TIMESTAMP""",
+                (key, user_id, source, ts.isoformat()),
+            )
+    except Exception as e:
+        logger.debug(f"SQLite alert_state save failed: {e}")
+
+
 async def _poll_github(
     store,
     user_id: str,
@@ -87,8 +136,11 @@ async def _poll_github(
     from backend.alerters.github_alerter import GitHubAlerter
 
     last_checked: Optional[datetime] = None
-    if user_id and store.is_available():
-        last_checked = await store.load_last_checked(user_id, "github")
+    if user_id:
+        if store.is_available():
+            last_checked = await store.load_last_checked(user_id, "github")
+        else:
+            last_checked = _sqlite_load_last_checked(user_id, "github")
 
     notifications: List[Dict[str, Any]] = []
     async with GitHubAlerter() as alerter:
@@ -98,9 +150,12 @@ async def _poll_github(
         notifications = await alerter.poll(last_checked=last_checked)
 
     # Persist last_checked timestamp
-    if user_id and store.is_available() and notifications is not None:
+    if user_id and notifications is not None:
         now = datetime.now(tz=timezone.utc)
-        await store.save_last_checked(user_id, "github", now)
+        if store.is_available():
+            await store.save_last_checked(user_id, "github", now)
+        else:
+            _sqlite_save_last_checked(user_id, "github", now)
 
     return notifications
 
@@ -113,8 +168,11 @@ async def _poll_azure(
     from backend.alerters.azure_alerter import AzureAlerter
 
     last_checked: Optional[datetime] = None
-    if user_id and store.is_available():
-        last_checked = await store.load_last_checked(user_id, "azure")
+    if user_id:
+        if store.is_available():
+            last_checked = await store.load_last_checked(user_id, "azure")
+        else:
+            last_checked = _sqlite_load_last_checked(user_id, "azure")
 
     notifications: List[Dict[str, Any]] = []
     async with AzureAlerter() as alerter:
@@ -124,9 +182,12 @@ async def _poll_azure(
         notifications = await alerter.poll(last_checked=last_checked)
 
     # Persist last_checked timestamp
-    if user_id and store.is_available() and notifications is not None:
+    if user_id and notifications is not None:
         now = datetime.now(tz=timezone.utc)
-        await store.save_last_checked(user_id, "azure", now)
+        if store.is_available():
+            await store.save_last_checked(user_id, "azure", now)
+        else:
+            _sqlite_save_last_checked(user_id, "azure", now)
 
     return notifications
 
@@ -139,8 +200,11 @@ async def _poll_jira(
     from backend.alerters.jira_alerter import JiraAlerter
 
     last_checked: Optional[datetime] = None
-    if user_id and store.is_available():
-        last_checked = await store.load_last_checked(user_id, "jira")
+    if user_id:
+        if store.is_available():
+            last_checked = await store.load_last_checked(user_id, "jira")
+        else:
+            last_checked = _sqlite_load_last_checked(user_id, "jira")
 
     notifications: List[Dict[str, Any]] = []
     async with JiraAlerter() as alerter:
@@ -150,9 +214,12 @@ async def _poll_jira(
         notifications = await alerter.poll(last_checked=last_checked)
 
     # Persist last_checked timestamp
-    if user_id and store.is_available() and notifications is not None:
+    if user_id and notifications is not None:
         now = datetime.now(tz=timezone.utc)
-        await store.save_last_checked(user_id, "jira", now)
+        if store.is_available():
+            await store.save_last_checked(user_id, "jira", now)
+        else:
+            _sqlite_save_last_checked(user_id, "jira", now)
 
     return notifications
 
@@ -240,14 +307,15 @@ def _write_notification_to_sqlite(notif: Dict[str, Any]) -> None:
             conn.execute(
                 """
                 INSERT OR IGNORE INTO notifications
-                    (source, event_type, ticket_id, title, url, read, created_at)
-                VALUES (?, ?, ?, ?, ?, 0, ?)
+                    (source, event_type, ticket_id, title, body, url, read, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, 0, ?)
                 """,
                 (
                     notif.get("source", ""),
                     notif.get("event_type", ""),
                     notif.get("ticket_id", ""),
                     notif.get("title", ""),
+                    notif.get("summary", ""),
                     notif.get("url", ""),
                     ts_str,
                 ),

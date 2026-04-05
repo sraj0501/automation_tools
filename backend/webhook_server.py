@@ -26,12 +26,13 @@ _project_root = os.path.dirname(_script_dir)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 try:
     from backend import config
-    config._load_env()
 except ImportError:
     config = None
 
@@ -48,13 +49,22 @@ logging.basicConfig(
 # App setup
 # ---------------------------------------------------------------------------
 
-app = FastAPI(title="DevTrack Webhooks", version="1.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("DevTrack Webhook + Trigger Server starting (CS-1 HTTP mode)")
+    await asyncio.to_thread(TriggerProcessor.get)
+    await _ensure_gitlab_webhooks()
+    yield
+    logger.info("DevTrack Webhook + Trigger Server stopped")
+
+
+app = FastAPI(title="DevTrack Webhooks", version="1.0", lifespan=lifespan)
 
 try:
     from runtime_narrative import RuntimeNarrativeMiddleware
-    app.add_middleware(RuntimeNarrativeMiddleware, failure_diagnostics="lean")
+    app.add_middleware(RuntimeNarrativeMiddleware)
     logger.info("runtime-narrative middleware enabled for webhook server")
-except ImportError:
+except (ImportError, TypeError):
     pass
 
 _handler: WebhookEventHandler | None = None
@@ -173,8 +183,12 @@ class TriggerProcessor:
         repo_path   = data.get("repo_path", "")
         author      = data.get("author", "")
         branch      = data.get("branch", "")
-        pm_platform = data.get("pm_platform", "")
-        pm_project  = data.get("pm_project", "")
+        pm_platform       = data.get("pm_platform", "")
+        pm_project        = data.get("pm_project", "")
+        pm_assignee       = data.get("pm_assignee", "")
+        pm_iteration_path = data.get("pm_iteration_path", "")
+        pm_area_path      = data.get("pm_area_path", "")
+        pm_milestone      = data.get("pm_milestone", "")
 
         logger.info(f"[HTTP commit] {commit_hash[:12]} — {commit_msg[:60]}")
 
@@ -210,6 +224,10 @@ class TriggerProcessor:
                     ticket_id=task_data.get("ticket_id", ""),
                     status=task_data.get("status", ""),
                     pm_project=pm_project,
+                    pm_assignee=pm_assignee,
+                    pm_iteration_path=pm_iteration_path,
+                    pm_area_path=pm_area_path,
+                    pm_milestone=pm_milestone,
                     commit_info={
                         "hash": commit_hash,
                         "message": commit_msg,
@@ -338,14 +356,13 @@ def _get_handler() -> WebhookEventHandler:
 def _cfg(key: str, default: str = "") -> str:
     if config:
         return config.get(key, default)
-    return os.getenv(key, default)
+    return default
 
 
 def _cfg_bool(key: str, default: bool = False) -> bool:
     if config:
         return config.get_bool(key, default)
-    val = os.getenv(key, "").lower().strip()
-    return val in ("true", "1", "yes", "on") if val else default
+    return default
 
 
 async def _verify_trigger_key(request: Request) -> None:
@@ -353,7 +370,7 @@ async def _verify_trigger_key(request: Request) -> None:
 
     Skipped when DEVTRACK_API_KEY is not set (dev/testing mode).
     """
-    expected = os.environ.get("DEVTRACK_API_KEY", "")
+    expected = config.get_devtrack_api_key() if config else ""
     if not expected:
         return  # auth not configured — allow all (dev mode)
     key = request.headers.get("X-DevTrack-API-Key", "")
@@ -793,15 +810,6 @@ async def http_work_session_stop(
 # Startup
 # ---------------------------------------------------------------------------
 
-@app.on_event("startup")
-async def on_startup() -> None:
-    logger.info("DevTrack Webhook + Trigger Server starting (CS-1 HTTP mode)")
-    # Pre-warm TriggerProcessor so the first trigger request doesn't pay init cost
-    await asyncio.to_thread(TriggerProcessor.get)
-    # Auto-register GitLab webhooks for configured projects
-    await _ensure_gitlab_webhooks()
-
-
 async def _ensure_gitlab_webhooks() -> None:
     """Register GitLab webhooks for all project IDs listed in GITLAB_PROJECT_IDS."""
     try:
@@ -835,11 +843,6 @@ async def _ensure_gitlab_webhooks() -> None:
         logger.debug(f"GitLab webhook auto-registration error: {e}")
 
 
-@app.on_event("shutdown")
-async def on_shutdown() -> None:
-    logger.info("DevTrack Webhook + Trigger Server stopped")
-
-
 def main() -> None:
     """Entry point when run as a module."""
     import uvicorn
@@ -849,9 +852,9 @@ def main() -> None:
 
     # TLS: Go passes DEVTRACK_TLS_CERT / DEVTRACK_TLS_KEY via the subprocess env.
     # If TLS is enabled and both paths are present, start uvicorn with SSL.
-    tls_enabled = os.environ.get("DEVTRACK_TLS", "true").lower() not in ("false", "0", "no")
-    cert_path = os.environ.get("DEVTRACK_TLS_CERT", "")
-    key_path = os.environ.get("DEVTRACK_TLS_KEY", "")
+    tls_enabled = config.get_devtrack_tls_enabled() if config else True
+    cert_path = config.get_devtrack_tls_cert() if config else ""
+    key_path = config.get_devtrack_tls_key() if config else ""
 
     ssl_kwargs: dict = {}
     if tls_enabled and cert_path and key_path:

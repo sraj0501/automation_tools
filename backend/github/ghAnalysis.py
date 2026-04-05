@@ -22,17 +22,11 @@ class GitHubBranchAnalyzer:
         This method ensures secure access to GitHub and sets up comprehensive logging.
         """
         # Load environment from project root
-        try:
-            from backend.config import _load_env, github_token, timezone, log_file_path
-            _load_env()
-            self.token = token or github_token()
-            tz_name = timezone()
-            log_path = str(log_file_path())
-        except ImportError:
-            load_dotenv(os.path.join(_project_root, ".env"))
-            self.token = token or os.getenv("GITHUB_TOKEN")
-            tz_name = os.getenv("TIMEZONE", "Asia/Kolkata")
-            log_path = os.getenv("GITHUB_LOG_PATH") or os.path.join(_project_root, "Data", "logs", "github_branch_analysis.log")
+        from backend.config import github_token, timezone, log_file_path, get_github_log_path
+        self.token = token or github_token()
+        tz_name = timezone()
+        log_path_val = get_github_log_path()
+        log_path = log_path_val if log_path_val else str(log_file_path())
 
         if not self.token:
             raise ValueError("GitHub Personal Access Token is required (GITHUB_TOKEN in .env)")

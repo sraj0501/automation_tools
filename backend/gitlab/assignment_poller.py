@@ -124,22 +124,14 @@ async def _notify(bot, chat_ids: list, issue) -> None:
 # ---------------------------------------------------------------------------
 
 async def run() -> None:
-    token = os.getenv("TELEGRAM_BOT_TOKEN", "")
-    allowed_ids_str = os.getenv("TELEGRAM_ALLOWED_CHAT_IDS", "")
-    interval_mins = int(os.getenv("GITLAB_POLL_INTERVAL_MINS", "5") or "5")
+    from backend.config import get_telegram_bot_token, get_telegram_allowed_chat_ids, get_gitlab_poll_interval_mins
+    token = get_telegram_bot_token()
+    chat_ids = get_telegram_allowed_chat_ids()
+    interval_mins = get_gitlab_poll_interval_mins()
 
     if not token:
         logger.error("TELEGRAM_BOT_TOKEN not set — GitLab assignment poller disabled")
         return
-
-    chat_ids = []
-    for id_str in allowed_ids_str.split(","):
-        id_str = id_str.strip()
-        if id_str:
-            try:
-                chat_ids.append(int(id_str))
-            except ValueError:
-                logger.warning(f"Invalid chat ID: {id_str}")
 
     if not chat_ids:
         logger.warning("No TELEGRAM_ALLOWED_CHAT_IDS set — GitLab assignment poller disabled")

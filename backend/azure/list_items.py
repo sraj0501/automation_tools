@@ -58,8 +58,8 @@ async def run(states=None, show_all=False):
         if show_all:
             states = None  # no state filter
         else:
-            raw = os.getenv("AZURE_SYNC_STATES", "New,Active,In Progress")
-            states = [s.strip() for s in raw.split(",")]
+            from backend.config import get_azure_sync_states
+            states = get_azure_sync_states()
 
     org = client._org
     project = client._project

@@ -9,12 +9,11 @@ from typing import Optional
 
 
 def _log_dir() -> Optional[Path]:
+    from backend.config import log_dir, get_project_root
     try:
-        from backend.config import get_log_dir
-        return get_log_dir()
+        return log_dir()
     except Exception:
-        # Fallback: look relative to PROJECT_ROOT
-        root = os.environ.get("PROJECT_ROOT")
+        root = get_project_root()
         if root:
             return Path(root) / "Data" / "logs"
         return None

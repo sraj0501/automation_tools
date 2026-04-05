@@ -24,7 +24,8 @@ from fastapi import Cookie, HTTPException, Request, status
 # Read config once at import time — all values required to be set, or we use
 # safe defaults suitable for a self-hosted local install.
 def _cfg(key: str, default: str = "") -> str:
-    return os.environ.get(key, default)
+    from backend.config import get
+    return get(key, default)
 
 
 def _secret_key() -> str:

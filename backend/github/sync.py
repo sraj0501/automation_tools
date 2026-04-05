@@ -22,7 +22,8 @@ logger = logging.getLogger(__name__)
 
 def _state_file() -> Path:
     """Return path to local sync state file."""
-    data_dir = os.getenv("DATA_DIR", "Data")
+    from backend.config import get_data_dir
+    data_dir = get_data_dir() or "Data"
     path = Path(data_dir) / "github" / "sync_state.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
@@ -75,7 +76,8 @@ class GitHubSync:
             logger.info("GitHub sync: full mode, clearing existing cache")
         else:
             # Incremental default: read window from env
-            window_hours = int(os.getenv("GITHUB_SYNC_WINDOW_HOURS", "0") or "0")
+            from backend.config import get_github_sync_window_hours
+            window_hours = get_github_sync_window_hours()
             if window_hours > 0:
                 updated_after = datetime.now(timezone.utc) - timedelta(hours=window_hours)
                 existing = _load_state().get("issues", {})
@@ -110,7 +112,8 @@ class GitHubSync:
         # Merge: fetched records overwrite existing ones
         merged = {**existing, **fetched_records}
 
-        mode = f"windowed:{hours}h" if hours else ("full" if not existing else f"windowed:{int(os.getenv('GITHUB_SYNC_WINDOW_HOURS', '0'))}h" if updated_after else "full")
+        from backend.config import get_github_sync_window_hours as _gh_win
+        mode = f"windowed:{hours}h" if hours else ("full" if not existing else f"windowed:{_gh_win()}h" if updated_after else "full")
         state = {
             "last_sync": now,
             "sync_mode": mode,

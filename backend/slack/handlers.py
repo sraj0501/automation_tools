@@ -59,7 +59,8 @@ def dispatch(text: str, respond: Callable, bot: "SlackBot") -> None:
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _devtrack_bin() -> str:
-    root = os.environ.get("PROJECT_ROOT", "")
+    from backend.config import get_project_root
+    root = get_project_root()
     if root:
         candidate = os.path.join(root, "devtrack")
         if os.path.isfile(candidate) and os.access(candidate, os.X_OK):

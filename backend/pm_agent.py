@@ -431,9 +431,10 @@ Required JSON format:
         import aiohttp
         import os
 
-        token = self._github_token or os.getenv("GITHUB_TOKEN", "")
-        owner = os.getenv("GITHUB_OWNER", "")
-        repo = os.getenv("GITHUB_REPO", "")
+        from backend.config import get_github_token, get_github_owner, get_github_repo
+        token = self._github_token or get_github_token()
+        owner = get_github_owner()
+        repo = get_github_repo()
 
         if not token or not owner or not repo:
             logger.error("GitHub creation requires GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO")

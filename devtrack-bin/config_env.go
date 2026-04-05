@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-
-	"github.com/joho/godotenv"
 )
 
 // EnvConfig holds all environment configuration
@@ -85,29 +83,34 @@ type EnvConfig struct {
 
 var envConfig *EnvConfig
 
-// requiredEnvVars lists all required environment variables
+// requiredEnvVars lists the environment variables that must be present for the
+// daemon to start. Feature-specific variables (Ollama, Teams, Email, Telegram,
+// Learning, etc.) are validated at the point of use, not at startup.
 var requiredEnvVars = []string{
+	// Daemon identity & paths
 	"PROJECT_ROOT",
 	"DEVTRACK_HOME",
+	"CLI_APP_NAME",
+	"CLI_DAEMON_NAME",
+	"CLI_BINARY_NAME",
+	// IPC
 	"IPC_HOST",
 	"IPC_PORT",
 	"IPC_CONNECT_TIMEOUT_SECS",
-	"PYTHON_BRIDGE_SCRIPT",
-	"CLI_BINARY_NAME",
+	// Data directories
+	"DATABASE_DIR",
+	"LOG_DIR",
+	"PID_DIR",
+	"CONFIG_DIR_PATH",
+	"LEARNING_DIR_PATH",
+	// File names
 	"CONFIG_FILE_NAME",
 	"DATABASE_FILE_NAME",
 	"PID_FILE_NAME",
 	"LOG_FILE_NAME",
 	"LEARNING_DIR_NAME",
 	"CONFIG_DIR_NAME",
-	"CLI_APP_NAME",
-	"CLI_DAEMON_NAME",
-	"DATABASE_DIR",
-	"LOG_DIR",
-	"PID_DIR",
-	"CONFIG_DIR_PATH",
-	"LEARNING_DIR_PATH",
-	"OLLAMA_HOST",
+	// Scheduler
 	"PROMPT_INTERVAL",
 	"WORK_HOURS_ONLY",
 	"WORK_START_HOUR",
@@ -115,57 +118,29 @@ var requiredEnvVars = []string{
 	"TIMEZONE",
 	"LOG_LEVEL",
 	"AUTO_SYNC",
-	"OUTPUT_TYPE",
-	"DAILY_REPORT_TIME",
-	"WEEKLY_REPORT_DAY",
-	"SEND_ON_TRIGGER",
-	"SEND_DAILY_SUMMARY",
-	"EMAIL_TO_ADDRESSES",
-	"EMAIL_CC_ADDRESSES",
-	"EMAIL_MANAGER",
-	"EMAIL_SUBJECT",
-	"TEAMS_CHANNEL_ID",
-	"TEAMS_CHANNEL_NAME",
-	"TEAMS_CHAT_ID",
-	"TEAMS_CHAT_TYPE",
-	"TEAMS_WEBHOOK_URL",
-	"TEAMS_MENTION_USER",
-	"LEARNING_PYTHON_PATH",
-	"LEARNING_SCRIPT_PATH",
-	"LEARNING_DEFAULT_DAYS",
-	"DEVTRACK_VERSION",
-	"DEVTRACK_BUILD_DATE",
 }
 
-// LoadEnvConfig loads configuration from .env files and environment variables
-// Returns error if any required variable is missing
+// LoadEnvConfig reads configuration from the process environment.
+// How those variables get into the environment (secret manager, shell export,
+// launchd, Docker, etc.) is not this function's concern.
+// Returns an error listing any required variables that are absent.
 func LoadEnvConfig() (*EnvConfig, error) {
 	if envConfig != nil {
 		return envConfig, nil
 	}
 
-	// Only load .env from explicit location: DEVTRACK_ENV_FILE or .env in current directory
-	envPath := os.Getenv("DEVTRACK_ENV_FILE")
-	if envPath == "" {
-		envPath = ".env"
-	}
-	if !fileExists(envPath) {
-		return nil, fmt.Errorf(".env file not found at: %s. Set DEVTRACK_ENV_FILE or place .env in current directory.", envPath)
-	}
-	if err := godotenv.Load(envPath); err != nil {
-		return nil, fmt.Errorf("failed to load .env file at %s: %v", envPath, err)
-	}
-
-	// Check all required variables
+	// Validate required variables are present in the environment.
 	missing := []string{}
 	for _, key := range requiredEnvVars {
 		if os.Getenv(key) == "" {
 			missing = append(missing, key)
 		}
 	}
-
 	if len(missing) > 0 {
-		return nil, fmt.Errorf("missing required environment variables:\n%s", strings.Join(missing, "\n"))
+		return nil, fmt.Errorf(
+			"missing required environment variables (set these before starting devtrack):\n  %s",
+			strings.Join(missing, "\n  "),
+		)
 	}
 
 	// Build config from environment
