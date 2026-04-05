@@ -23,12 +23,17 @@ except ImportError:
     def _get_style_instruction(context_type: str = "general") -> str:
         return ""
 
+try:
+    from backend import config as _backend_config
+except ImportError:
+    _backend_config = None  # type: ignore[assignment]
+
 # ─── devtrack git integration ────────────────────────────────────────────────
 
 def _devtrack_git_cmd(cmd: str) -> str:
     """Replace 'git commit' with 'devtrack git commit' to use AI-enhanced commits."""
     import re
-    project_root = os.environ.get("PROJECT_ROOT", "")
+    project_root = _backend_config.get_project_root() if _backend_config else ""
     if not project_root:
         return cmd
     devtrack_bin = os.path.join(project_root, "devtrack")

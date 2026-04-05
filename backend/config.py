@@ -681,6 +681,11 @@ def get_webhook_github_secret() -> str:
     return get("WEBHOOK_GITHUB_SECRET", "")
 
 
+def get_webhook_gitlab_secret() -> str:
+    """GitLab webhook token (optional). WEBHOOK_GITLAB_SECRET."""
+    return get("WEBHOOK_GITLAB_SECRET", "")
+
+
 def is_webhook_notify_os() -> bool:
     """Send OS notifications for webhook events. WEBHOOK_NOTIFY_OS (default: true)."""
     return get_bool("WEBHOOK_NOTIFY_OS", True)
