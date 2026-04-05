@@ -33,7 +33,6 @@ from fastapi.responses import JSONResponse
 
 try:
     from backend import config
-    config._load_env()
 except ImportError:
     config = None
 
