@@ -101,13 +101,23 @@ Resume using devtrack as soon as it restarts. Log the pause in the engineer log.
 
 ---
 
-## Branch naming
+## Branch naming — MANDATORY
 
-Always branch from `main` with a task-scoped name:
+**Never push code commits to `main` directly.** Always work on a task branch.
+
+Before writing a single line of code for any task:
+```bash
+git checkout main && git pull
+git checkout -b fix/TASK-NNN-short-description   # or features/ or docs/
 ```
-features/TASK-NNN-short-description
-fix/TASK-NNN-short-description
+
+Push to that branch only. When the task is complete, open a PR:
+```bash
+gh pr create --title "TASK-NNN: <title>" --body "Closes TASK-NNN on project board."
 ```
+Then post the PR URL on the project board under the task. Do NOT merge — that's the PM/developer's call.
+
+If you ever find yourself on `main` with uncommitted changes: stash, create a branch, pop the stash, then commit to the branch.
 
 ---
 
