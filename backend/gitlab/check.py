@@ -31,9 +31,10 @@ def main() -> int:
 
     import requests
 
-    gitlab_url = os.getenv("GITLAB_URL", "https://gitlab.com").rstrip("/")
-    pat = os.getenv("GITLAB_PAT") or os.getenv("GITLAB_API_KEY", "")
-    project_id = os.getenv("GITLAB_PROJECT_ID", "")
+    from backend.config import get_gitlab_url, get_gitlab_pat, get_gitlab_project_id_str
+    gitlab_url = get_gitlab_url().rstrip("/")
+    pat = get_gitlab_pat()
+    project_id = get_gitlab_project_id_str()
 
     print("GitLab Connection Check")
     print("=" * 40)
