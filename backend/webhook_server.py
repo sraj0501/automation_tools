@@ -26,6 +26,8 @@ _project_root = os.path.dirname(_script_dir)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
@@ -48,13 +50,22 @@ logging.basicConfig(
 # App setup
 # ---------------------------------------------------------------------------
 
-app = FastAPI(title="DevTrack Webhooks", version="1.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("DevTrack Webhook + Trigger Server starting (CS-1 HTTP mode)")
+    await asyncio.to_thread(TriggerProcessor.get)
+    await _ensure_gitlab_webhooks()
+    yield
+    logger.info("DevTrack Webhook + Trigger Server stopped")
+
+
+app = FastAPI(title="DevTrack Webhooks", version="1.0", lifespan=lifespan)
 
 try:
     from runtime_narrative import RuntimeNarrativeMiddleware
-    app.add_middleware(RuntimeNarrativeMiddleware, failure_diagnostics="lean")
+    app.add_middleware(RuntimeNarrativeMiddleware)
     logger.info("runtime-narrative middleware enabled for webhook server")
-except ImportError:
+except (ImportError, TypeError):
     pass
 
 _handler: WebhookEventHandler | None = None
@@ -173,8 +184,12 @@ class TriggerProcessor:
         repo_path   = data.get("repo_path", "")
         author      = data.get("author", "")
         branch      = data.get("branch", "")
-        pm_platform = data.get("pm_platform", "")
-        pm_project  = data.get("pm_project", "")
+        pm_platform       = data.get("pm_platform", "")
+        pm_project        = data.get("pm_project", "")
+        pm_assignee       = data.get("pm_assignee", "")
+        pm_iteration_path = data.get("pm_iteration_path", "")
+        pm_area_path      = data.get("pm_area_path", "")
+        pm_milestone      = data.get("pm_milestone", "")
 
         logger.info(f"[HTTP commit] {commit_hash[:12]} — {commit_msg[:60]}")
 
@@ -210,6 +225,10 @@ class TriggerProcessor:
                     ticket_id=task_data.get("ticket_id", ""),
                     status=task_data.get("status", ""),
                     pm_project=pm_project,
+                    pm_assignee=pm_assignee,
+                    pm_iteration_path=pm_iteration_path,
+                    pm_area_path=pm_area_path,
+                    pm_milestone=pm_milestone,
                     commit_info={
                         "hash": commit_hash,
                         "message": commit_msg,
@@ -793,15 +812,6 @@ async def http_work_session_stop(
 # Startup
 # ---------------------------------------------------------------------------
 
-@app.on_event("startup")
-async def on_startup() -> None:
-    logger.info("DevTrack Webhook + Trigger Server starting (CS-1 HTTP mode)")
-    # Pre-warm TriggerProcessor so the first trigger request doesn't pay init cost
-    await asyncio.to_thread(TriggerProcessor.get)
-    # Auto-register GitLab webhooks for configured projects
-    await _ensure_gitlab_webhooks()
-
-
 async def _ensure_gitlab_webhooks() -> None:
     """Register GitLab webhooks for all project IDs listed in GITLAB_PROJECT_IDS."""
     try:
@@ -833,11 +843,6 @@ async def _ensure_gitlab_webhooks() -> None:
         await client.close()
     except Exception as e:
         logger.debug(f"GitLab webhook auto-registration error: {e}")
-
-
-@app.on_event("shutdown")
-async def on_shutdown() -> None:
-    logger.info("DevTrack Webhook + Trigger Server stopped")
 
 
 def main() -> None:

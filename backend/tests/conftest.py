@@ -3,6 +3,9 @@ Pytest configuration and fixtures for DevTrack backend tests.
 """
 import sys
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
 
 # Add project root to path so we can import backend modules
 project_root = Path(__file__).resolve().parent.parent.parent
@@ -13,3 +16,5 @@ if str(project_root) not in sys.path:
 def pytest_configure(config):
     """Ensure config is loaded before tests that need it."""
     pass
+
+

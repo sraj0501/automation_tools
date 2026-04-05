@@ -227,7 +227,7 @@ def test_gitlab_pm_project_parsed_as_int():
     captured = {}
 
     def capture_call_sync(platform, client, description, ticket_id, status,
-                          commit_info, task_matcher, project_id):
+                          commit_info, task_matcher, project_id, overrides=None):
         captured["project_id"] = project_id
         return (42, "gitlab")
 
@@ -246,7 +246,7 @@ def test_gitlab_pm_project_invalid_ignored():
     captured = {}
 
     def capture_call_sync(platform, client, description, ticket_id, status,
-                          commit_info, task_matcher, project_id):
+                          commit_info, task_matcher, project_id, overrides=None):
         captured["project_id"] = project_id
         return (None, None)
 
@@ -270,5 +270,121 @@ def test_priority_chain_all_return_none():
          patch("backend.config.is_github_sync_enabled", return_value=True), \
          patch.object(router, "_call_sync", return_value=(None, None)):
         result = router._route_priority_chain("desc", "T-1", "done", "", None, None)
+
+    assert result == (None, None)
+
+
+# ---------------------------------------------------------------------------
+# Per-workspace overrides — Azure
+# ---------------------------------------------------------------------------
+
+def test_route_passes_azure_overrides_to_call_sync():
+    """pm_assignee, pm_area_path, pm_iteration_path are forwarded to _call_sync."""
+    azure_client = MagicMock()
+    router = make_router(azure=azure_client)
+
+    captured = {}
+
+    def capture(platform, client, description, ticket_id, status,
+                commit_info, task_matcher, project_id, overrides=None):
+        captured.update(overrides or {})
+        return (5, "azure")
+
+    with patch("backend.config.is_azure_sync_enabled", return_value=True), \
+         patch.object(router, "_call_sync", side_effect=capture):
+        router.route(
+            pm_platform="azure",
+            description="fix login",
+            ticket_id="",
+            status="done",
+            pm_assignee="dev@example.com",
+            pm_iteration_path="MyProject\\Sprint 3",
+            pm_area_path="MyProject\\Backend",
+        )
+
+    assert captured["pm_assignee"] == "dev@example.com"
+    assert captured["pm_iteration_path"] == "MyProject\\Sprint 3"
+    assert captured["pm_area_path"] == "MyProject\\Backend"
+
+
+# ---------------------------------------------------------------------------
+# Per-workspace overrides — GitHub
+# ---------------------------------------------------------------------------
+
+def test_route_passes_github_overrides_to_call_sync():
+    """pm_assignee and pm_milestone are forwarded for GitHub routing."""
+    github_client = MagicMock()
+    router = make_router(github=github_client)
+
+    captured = {}
+
+    def capture(platform, client, description, ticket_id, status,
+                commit_info, task_matcher, project_id, overrides=None):
+        captured.update(overrides or {})
+        return (10, "github")
+
+    with patch("backend.config.is_github_sync_enabled", return_value=True), \
+         patch.object(router, "_call_sync", side_effect=capture):
+        router.route(
+            pm_platform="github",
+            description="add feature",
+            ticket_id="",
+            status="in_progress",
+            pm_assignee="octocat",
+            pm_milestone="7",
+        )
+
+    assert captured["pm_assignee"] == "octocat"
+    assert captured["pm_milestone"] == "7"
+
+
+# ---------------------------------------------------------------------------
+# Per-workspace overrides — GitLab
+# ---------------------------------------------------------------------------
+
+def test_route_passes_gitlab_overrides_to_call_sync():
+    """pm_assignee (user ID) and pm_milestone are forwarded for GitLab routing."""
+    gitlab_client = MagicMock()
+    router = make_router(gitlab=gitlab_client)
+
+    captured = {}
+
+    def capture(platform, client, description, ticket_id, status,
+                commit_info, task_matcher, project_id, overrides=None):
+        captured.update(overrides or {})
+        return (20, "gitlab")
+
+    with patch("backend.config.is_gitlab_sync_enabled", return_value=True), \
+         patch.object(router, "_call_sync", side_effect=capture):
+        router.route(
+            pm_platform="gitlab",
+            description="refactor auth",
+            ticket_id="",
+            status="done",
+            pm_project="42",
+            pm_assignee="123",
+            pm_milestone="5",
+        )
+
+    assert captured["pm_assignee"] == "123"
+    assert captured["pm_milestone"] == "5"
+
+
+# ---------------------------------------------------------------------------
+# Per-workspace overrides — none platform still skips
+# ---------------------------------------------------------------------------
+
+def test_overrides_ignored_for_none_platform():
+    """pm_platform=none always returns (None, None) regardless of overrides."""
+    router = make_router(azure=MagicMock())
+
+    result = router.route(
+        pm_platform="none",
+        description="work done",
+        ticket_id="",
+        status="done",
+        pm_assignee="someone",
+        pm_iteration_path="Sprint 1",
+    )
 
     assert result == (None, None)

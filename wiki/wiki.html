@@ -524,7 +524,7 @@
         <span class="current" id="breadcrumbCurrent">Home</span>
       </div>
       <div class="topbar-actions">
-        <span class="version-chip">v1.2</span>
+        <span class="version-chip">v1.4-dev</span>
         <button class="icon-btn" id="themeToggle" title="Toggle theme">
           <svg id="themeIcon" viewBox="0 0 20 20" fill="currentColor"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>
         </button>
@@ -620,6 +620,7 @@ const NAV = [
       { id: 'OFFLINE_RESILIENCE', label: 'Offline Resilience', icon: offline_icon() },
       { id: 'ADVANCED_FEATURES',  label: 'Advanced Features',  icon: advanced_icon() },
       { id: 'TROUBLESHOOTING',    label: 'Troubleshooting',    icon: bug_icon() },
+      { id: 'TEST_SUITE',         label: 'Test Suite',         icon: commit_icon() },
       { id: 'VISION',             label: 'Roadmap',            icon: map_icon() },
     ]
   },
@@ -991,11 +992,154 @@ devtrack cloud logout</code></pre>
 </ul>
 </div>`,
 
+  TICKET_ALERTER: `<div class="md-body">
+<h1>Ticket Alerter</h1>
+<p>A background polling service that watches GitHub, Azure DevOps, and Jira for events relevant to you — delivering macOS OS notifications and terminal output so you never miss an assignment or comment.</p>
+
+<h2>Quick Start</h2>
+<h3>1. Configure environment variables</h3>
+<pre><code class="language-bash">ALERT_ENABLED=true
+ALERT_POLL_INTERVAL_SECS=300     # poll every 5 minutes
+
+# Per-source toggles
+ALERT_GITHUB_ENABLED=true
+ALERT_AZURE_ENABLED=true
+ALERT_JIRA_ENABLED=true
+
+# Per-event toggles
+ALERT_NOTIFY_ASSIGNED=true
+ALERT_NOTIFY_COMMENTS=true
+ALERT_NOTIFY_STATUS_CHANGES=true
+ALERT_NOTIFY_REVIEW_REQUESTED=true   # GitHub only
+
+# Optional: filter out your own Azure/Jira comments
+# AZURE_EMAIL=you@yourorg.com</code></pre>
+
+<h3>2. Start the daemon</h3>
+<pre><code class="language-bash">devtrack start</code></pre>
+<p>The alerter poller starts automatically as a subprocess of the daemon when <code>ALERT_ENABLED=true</code>.</p>
+
+<h3>3. View notifications</h3>
+<pre><code class="language-bash">devtrack alerts            # show unread notifications (last 24h)
+devtrack alerts --all      # show all notifications
+devtrack alerts --clear    # mark all as read</code></pre>
+
+<h2>Events by Source</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Source</th><th>Events</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><strong>GitHub</strong></td><td>Assigned to issue or PR</td><td>Checks <code>assignee</code> field</td></tr>
+<tr><td></td><td>Review requested on PR</td><td><code>ALERT_NOTIFY_REVIEW_REQUESTED</code></td></tr>
+<tr><td></td><td>Comment on issue/PR you're involved in</td><td>Filters own comments</td></tr>
+<tr><td><strong>Azure DevOps</strong></td><td>Work item assigned to you</td><td>First-run guard (skips on cold start)</td></tr>
+<tr><td></td><td>Comment added to your work items</td><td>Filters <code>AZURE_EMAIL</code> author</td></tr>
+<tr><td></td><td>State changed on your work items</td><td>First-run guard</td></tr>
+<tr><td><strong>Jira</strong></td><td>Issue assigned to you</td><td>JQL <code>assignee changed to currentUser()</code></td></tr>
+<tr><td></td><td>Comment on your issues</td><td>Filters own email</td></tr>
+<tr><td></td><td>Status changed on your issues</td><td>JQL <code>status changed</code></td></tr>
+</tbody>
+</table></div>
+
+<h2>Notification Delivery</h2>
+<h3>macOS OS Notifications</h3>
+<p>Uses <code>osascript</code> to show a native notification:</p>
+<pre><code>DevTrack Alert — GitHub
+"PR Review Requested: Fix login redirect (#142)"</code></pre>
+<p>Configure <code>ALERT_NOTIFY_OS=true</code> (default <code>true</code>).</p>
+
+<h3>Terminal Output</h3>
+<p>When the daemon is running in a terminal session, alerts are also printed to stdout. Configure <code>ALERT_NOTIFY_TERMINAL=true</code> (default <code>true</code>).</p>
+
+<h2>Architecture</h2>
+<pre><code>alert_poller.py  (async, runs as daemon subprocess)
+  ├── GitHubAlerter    — GitHub REST API
+  ├── AzureAlerter     — Azure DevOps REST API
+  └── JiraAlerter      — Jira REST API (v1.4-dev)
+          │
+          ▼
+  MongoAlertsStore     — MongoDB notifications + alert_state collections
+  SQLite fallback      — alert_state stored locally when MongoDB unavailable (v1.4-dev)
+          │
+          ▼
+  AlertNotifier
+    ├── macOS: osascript
+    └── Terminal: stdout (if TTY)</code></pre>
+<p>Each alerter tracks <code>last_checked</code> per user in the <code>alert_state</code> collection so only new events are processed on each poll cycle.</p>
+
+<h2>SQLite Fallback <span style="font-size:.75rem;font-weight:400;background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent);border-radius:99px;padding:1px 8px;margin-left:6px;">v1.4-dev</span></h2>
+<p>When <code>MONGODB_URI</code> is not set, the alerter stores delta-sync timestamps in the local SQLite database. The <code>alert_state</code> table holds the last poll time per source, ensuring you don't see duplicate notifications across daemon restarts. This makes the alerter fully functional in offline-first mode without any external database.</p>
+<pre><code class="language-sql">-- alert_state table schema
+CREATE TABLE alert_state (
+    source TEXT PRIMARY KEY,
+    last_checked TEXT NOT NULL  -- ISO8601 timestamp
+);</code></pre>
+
+<h2>MongoDB Schema</h2>
+<pre><code>notifications collection:
+  _id:        ObjectId
+  source:     "github" | "azure" | "jira"
+  event_type: "assigned" | "comment" | "status_change" | "review_requested"
+  ticket_id:  "owner/repo#123" | "PROJ-42"
+  title:      "Fix login bug"
+  summary:    "Alice commented: LGTM"
+  url:        "https://..."
+  timestamp:  datetime
+  read:       false
+  dismissed:  false
+  raw:        { ...full API payload... }</code></pre>
+
+<h2>Implementation Files</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td><code>backend/alert_poller.py</code></td><td>Main async poller; orchestrates all sources</td></tr>
+<tr><td><code>backend/alert_notifier.py</code></td><td>macOS osascript + terminal output</td></tr>
+<tr><td><code>backend/alerters/github_alerter.py</code></td><td>GitHub assigned/comments/review-requests</td></tr>
+<tr><td><code>backend/alerters/azure_alerter.py</code></td><td>Azure DevOps assigned/comments/state-changes</td></tr>
+<tr><td><code>backend/alerters/jira_alerter.py</code></td><td>Jira assigned/comments/status-changes (26 tests)</td></tr>
+<tr><td><code>backend/db/mongo_alerts.py</code></td><td>MongoAlertsStore: notifications + alert_state</td></tr>
+<tr><td><code>devtrack-bin/database.go</code></td><td>SQLite alert_state Get/Set accessors</td></tr>
+</tbody>
+</table></div>
+
+<h2>Jira Alerter <span style="font-size:.75rem;font-weight:400;background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent);border-radius:99px;padding:1px 8px;margin-left:6px;">v1.4-dev</span></h2>
+<p>The <code>JiraAlerter</code> class (fully tested with 26 pytest tests) polls Jira Cloud for three event types:</p>
+<ul>
+<li><strong>Assigned</strong>: JQL <code>assignee changed to currentUser() AFTER "..."</code> with first-run guard</li>
+<li><strong>Comments</strong>: Fetches comments on assigned issues, skips own comments via <code>JIRA_EMAIL</code></li>
+<li><strong>Status changes</strong>: JQL + changelog delta, emits <code>old_status → new_status</code> notifications</li>
+</ul>
+<p>Configuration: <code>ALERT_JIRA_ENABLED=true</code> plus standard <code>JIRA_URL</code>, <code>JIRA_EMAIL</code>, <code>JIRA_API_TOKEN</code> variables.</p>
+
+<h2>Troubleshooting</h2>
+<p><strong>No notifications appearing</strong></p>
+<ul>
+<li>Check <code>ALERT_ENABLED=true</code> and the per-source toggle (<code>ALERT_GITHUB_ENABLED</code>, etc.)</li>
+<li>Verify the daemon is running: <code>devtrack status</code></li>
+<li>Check logs: <code>devtrack logs | grep alert</code></li>
+</ul>
+<p><strong>Getting your own comments as notifications</strong></p>
+<ul>
+<li>Set <code>AZURE_EMAIL=you@yourorg.com</code> (Azure/Jira filter)</li>
+<li>The alerters automatically skip comments where the author matches your configured email</li>
+</ul>
+<p><strong>First poll shows no results (Azure/Jira)</strong></p>
+<ul>
+<li>Expected — first-run guard skips assigned and state-change events on the initial poll to avoid a flood of old notifications. Subsequent polls will catch new events.</li>
+</ul>
+<p><strong>MongoDB not configured</strong></p>
+<ul>
+<li>The alerter works fully without MongoDB — alert state is stored in SQLite and notifications are written to the local SQLite <code>notifications</code> table. Set <code>MONGODB_URI</code> only if you need cross-device notification sync.</li>
+</ul>
+</div>`,
+
   TELEMETRY: `<div class="md-body">
 <h1>Telemetry</h1>
-<div class="home-badge" style="margin-bottom:24px;background:var(--callout-warn);border-color:var(--callout-warn-border);color:#92400e;">Planned — not yet implemented</div>
+<div class="home-badge" style="margin-bottom:24px;background:var(--callout-tip);border-color:var(--callout-tip-border);color:#166534;">Tier 2 implemented (v1.4-dev) — Tier 1 &amp; 3 planned</div>
 
 <p>DevTrack's telemetry system is a <strong>privacy-first, three-tier</strong> approach to understanding how many people download and use the tool — without ever collecting personal data. Telemetry is always opt-in and the binary works identically with it on or off.</p>
+
+<blockquote><p><strong>Status (v1.4-dev):</strong> Tier-2 anonymous install and active pings are now implemented in <code>devtrack-bin/ping.go</code> and sent to <code>https://ping.devtrack.dev</code> (Cloudflare Worker). Two events fire: <code>install</code> on first run and <code>active</code> at most once per 24 hours. Tier-1 (GitHub Releases download stats) and Tier-3 (registered-user heartbeats) remain planned.</p></blockquote>
 
 <h2>Three Tiers at a Glance</h2>
 <div class="table-wrap"><table>
@@ -1118,11 +1262,79 @@ curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
 </tbody>
 </table></div>
 
-<blockquote><p><strong>Implementation status:</strong> The telemetry system is fully designed and documented in <code>docs/TELEMETRY_PLAN.md</code>. No code has been written yet. The plan covers four implementation phases: server-side foundation (1 day), real-time admin dashboard (1 day), Go binary instrumentation (1 day), and polish including a first-run opt-in prompt (half day).</p></blockquote>
+<blockquote><p><strong>Implementation status (v1.4-dev):</strong> Tier-2 anonymous pings are now implemented in <code>devtrack-bin/ping.go</code>. The <code>install</code> event fires on the first daemon start; the <code>active</code> event fires at most once per 24 hours. Both are fire-and-forget goroutines to a Cloudflare Worker at <code>https://ping.devtrack.dev</code>. The server-side foundation, real-time admin dashboard (Tier 1 GitHub stats, Tier 2 SSE live feed), and Tier-3 registered-user heartbeats described above remain planned. The four-phase implementation plan is documented in <code>docs/TELEMETRY_PLAN.md</code>.</p></blockquote>
 </div>`,
 
   WHATS_NEW: `<div class="md-body">
 <h1>What's New</h1>
+<div class="home-badge" style="margin-bottom:24px;background:var(--callout-warn);border-color:var(--callout-warn-border);color:#92400e;">v1.4-dev — unreleased — on features/release_ready</div>
+
+<h2>v1.4-dev — Jira Alerter, Env-First Config, PM Persistence &amp; More</h2>
+<p>These changes are on the <code>features/release_ready</code> branch and have not yet been tagged as a release. They represent the next batch of production-readiness improvements.</p>
+
+<div class="feature-list" style="margin-bottom:32px;">
+  <div class="feature-item"><div class="feature-dot">1</div><div><h4>Jira Alerter — 26 new tests</h4><p><code>backend/alerters/jira_alerter.py</code> is now implemented and fully tested. The <code>JiraAlerter</code> class polls Jira Cloud for three event types: <strong>assigned to me</strong>, <strong>comment added</strong>, and <strong>status changed</strong>. 26 tests covering all polling paths, deduplication, and edge cases are in <code>backend/tests/test_jira_alerter.py</code>. The alert poller is updated to include Jira alongside GitHub and Azure DevOps. See the <a href="#TICKET_ALERTER" onclick="navigate('TICKET_ALERTER');return false;">Ticket Alerter</a> page.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">2</div><div><h4>Environment-first config — dotenv file loading removed</h4><p>The Go daemon no longer reads a <code>.env</code> file at startup. All configuration must be provided as real environment variables (exported in the shell, baked into the launchd/systemd plist, or set by a wrapper script). This eliminates the class of bugs caused by FIFO-flavoured <code>.env</code> files and makes the daemon safe to run as a system service. Run <code>devtrack autostart-install</code> to migrate — the command bakes all current env vars into the plist automatically. See <a href="#CONFIGURATION" onclick="navigate('CONFIGURATION');return false;">Configuration</a>.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">3</div><div><h4>Post-commit hook auto-install on <code>devtrack start</code></h4><p><code>devtrack start</code> now automatically installs the DevTrack post-commit hook in every enabled workspace repository on daemon startup. Previously the hook was only installed when running <code>devtrack workspace install-hooks</code> manually. No action required for existing setups — the hook is idempotent and will not overwrite a hook that already exists.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">4</div><div><h4>Multi-repo: <code>ignore_branches</code> and branch tracking</h4><p>Workspaces in <code>workspaces.yaml</code> now support an <code>ignore_branches</code> list. Commits on listed branches (e.g. <code>main</code>, <code>release/**</code>) are silently skipped — no prompt, no trigger, no log entry. The daemon also tracks the active branch per workspace and surfaces it in the TUI Workspaces tab. See <a href="#MULTI_REPO" onclick="navigate('MULTI_REPO');return false;">Multi-Repo Setup</a>.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">5</div><div><h4>Phase 4B — SQLite persistence for PM projects, backlog &amp; sprints</h4><p>The Go daemon's SQLite schema gains three new tables: <code>pm_projects</code> (synced project/repo metadata per workspace), <code>backlog_items</code> (cached issue/ticket records), and <code>sprints</code> (iteration metadata). These tables are written by the Go daemon from PM API responses and read by the TUI Workspaces tab to show project status without an API round-trip. No migration needed for clean installs.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">6</div><div><h4>Autostart env-baking — launchd/systemd/profile</h4><p><code>devtrack autostart-install</code> has been upgraded to <strong>bake all current environment variables</strong> into the generated plist (macOS) or systemd unit (Linux). This means the daemon, when started by the OS at login, inherits the exact same configuration that was active when you ran <code>autostart-install</code> — no wrapper scripts, no <code>EnvironmentFile=</code> hacks. Re-run <code>devtrack autostart-install</code> after changing <code>.env</code> values to refresh the baked env. See <a href="#AUTOSTART" onclick="navigate('AUTOSTART');return false;">Auto-Start</a>.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">7</div><div><h4>Anonymous install &amp; active telemetry ping (Tier 2 implemented)</h4><p><code>devtrack-bin/ping.go</code> implements the Tier-2 anonymous usage pings described in the Telemetry plan. On install, a random UUID is created at <code>~/.devtrack/id</code>. A SHA-256 of the hardware platform UUID is computed as a stable fingerprint (raw value never leaves the machine). Two events are fired: <code>install</code> on first run, and <code>active</code> at most once per 24 hours when the daemon is running. Both POSTs are fire-and-forget goroutines — failures are silent. The telemetry endpoint is <code>https://ping.devtrack.dev</code> (Cloudflare Worker). Disabled by a sentinel file written by <code>devtrack telemetry off</code>. See <a href="#TELEMETRY" onclick="navigate('TELEMETRY');return false;">Telemetry</a>.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">8</div><div><h4>SQLite alert_state fallback for ticket alerter</h4><p>The ticket alerter now persists <code>last_checked</code> timestamps to SQLite when MongoDB is unavailable. The <code>alert_state</code> table in <code>Data/devtrack.db</code> tracks the last poll time per source (github/azure/jira), enabling full delta-sync functionality in offline-first mode. Go accessors <code>GetAlertLastChecked</code>/<code>SetAlertLastChecked</code> added to <code>database.go</code>. See <a href="#TICKET_ALERTER" onclick="navigate('TICKET_ALERTER');return false;">Ticket Alerter</a>.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">9</div><div><h4>Per-workspace PM overrides (WorkspaceRouter)</h4><p>Workspaces now support per-platform PM overrides: <code>pm_assignee</code>, <code>pm_iteration_path</code> (Azure), <code>pm_area_path</code> (Azure), and <code>pm_milestone</code> (GitHub/GitLab). These are extracted from commit trigger POST data and forwarded to the appropriate platform API when creating work items or issues. Azure gets assigned_to/area_path/iteration_path; GitHub gets assignees/milestone; GitLab gets assignee_ids/milestone_id. See <a href="#MULTI_REPO" onclick="navigate('MULTI_REPO');return false;">Multi-Repo Setup</a>.</p></div></div>
+</div>
+
+<h2>New .env Variables (v1.4-dev)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Variable</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><em>none</em></td><td>v1.4-dev adds no new required env vars. The env-first refactor removes the requirement for a <code>.env</code> file — all vars must now be exported into the process environment before starting the daemon.</td></tr>
+</tbody>
+</table></div>
+
+<h2>New workspaces.yaml Fields (v1.4-dev)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>ignore_branches</code></td><td><code>[]string</code></td><td>Branch names (or glob patterns) whose commits are silently skipped. Example: <code>["main", "release/*"]</code></td></tr>
+</tbody>
+</table></div>
+
+<h2>New Test Files (v1.4-dev)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Layer</th><th>Tests added</th></tr></thead>
+<tbody>
+<tr><td><code>backend/tests/test_jira_alerter.py</code></td><td>Python</td><td>26 tests for <code>JiraAlerter</code> — assigned, comment, and status-change polling; deduplication; all edge cases mocked</td></tr>
+</tbody>
+</table></div>
+
+<hr>
+<div class="home-badge" style="margin-bottom:24px;background:var(--callout-tip);border-color:var(--callout-tip-border);color:#166534;">v1.3 — April 2026 — HTTP Trigger Validation &amp; Test Coverage</div>
+
+<h2>v1.3 — HTTP Trigger Validation, Bug Fixes &amp; 133 New Tests</h2>
+<p>DevTrack v1.3 focuses on correctness and reliability: comprehensive test coverage for the HTTP trigger layer and admin subsystems, two daemon startup bugs fixed, and a hardened test harness that catches FIFO-related hangs before they reach CI.</p>
+
+<div class="feature-list" style="margin-bottom:32px;">
+  <div class="feature-item"><div class="feature-dot">1</div><div><h4>CS-1 HTTP trigger validation — 133 new tests</h4><p>Full test coverage for the Go daemon's HTTP trigger dispatch and the FastAPI webhook server's trigger ingestion. Tests verify correct payloads are accepted, malformed or unauthenticated requests are rejected with the right status codes, and all edge cases (missing fields, invalid JSON, wrong content-type) are handled consistently. See the <a href="#TEST_SUITE" onclick="navigate('TEST_SUITE');return false;">Test Suite</a> page for details.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">2</div><div><h4>Admin subsystem tests — auth, user manager, license manager</h4><p>Three new Python test files cover the Admin Console authentication flow (JWT issuance, expiry, bad-credential rejection), user lifecycle (create/delete/list/key rotation), and the license manager (tier detection, T&amp;C acceptance recording, <code>DEVTRACK_AUTO_ACCEPT_TERMS</code> flag). These tests run fully offline — no cloud endpoint required.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">3</div><div><h4>Bug fix: .env FIFO causes daemon startup hang</h4><p>When <code>.env</code> was a named pipe (created by a broken shell redirect or <code>mkfifo</code>), the daemon would block indefinitely trying to read it. The fix detects this condition at startup and aborts with a clear error message. The <code>conftest.py</code> session fixture also guards against this in the test suite so the bug can never silently hang CI collection.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">4</div><div><h4>Bug fix: RuntimeNarrativeMiddleware unknown kwarg crash</h4><p>The FastAPI webhook server crashed on startup with <code>TypeError: __init__() got an unexpected keyword argument 'failure_diagnostics'</code>. The <code>failure_diagnostics</code> parameter was removed from <code>RuntimeNarrativeMiddleware</code> to match the current API signature. The new HTTP trigger tests catch this class of startup error automatically.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">5</div><div><h4>Test harness: conftest.py session fixture</h4><p>The shared <code>backend/tests/conftest.py</code> gains a session-scoped autouse fixture that inspects the <code>.env</code> file's stat type before any test runs. If <code>.env</code> is a FIFO, collection is aborted immediately with a clear error rather than hanging the entire pytest process. LLM provider isolation (<code>reset_provider_cache()</code>) is also documented as the required pattern for any test that modifies <code>LLM_PROVIDER</code>.</p></div></div>
+</div>
+
+<h2>New Test Files (v1.3)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Layer</th><th>Tests added</th></tr></thead>
+<tbody>
+<tr><td><code>devtrack-bin/http_trigger_test.go</code></td><td>Go</td><td>HTTP trigger validation (auth, payload schema, edge cases)</td></tr>
+<tr><td><code>backend/tests/test_http_triggers.py</code></td><td>Python</td><td>FastAPI webhook trigger routes end-to-end</td></tr>
+<tr><td><code>backend/tests/test_admin_auth.py</code></td><td>Python</td><td>Admin Console login, JWT sessions</td></tr>
+<tr><td><code>backend/tests/test_admin_user_manager.py</code></td><td>Python</td><td>User create/delete/list/key rotation</td></tr>
+<tr><td><code>backend/tests/test_license_manager.py</code></td><td>Python</td><td>License tier, T&amp;C acceptance, auto-accept flag</td></tr>
+</tbody>
+</table></div>
+
+<hr>
 <div class="home-badge" style="margin-bottom:24px;background:var(--callout-tip);border-color:var(--callout-tip-border);color:#166534;">v1.2 — March 31, 2026 — Community License &amp; Auth</div>
 
 <h2>v1.2 — Community License, Login &amp; Auth, Telemetry opt-in</h2>
@@ -1244,10 +1456,17 @@ curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
 </tbody>
 </table></div>
 
-<h2>Coming in v1.3</h2>
+<h2>In v1.4 (partial — see v1.4-dev above)</h2>
 <ul>
-<li><strong>Autonomous Communication</strong> — AI drafts and sends standup messages via Power Automate / email</li>
-<li><strong>CS-4 SaaS tier</strong> — Multi-tenant managed backend; billing; <code>DEVTRACK_API_KEY</code> subscription auth</li>
+<li>Jira alerter with 26 tests ✅ (shipped in v1.4-dev)</li>
+<li>Environment-first config — dotenv file loading removed ✅</li>
+<li>Post-commit hook auto-install on <code>devtrack start</code> ✅</li>
+<li><code>ignore_branches</code> and branch tracking for multi-repo ✅</li>
+<li>Phase 4B SQLite PM persistence ✅</li>
+<li>Autostart env-baking ✅</li>
+<li>Anonymous telemetry ping (Tier 2) ✅</li>
+<li><strong>Autonomous Communication</strong> — AI drafts and sends standup messages via Power Automate / email (planned)</li>
+<li><strong>CS-4 SaaS tier</strong> — Multi-tenant managed backend; billing; <code>DEVTRACK_API_KEY</code> subscription auth (planned)</li>
 </ul>
 
 <blockquote><p>DevTrack follows a local-first design principle: everything in v1.0 works fully offline on your machine. Cloud features (CS-4) are opt-in upgrades — they extend capability without replacing the local-first core.</p></blockquote>
@@ -1255,7 +1474,9 @@ curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
 
   CONFIGURATION: `<div class="md-body">
 <h1>Configuration Reference</h1>
-<p>DevTrack is configured via a single <code>.env</code> file. Copy <code>.env_sample</code> to <code>.env</code>, fill in your values, then run <code>devtrack start</code>. All path values must be absolute. Restart the daemon after changes.</p>
+<p>DevTrack is configured entirely through environment variables. Copy <code>.env_sample</code> to <code>.env</code>, fill in your values, then <strong>export them</strong> before running <code>devtrack start</code>. All path values must be absolute. Restart the daemon after changes.</p>
+
+<blockquote><p><strong>v1.4-dev — Env-first config:</strong> The Go daemon no longer reads a <code>.env</code> file at startup. All variables must be exported into the process environment beforehand (e.g. via <code>source .env</code> in your shell profile, or baked into the launchd/systemd plist by running <code>devtrack autostart-install</code>). Running <code>set -a; source .env; set +a</code> before <code>devtrack start</code> is the quickest migration path for interactive use.</p></blockquote>
 
 <h2>Minimum Required Setup</h2>
 <pre><code class="language-bash">PROJECT_ROOT=/path/to/automation_tools
@@ -1505,6 +1726,89 @@ SENTIMENT_ANALYSIS_WINDOW_MINUTES=120</code></pre>
 <blockquote><p><strong>Security note:</strong> The session file is written with <code>chmod 0600</code> — readable only by the current user. Tokens are JWTs issued by the DevTrack cloud server; they are verified server-side on each cloud API call. Local-only sessions have no token and no server-side state.</p></blockquote>
 </div>`,
 
+  TEST_SUITE: `<div class="md-body">
+<h1>Test Suite</h1>
+<p>DevTrack ships a comprehensive test suite covering the Go daemon, the Python backend, and the HTTP trigger layer. As of <strong>v1.4-dev</strong>, the suite contains <strong>185+ tests</strong> (159+ CS-1 validation tests + 26 Jira alerter tests) spread across Go and Python, with full coverage of HTTP trigger validation, admin authentication, user management, license enforcement, and Jira alerter polling.</p>
+
+<h2>Running the Tests</h2>
+<h3>Go tests</h3>
+<pre><code class="language-bash">cd devtrack-bin
+go test ./...        # run all Go tests
+go test -run TestHTTPTrigger ./...   # run only HTTP trigger tests</code></pre>
+
+<h3>Python tests</h3>
+<pre><code class="language-bash"># Install / sync dependencies first
+uv sync
+
+# Run the full Python test suite
+uv run pytest backend/tests/
+
+# Run a single test file
+uv run pytest backend/tests/test_http_triggers.py
+uv run pytest backend/tests/test_admin_auth.py
+uv run pytest backend/tests/test_admin_user_manager.py
+uv run pytest backend/tests/test_license_manager.py
+uv run pytest backend/tests/test_jira_alerter.py
+
+# Run by name filter
+uv run pytest backend/tests/ -k test_name</code></pre>
+
+<h2>Test Files</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Layer</th><th>What it covers</th></tr></thead>
+<tbody>
+<tr><td><code>devtrack-bin/http_trigger_test.go</code></td><td>Go</td><td>HTTP trigger validation — correct payloads accepted, malformed or unauthenticated requests rejected, edge cases for missing fields and invalid JSON</td></tr>
+<tr><td><code>backend/tests/test_http_triggers.py</code></td><td>Python</td><td>End-to-end HTTP trigger handling in the FastAPI webhook server — commit and timer trigger routes, auth header validation, payload schema enforcement</td></tr>
+<tr><td><code>backend/tests/test_admin_auth.py</code></td><td>Python</td><td>Admin console authentication — login flow, JWT session cookie issuance, expiry, and rejection of bad credentials</td></tr>
+<tr><td><code>backend/tests/test_admin_user_manager.py</code></td><td>Python</td><td>User lifecycle via the Admin Console — create, delete, list, and API key rotation; enforces that duplicate usernames are rejected</td></tr>
+<tr><td><code>backend/tests/test_license_manager.py</code></td><td>Python</td><td>License tier detection, T&amp;C acceptance recording and re-prompt logic, offline vs SaaS mode enforcement, <code>DEVTRACK_AUTO_ACCEPT_TERMS</code> flag behaviour</td></tr>
+<tr><td><code>backend/tests/test_jira_alerter.py</code></td><td>Python</td><td>26 tests for <code>JiraAlerter</code> — assigned polling, comment detection, status-change events, deduplication, and all edge cases. No real network calls — all <code>JiraClient</code> methods are mocked.</td></tr>
+</tbody>
+</table></div>
+
+<h2>Test Infrastructure</h2>
+
+<h3>conftest.py — session fixture</h3>
+<p>The shared <code>backend/tests/conftest.py</code> adds the repo root to <code>sys.path</code> and provides a <strong>session-scoped fixture</strong> that blocks any attempt to load a <code>.env</code> that is a named pipe (FIFO). This prevents the Go daemon's FIFO <code>.env</code> bug from silently hanging the test process during collection.</p>
+<pre><code class="language-python"># conftest.py (excerpt)
+@pytest.fixture(scope="session", autouse=True)
+def block_fifo_env(tmp_path_factory):
+    """Ensure .env is never a FIFO during the test run — prevents daemon-startup hangs."""
+    env_path = Path(".env")
+    if env_path.exists() and stat.S_ISFIFO(env_path.stat().st_mode):
+        raise RuntimeError(
+            ".env is a named pipe (FIFO). Replace it with a regular file before running tests."
+        )
+    yield</code></pre>
+
+<h3>LLM provider isolation</h3>
+<p>Tests that change <code>LLM_PROVIDER</code> must call <code>reset_provider_cache()</code> in their setup and teardown to prevent provider state leaking between test cases:</p>
+<pre><code class="language-python">from backend.llm.provider_factory import reset_provider_cache
+
+def setup_function():
+    reset_provider_cache()
+
+def teardown_function():
+    reset_provider_cache()</code></pre>
+
+<h2>Known Bugs Fixed by These Tests</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Bug</th><th>Symptom</th><th>Fix verified by</th></tr></thead>
+<tbody>
+<tr><td><strong>.env FIFO bug</strong></td><td>Daemon startup hangs indefinitely when <code>.env</code> is a named pipe (e.g. created by <code>mkfifo</code> or a broken shell redirect)</td><td><code>conftest.py</code> session fixture; <code>test_http_triggers.py</code> startup assertions</td></tr>
+<tr><td><strong>RuntimeNarrativeMiddleware unknown kwarg</strong></td><td><code>TypeError: __init__() got an unexpected keyword argument 'failure_diagnostics'</code> on FastAPI startup</td><td><code>test_http_triggers.py</code> — server startup smoke test runs as part of the fixture setup and would surface this error</td></tr>
+</tbody>
+</table></div>
+
+<h2>Troubleshooting</h2>
+<ul>
+<li><strong>Tests hang at collection</strong> — likely caused by the <code>.env</code> FIFO bug. Run <code>file .env</code>; if it shows <em>fifo (named pipe)</em>, delete and recreate: <code>rm .env &amp;&amp; cp .env_sample .env</code>.</li>
+<li><strong>"provider not found" errors</strong> — call <code>reset_provider_cache()</code> in test setup/teardown when changing <code>LLM_PROVIDER</code>.</li>
+<li><strong>Admin auth tests fail with 500</strong> — confirm <code>ADMIN_SECRET_KEY</code> is set in the test environment (can be any non-empty string for tests).</li>
+<li><strong>License manager tests fail offline</strong> — expected: tests that require <code>DEVTRACK_API_URL</code> are skipped automatically when the variable is absent. Set <code>DEVTRACK_AUTO_ACCEPT_TERMS=1</code> to prevent interactive prompts during CI runs.</li>
+</ul>
+</div>`,
+
   MULTI_REPO: `<div class="md-body">
 <h1>Multi-Repo Monitoring</h1>
 <p>By default DevTrack monitors a single repository (<code>DEVTRACK_WORKSPACE</code>). <strong>Multi-repo mode</strong> lets you monitor any number of repositories simultaneously, each routing to its own project management platform.</p>
@@ -1569,6 +1873,30 @@ workspaces:
 </tbody>
 </table></div>
 
+<h2>PM Override Fields <span style="font-size:.75rem;font-weight:400;background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent);border-radius:99px;padding:1px 8px;margin-left:6px;">v1.4-dev</span></h2>
+<p>Per-workspace overrides for PM assignee, area path, iteration path, and milestone. These values are extracted from commit triggers and forwarded to the platform API when creating work items or issues.</p>
+
+<h3>pm_assignee</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Platform</th><th>Format</th><th>API Field</th></tr></thead>
+<tbody>
+<tr><td><code>azure</code></td><td>Email or display name</td><td><code>assigned_to</code></td></tr>
+<tr><td><code>github</code></td><td>Username (e.g., <code>sraj</code>)</td><td><code>assignees[]</code></td></tr>
+<tr><td><code>gitlab</code></td><td>Numeric user ID</td><td><code>assignee_ids[]</code></td></tr>
+</tbody>
+</table></div>
+
+<h3>pm_iteration_path (Azure only)</h3>
+<p>Azure DevOps iteration path for new work items. Format: <code>Project\\Iteration Path</code> or just <code>Iteration Path</code> (project is prepended automatically).</p>
+<pre><code class="language-yaml">pm_iteration_path: "CoreServices\\Sprint 42"
+pm_iteration_path: "Sprint 42"  # project inferred from pm_project or env</code></pre>
+
+<h3>pm_area_path (Azure only)</h3>
+<p>Azure DevOps area path for new work items. Format: <code>Project\\Area Path</code> or just <code>Area Path</code>.</p>
+<pre><code class="language-yaml">pm_area_path: "CoreServices\\Mobile\\iOS"</code></pre>
+
+<p>These overrides are extracted by the webhook server from commit trigger POST data and applied per-platform when creating work items. The <code>workspace_router.py</code> module handles the mapping from workspace fields to platform-specific API parameters.</p>
+
 <h2>Full Example</h2>
 <pre><code class="language-yaml">version: "1"
 
@@ -1602,9 +1930,23 @@ workspaces:
     pm_platform: azure
     enabled: false</code></pre>
 
+<h2>ignore_branches Field <span style="font-size:.75rem;font-weight:400;background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent);border-radius:99px;padding:1px 8px;margin-left:6px;">v1.4-dev</span></h2>
+<p>List branch name patterns to exclude from commit monitoring. When the active branch of a workspace matches any entry, the commit event is silently discarded — no work-update prompt, no trigger, no log entry.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Pattern</th><th>Matches</th></tr></thead>
+<tbody>
+<tr><td><code>main</code></td><td>The branch named exactly <code>main</code></td></tr>
+<tr><td><code>release/*</code></td><td>Any branch starting with <code>release/</code></td></tr>
+<tr><td><code>dependabot/*</code></td><td>All Dependabot auto-update branches</td></tr>
+<tr><td><code>renovate/*</code></td><td>All Renovate auto-update branches</td></tr>
+</tbody>
+</table></div>
+<p>The daemon also tracks and displays the <strong>current branch</strong> for each workspace — visible in the TUI Workspaces tab alongside PM platform and enabled status.</p>
+
 <h2>How Routing Works</h2>
 <ol>
 <li>Go daemon detects a commit in a workspace path</li>
+<li>If the current branch matches an <code>ignore_branches</code> pattern, the event is dropped immediately</li>
 <li>The trigger message includes <code>pm_platform</code>, <code>pm_project</code>, <code>pm_milestone</code>, and <code>workspace_name</code></li>
 <li>Python bridge reads <code>pm_platform</code> and calls only that platform's sync handler</li>
 <li>Azure, GitHub, GitLab, and Jira are all skipped for platform values that don't match</li>
@@ -1620,6 +1962,94 @@ workspaces:
 <li><strong>Workspace not monitored</strong> — confirm <code>enabled: true</code> and that the path is a valid git repo</li>
 <li><strong>Commits routing to wrong platform</strong> — confirm <code>pm_platform</code> matches one of <code>azure | gitlab | github | jira | none</code>; an unknown value falls back to the priority chain</li>
 <li><strong>pm_project not applied for GitLab</strong> — must be a numeric string (e.g., <code>"12345"</code>); strings that fail int conversion are silently ignored</li>
+</ul>
+</div>`,
+
+  AUTOSTART: `<div class="md-body">
+<h1>Auto-Start</h1>
+<p>Automatically start the DevTrack daemon when you log in, using the right mechanism for your operating system.</p>
+
+<div class="home-badge" style="margin-bottom:24px;background:var(--callout-note);border-color:var(--callout-note-border);color:#1d4ed8;">v1.4-dev — Env-baking: all current env vars are now baked into the generated plist/service unit automatically</div>
+
+<h2>Quick Start</h2>
+<pre><code class="language-bash">devtrack autostart-install    # Install and enable auto-start (bakes env vars)
+devtrack autostart-status     # Verify it is registered
+devtrack autostart-uninstall  # Remove auto-start at any time</code></pre>
+
+<p>DevTrack detects your OS and picks the appropriate mechanism automatically:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>OS</th><th>Mechanism</th><th>Location</th></tr></thead>
+<tbody>
+<tr><td>macOS</td><td>launchd LaunchAgent</td><td><code>~/Library/LaunchAgents/dev.devtrack.plist</code></td></tr>
+<tr><td>Linux with systemd</td><td>systemd user service</td><td><code>~/.config/systemd/user/devtrack.service</code></td></tr>
+<tr><td>WSL with systemd</td><td>systemd user service</td><td><code>~/.config/systemd/user/devtrack.service</code></td></tr>
+<tr><td>WSL without systemd</td><td>Shell profile block</td><td><code>~/.zshrc</code> or <code>~/.bashrc</code></td></tr>
+</tbody>
+</table></div>
+
+<h2>Env-Baking (v1.4-dev)</h2>
+<p>As of v1.4-dev, <code>devtrack autostart-install</code> <strong>bakes all current environment variables</strong> into the generated plist (macOS) or systemd unit (Linux) at install time. This means the daemon inherits the exact same configuration that was active when you ran <code>autostart-install</code> — no wrapper scripts, no <code>EnvironmentFile=</code> hacks, and no separate <code>.env</code> file needed at runtime.</p>
+
+<blockquote><p><strong>Important:</strong> Re-run <code>devtrack autostart-install</code> after changing any environment variable to refresh the baked configuration in the plist or service unit.</p></blockquote>
+
+<pre><code class="language-bash"># First time (or after changing env vars):
+set -a; source .env; set +a   # export all vars into the shell
+devtrack autostart-install    # bakes them into the plist/service unit
+
+# Verify
+devtrack autostart-status</code></pre>
+
+<h2>macOS — launchd</h2>
+<p>DevTrack registers as a <strong>user-level LaunchAgent</strong>, which starts when you log in and runs with your permissions.</p>
+
+<h3>Install</h3>
+<pre><code class="language-bash">devtrack autostart-install</code></pre>
+<p>This command:</p>
+<ol>
+<li>Captures all currently exported environment variables</li>
+<li>Generates a plist at <code>~/Library/LaunchAgents/dev.devtrack.plist</code> with all env vars inline under <code>EnvironmentVariables</code></li>
+<li>Runs <code>launchctl load</code> to register and start the service immediately</li>
+</ol>
+
+<h3>Status &amp; Manual Control</h3>
+<pre><code class="language-bash">devtrack autostart-status
+launchctl list | grep devtrack          # PID column: number = running
+launchctl start dev.devtrack            # Start without waiting for next login
+launchctl stop  dev.devtrack            # Stop (will restart on next login)
+cat ~/Library/LaunchAgents/dev.devtrack.plist  # Inspect baked env vars</code></pre>
+
+<h3>Uninstall</h3>
+<pre><code class="language-bash">devtrack autostart-uninstall</code></pre>
+
+<h2>Linux — systemd user service</h2>
+<p>DevTrack installs a <strong>systemd user service</strong> (<code>--user</code> scope), which starts at login and runs as your user account.</p>
+
+<h3>Install</h3>
+<pre><code class="language-bash">devtrack autostart-install</code></pre>
+<p>Generates <code>~/.config/systemd/user/devtrack.service</code> with all env vars inlined as <code>Environment=</code> lines, then runs <code>systemctl --user daemon-reload &amp;&amp; enable &amp;&amp; start</code>.</p>
+
+<h3>Status &amp; Manual Control</h3>
+<pre><code class="language-bash">devtrack autostart-status
+systemctl --user status devtrack
+systemctl --user restart devtrack
+journalctl --user -u devtrack -f        # Follow logs</code></pre>
+
+<h3>Uninstall</h3>
+<pre><code class="language-bash">devtrack autostart-uninstall</code></pre>
+
+<h2>WSL — Shell Profile Fallback</h2>
+<p>When systemd is not available in WSL, DevTrack appends a startup block to <code>~/.zshrc</code> (or <code>~/.bashrc</code>). The block is idempotent — running <code>autostart-install</code> again when the block is already present is a no-op.</p>
+<pre><code class="language-bash"># DevTrack auto-start
+devtrack start 2&gt;/dev/null || true
+# End DevTrack auto-start</code></pre>
+<p>After installation, re-source your profile or open a new terminal to start DevTrack in the current session.</p>
+
+<h2>Troubleshooting</h2>
+<ul>
+<li><strong>Daemon did not start after login (macOS)</strong> — run <code>tail -50 Data/logs/launchd.log</code> and <code>plutil ~/Library/LaunchAgents/dev.devtrack.plist</code>. If env vars are missing, re-run <code>autostart-install</code> after sourcing <code>.env</code>.</li>
+<li><strong>Daemon did not start after login (Linux)</strong> — run <code>systemctl --user status devtrack</code> and <code>journalctl --user -u devtrack --no-pager | tail -50</code>. Check the <code>Environment=</code> lines in the unit file match your expected values.</li>
+<li><strong>Config changes not taking effect</strong> — remember to re-run <code>devtrack autostart-install</code> after changing env vars; the new values are only baked in on reinstall.</li>
+<li><strong>"autostart-install already present" warning (WSL no-systemd)</strong> — run <code>devtrack autostart-uninstall</code> first, then reinstall.</li>
 </ul>
 </div>`,
 };
@@ -1752,7 +2182,7 @@ function renderHome() {
   const content = document.getElementById('content');
   content.innerHTML = `
     <div class="home-hero">
-      <div class="home-badge">Local-First · v1.2</div>
+      <div class="home-badge">Local-First · v1.4-dev</div>
       <h1 class="home-title">Developer automation<br>that handles the <span>overhead</span>.</h1>
       <p class="home-sub">DevTrack monitors your Git activity, prompts for work updates, routes them through AI, and keeps your project management systems in sync — all running locally on your machine.</p>
     </div>
@@ -1760,7 +2190,7 @@ function renderHome() {
     <div class="home-grid">
       ${[
         // ── Get Started ────────────────────────────────────────────────────────
-        { id:'WHATS_NEW',        icon:'🎉', title:"What's New",         desc:'Community License, magic-link login, T&amp;C acceptance flow, and AI-commit daemon guard — plus all prior features.' },
+        { id:'WHATS_NEW',        icon:'🎉', title:"What's New",         desc:'v1.4-dev: Jira alerter (26 tests), SQLite alert_state fallback, per-workspace PM overrides, env-first config, post-commit hook auto-install, ignore_branches, Phase 4B SQLite PM persistence, env-baking autostart, anonymous telemetry ping. v1.3: 133 new tests, .env FIFO fix.' },
         { id:'GETTING_STARTED',  icon:'🚀', title:'Getting Started',    desc:'New to DevTrack? Start here — concepts, setup, and first run.' },
         { id:'QUICK_START',      icon:'⚡', title:'Quick Start',        desc:'Get running in 5 minutes with the minimal setup guide.' },
         // ── Reference ─────────────────────────────────────────────────────────
@@ -1778,14 +2208,14 @@ function renderHome() {
         { id:'SLACK_BOT',       icon:'💬', title:'Slack Bot',           desc:'Socket Mode slash command <code>/devtrack &lt;cmd&gt;</code> — no public URL required. Supports all work-session and PM commands plus proactive work-reminder nudges.' },
         { id:'PM_AGENT',        icon:'🗂️', title:'PM Agent',            desc:'AI decomposes problems into Epic → Story → Task hierarchies.' },
         { id:'PROJECT_PLANNING',icon:'📋', title:'AI Project Planning', desc:'<code>/newproject</code> in Telegram: describe requirements, pick team from live roster, AI auto-fetches workloads, generates a full YAML spec with sprints/stories/risks, emails it to the PM for review, and creates everything in the PM tool on approval.' },
-        { id:'TICKET_ALERTER',  icon:'🔔', title:'Ticket Alerter',      desc:'Background poller for GitHub, Azure DevOps, and Jira — delivers OS notifications and terminal output when you\'re assigned, mentioned, or a status changes. <code>devtrack alerts</code> to view, <code>devtrack alerts --clear</code> to dismiss.' },
+        { id:'TICKET_ALERTER',  icon:'🔔', title:'Ticket Alerter',      desc:'Background poller for GitHub, Azure DevOps, and Jira (v1.4-dev) — delivers OS notifications and terminal output when you\'re assigned, mentioned, or a status changes. Delta-synced via MongoDB or SQLite fallback. <code>devtrack alerts</code> to view, <code>devtrack alerts --clear</code> to dismiss.' },
         { id:'WORK_TRACKER',    icon:'⏱️', title:'Work Tracker',        desc:'Automatic session-based time tracking. <code>devtrack work start AUTH-42</code> begins a session; every commit is auto-attached. <code>devtrack work stop</code> records the duration. At end of day, <code>devtrack work report</code> produces an AI narrative summary and optional email.' },
         { id:'VACATION_MODE',   icon:'✈️', title:'Vacation Mode',       desc:'Fully autonomous mode while you\'re away. LLM generates work updates from recent commits, scores its own confidence, and posts to the PM tool when confident enough. Enable with <code>devtrack vacation on --until YYYY-MM-DD</code>.' },
         // ── AI & Personalization ──────────────────────────────────────────────
         { id:'LLM_GUIDE',       icon:'🧠', title:'LLM Setup',           desc:'Configure local (Ollama, LM Studio) or cloud (OpenAI, Anthropic, Groq) AI providers. Automatic fallback chain. Per-use-case temperature and token limits.' },
         { id:'PERSONALIZATION', icon:'🎨', title:'Personalization',     desc:'"Talk Like You" — AI that learns your communication style from Teams messages and writes in your voice using RAG-powered few-shot examples.' },
         // ── System Integration ────────────────────────────────────────────────
-        { id:'AUTOSTART',       icon:'🔌', title:'Auto-Start',          desc:'Auto-start DevTrack at login — OS-aware. Run <code>devtrack autostart-install</code>: launchd LaunchAgent on macOS, systemd user service on Linux/WSL with systemd, or a shell profile block on WSL without systemd.' },
+        { id:'AUTOSTART',       icon:'🔌', title:'Auto-Start',          desc:'Auto-start DevTrack at login — OS-aware. Run <code>devtrack autostart-install</code>: launchd LaunchAgent on macOS, systemd user service on Linux/WSL, or a shell profile block on WSL without systemd. <strong>v1.4-dev:</strong> all env vars are now baked into the plist/unit at install time — no separate <code>.env</code> file needed at runtime.' },
         { id:'SERVER_TUI',      icon:'🖥️', title:'Server TUI',          desc:'Textual process monitor for the Python backend. Shows all server processes with live CPU/MEM/status and a health bar. Navigate with ↑↓, restart with r, toggle logs with l.' },
         { id:'ADMIN_CONSOLE',   icon:'🛡️', title:'Admin Console',       desc:'Web UI at <code>http://localhost:8090/admin/</code> — manage users, API keys, review server health, LLM config, integration credentials, and a full audit log. Run with <code>devtrack admin-start</code>.' },
         { id:'TELEMETRY',       icon:'📊', title:'Telemetry',           desc:'Optional usage tracking: download counts, command frequencies, version adoption. Fully transparent, no PII. Designed for a real-time admin dashboard via Server-Sent Events. See the plan in <code>docs/TELEMETRY_PLAN.md</code>.' },
@@ -1848,7 +2278,7 @@ cd automation_tools
         { n:'Richer AI Messages',  d:'In the commit refinement loop, pressing <kbd>E</kbd> to enhance gives the AI double the normal token allowance for that call, producing more detailed and thorough commit messages.' },
         { n:'Personalized AI',     d:'Learns your style from Teams messages and writes in your voice.' },
         { n:'Ticket Alerter',      d:'Polls GitHub, Azure DevOps, and Jira for events relevant to you — assigned issues/PRs/work items, comments on threads you are in, state changes, and review requests. Delivers macOS OS notifications (via osascript) and terminal output. Delta-synced via MongoDB so you never see the same notification twice. Configure with <code>ALERT_ENABLED=true</code>, <code>ALERT_GITHUB_ENABLED=true</code>, <code>ALERT_AZURE_ENABLED=true</code>, <code>ALERT_JIRA_ENABLED=true</code> and the <code>ALERT_*</code> variables in <code>.env</code>.' },
-        { n:'OS-Aware Auto-Start', d:'Run <code>devtrack autostart-install</code> — DevTrack detects your OS and picks the right mechanism: launchd LaunchAgent on macOS, systemd user service on Linux/WSL with systemd, or a shell profile block on WSL without systemd. The daemon starts automatically each time you log in — no cron, no manual <code>devtrack start</code> after reboot.' },
+        { n:'OS-Aware Auto-Start', d:'Run <code>devtrack autostart-install</code> — DevTrack detects your OS and picks the right mechanism: launchd LaunchAgent on macOS, systemd user service on Linux/WSL with systemd, or a shell profile block on WSL without systemd. The daemon starts automatically each time you log in — no cron, no manual <code>devtrack start</code> after reboot. v1.4-dev: all env vars are baked into the plist/unit at install time so the daemon gets the right config without a <code>.env</code> file.' },
         { n:'Offline-First',       d:'Queues everything and syncs when connectivity returns.' },
         { n:'Remote Control',      d:'Full Telegram bot: status, logs, create items, trigger updates. Plus a Slack bot (<code>/devtrack &lt;cmd&gt;</code>) via Socket Mode — no public URL required.' },
         { n:'AI Project Planning', d:'<code>/newproject</code> in Telegram — describe a project in plain text, pick developers from the live team roster, and let AI auto-fetch each person\'s workload from the PM tool. Generates a full YAML spec (features, stories, sprints, capacity analysis, skill-gap risks), emails it to the PM with an approve/edit link, and creates everything in Azure/GitHub/GitLab on approval.' },

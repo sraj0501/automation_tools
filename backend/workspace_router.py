@@ -30,6 +30,10 @@ class WorkspaceRouter:
         ticket_id: str,
         status: str,
         pm_project: str = "",
+        pm_assignee: str = "",
+        pm_iteration_path: str = "",
+        pm_area_path: str = "",
+        pm_milestone: str = "",
         commit_info: Optional[dict] = None,
         task_matcher=None,
     ) -> RouteResult:
@@ -42,27 +46,37 @@ class WorkspaceRouter:
             description:  Human-readable work description.
             ticket_id:    Ticket/issue ID extracted by NLP (may be empty).
             status:       Task status string (e.g. "in_progress", "done").
-            pm_project:   Optional platform-specific project override.
-            commit_info:  Dict with commit_hash, commit_message, author.
-            task_matcher: TaskMatcher instance for fuzzy matching.
+            pm_project:        Optional platform-specific project override.
+            pm_assignee:       Assignee to set when creating work items (Azure: email/name; GitHub: login; GitLab: user ID int).
+            pm_iteration_path: Azure iteration path override (e.g. "MyProject\\Sprint 5").
+            pm_area_path:      Azure area path override (e.g. "MyProject\\Backend").
+            pm_milestone:      Milestone number/ID for GitHub (int) or GitLab (int) on create.
+            commit_info:       Dict with commit_hash, commit_message, author.
+            task_matcher:      TaskMatcher instance for fuzzy matching.
 
         Returns:
             (work_item_id, platform) — work_item_id is None on no-match/error.
         """
         platform = (pm_platform or "").strip().lower()
+        overrides = {
+            "pm_assignee": pm_assignee,
+            "pm_iteration_path": pm_iteration_path,
+            "pm_area_path": pm_area_path,
+            "pm_milestone": pm_milestone,
+        }
 
         if platform == "none":
             logger.debug("Workspace pm_platform=none: skipping PM sync")
             return None, None
 
         if platform == "azure":
-            return self._route_azure(description, ticket_id, status, commit_info, task_matcher)
+            return self._route_azure(description, ticket_id, status, commit_info, task_matcher, overrides)
 
         if platform == "gitlab":
-            return self._route_gitlab(description, ticket_id, status, pm_project, commit_info, task_matcher)
+            return self._route_gitlab(description, ticket_id, status, pm_project, commit_info, task_matcher, overrides)
 
         if platform == "github":
-            return self._route_github(description, ticket_id, status, commit_info, task_matcher)
+            return self._route_github(description, ticket_id, status, commit_info, task_matcher, overrides)
 
         if platform == "jira":
             logger.info("Jira routing not yet implemented in WorkspaceRouter")
@@ -72,13 +86,13 @@ class WorkspaceRouter:
         if platform and platform not in ("azure", "gitlab", "github", "jira", "none"):
             logger.warning(f"Unknown pm_platform={platform!r}, falling back to priority chain")
 
-        return self._route_priority_chain(description, ticket_id, status, pm_project, commit_info, task_matcher)
+        return self._route_priority_chain(description, ticket_id, status, pm_project, commit_info, task_matcher, overrides)
 
     # ------------------------------------------------------------------
     # Platform-specific helpers
     # ------------------------------------------------------------------
 
-    def _route_azure(self, description, ticket_id, status, commit_info, task_matcher) -> RouteResult:
+    def _route_azure(self, description, ticket_id, status, commit_info, task_matcher, overrides=None) -> RouteResult:
         if not self.azure_client:
             logger.debug("Azure client not configured, skipping")
             return None, None
@@ -86,13 +100,9 @@ class WorkspaceRouter:
             import backend.config as config
             if not config.is_azure_sync_enabled():
                 return None, None
-            from python_bridge import DevTrackBridge  # lazy import to avoid circular
-            # Re-use the existing _run_azure_sync helper on the singleton bridge
-            # if available; otherwise call the client directly.
         except Exception:
             pass
 
-        # Direct call path (when called outside DevTrackBridge context)
         return self._call_sync(
             "azure",
             self.azure_client,
@@ -102,9 +112,10 @@ class WorkspaceRouter:
             commit_info,
             task_matcher,
             project_id=None,
+            overrides=overrides,
         )
 
-    def _route_gitlab(self, description, ticket_id, status, pm_project, commit_info, task_matcher) -> RouteResult:
+    def _route_gitlab(self, description, ticket_id, status, pm_project, commit_info, task_matcher, overrides=None) -> RouteResult:
         if not self.gitlab_client:
             logger.debug("GitLab client not configured, skipping")
             return None, None
@@ -131,9 +142,10 @@ class WorkspaceRouter:
             commit_info,
             task_matcher,
             project_id=project_id,
+            overrides=overrides,
         )
 
-    def _route_github(self, description, ticket_id, status, commit_info, task_matcher) -> RouteResult:
+    def _route_github(self, description, ticket_id, status, commit_info, task_matcher, overrides=None) -> RouteResult:
         if not self.github_client:
             logger.debug("GitHub client not configured, skipping")
             return None, None
@@ -153,9 +165,10 @@ class WorkspaceRouter:
             commit_info,
             task_matcher,
             project_id=None,
+            overrides=overrides,
         )
 
-    def _route_priority_chain(self, description, ticket_id, status, pm_project, commit_info, task_matcher) -> RouteResult:
+    def _route_priority_chain(self, description, ticket_id, status, pm_project, commit_info, task_matcher, overrides=None) -> RouteResult:
         """Azure → GitLab → GitHub fallback (legacy single-repo behavior)."""
         try:
             import backend.config as config
@@ -166,7 +179,7 @@ class WorkspaceRouter:
         if self.azure_client and config and config.is_azure_sync_enabled():
             work_item_id, platform = self._call_sync(
                 "azure", self.azure_client, description, ticket_id, status,
-                commit_info, task_matcher, project_id=None,
+                commit_info, task_matcher, project_id=None, overrides=overrides,
             )
             if work_item_id:
                 return work_item_id, platform
@@ -181,7 +194,7 @@ class WorkspaceRouter:
                     pass
             work_item_id, platform = self._call_sync(
                 "gitlab", self.gitlab_client, description, ticket_id, status,
-                commit_info, task_matcher, project_id=project_id,
+                commit_info, task_matcher, project_id=project_id, overrides=overrides,
             )
             if work_item_id:
                 return work_item_id, platform
@@ -190,7 +203,7 @@ class WorkspaceRouter:
         if self.github_client and config and config.is_github_sync_enabled():
             work_item_id, platform = self._call_sync(
                 "github", self.github_client, description, ticket_id, status,
-                commit_info, task_matcher, project_id=None,
+                commit_info, task_matcher, project_id=None, overrides=overrides,
             )
             if work_item_id:
                 return work_item_id, platform
@@ -201,7 +214,7 @@ class WorkspaceRouter:
     # Sync dispatcher — calls the appropriate async helper via asyncio
     # ------------------------------------------------------------------
 
-    def _call_sync(self, platform, client, description, ticket_id, status, commit_info, task_matcher, project_id) -> RouteResult:
+    def _call_sync(self, platform, client, description, ticket_id, status, commit_info, task_matcher, project_id, overrides=None) -> RouteResult:
         """Run the async platform sync in the current or new event loop."""
         import asyncio
         try:
@@ -211,18 +224,18 @@ class WorkspaceRouter:
                 with concurrent.futures.ThreadPoolExecutor() as pool:
                     future = pool.submit(
                         asyncio.run,
-                        self._async_sync(platform, client, description, ticket_id, status, commit_info, task_matcher, project_id),
+                        self._async_sync(platform, client, description, ticket_id, status, commit_info, task_matcher, project_id, overrides),
                     )
                     return future.result(timeout=30)
             else:
                 return loop.run_until_complete(
-                    self._async_sync(platform, client, description, ticket_id, status, commit_info, task_matcher, project_id)
+                    self._async_sync(platform, client, description, ticket_id, status, commit_info, task_matcher, project_id, overrides)
                 )
         except Exception as e:
             logger.error(f"WorkspaceRouter._call_sync({platform}) failed: {e}")
             return None, None
 
-    async def _async_sync(self, platform, client, description, ticket_id, status, commit_info, task_matcher, project_id) -> RouteResult:
+    async def _async_sync(self, platform, client, description, ticket_id, status, commit_info, task_matcher, project_id, overrides=None) -> RouteResult:
         """Async core: match → comment/transition → create-on-no-match."""
         try:
             import backend.config as config
@@ -230,9 +243,15 @@ class WorkspaceRouter:
             config = None
 
         commit_info = commit_info or {}
+        overrides = overrides or {}
         commit_msg = commit_info.get("commit_message", description)
         commit_hash = commit_info.get("commit_hash", "")
         author = commit_info.get("author", "")
+
+        pm_assignee       = overrides.get("pm_assignee", "") or ""
+        pm_iteration_path = overrides.get("pm_iteration_path", "") or ""
+        pm_area_path      = overrides.get("pm_area_path", "") or ""
+        pm_milestone      = overrides.get("pm_milestone", "") or ""
 
         # ---- Azure ----
         if platform == "azure":
@@ -281,7 +300,13 @@ class WorkspaceRouter:
             elif config and config.is_azure_create_on_no_match():
                 try:
                     title = description[:120] if description else commit_msg[:120]
-                    new_item = await client.create_work_item(title=title, description=description)
+                    new_item = await client.create_work_item(
+                        title=title,
+                        description=description,
+                        assigned_to=pm_assignee or None,
+                        area_path=pm_area_path or None,
+                        iteration_path=pm_iteration_path or None,
+                    )
                     logger.info(f"Azure: created work item #{new_item.id}")
                     return new_item.id, "azure"
                 except Exception as e:
@@ -345,7 +370,25 @@ class WorkspaceRouter:
                     return None, None
                 try:
                     title = description[:120] if description else commit_msg[:120]
-                    new_issue = await client.create_issue(issue_project_id, title=title, description=description)
+                    gl_assignee_ids = None
+                    if pm_assignee:
+                        try:
+                            gl_assignee_ids = [int(pm_assignee)]
+                        except ValueError:
+                            logger.warning(f"GitLab pm_assignee={pm_assignee!r} is not an integer user ID, ignoring")
+                    gl_milestone_id = None
+                    if pm_milestone:
+                        try:
+                            gl_milestone_id = int(pm_milestone)
+                        except ValueError:
+                            logger.warning(f"GitLab pm_milestone={pm_milestone!r} is not an integer, ignoring")
+                    new_issue = await client.create_issue(
+                        issue_project_id,
+                        title=title,
+                        description=description,
+                        assignee_ids=gl_assignee_ids,
+                        milestone_id=gl_milestone_id,
+                    )
                     logger.info(f"GitLab: created issue #{new_issue.iid}")
                     return new_issue.id, "gitlab"
                 except Exception as e:
@@ -403,7 +446,20 @@ class WorkspaceRouter:
                                 labels = [label]
                         except Exception:
                             pass
-                    new_issue = await client.create_issue(title=title, body=description, labels=labels)
+                    gh_assignees = [pm_assignee] if pm_assignee else None
+                    gh_milestone = None
+                    if pm_milestone:
+                        try:
+                            gh_milestone = int(pm_milestone)
+                        except ValueError:
+                            logger.warning(f"GitHub pm_milestone={pm_milestone!r} is not an integer, ignoring")
+                    new_issue = await client.create_issue(
+                        title=title,
+                        body=description,
+                        labels=labels,
+                        assignees=gh_assignees,
+                        milestone=gh_milestone,
+                    )
                     logger.info(f"GitHub: created issue #{new_issue.number}")
                     return new_issue.number, "github"
                 except Exception as e:
