@@ -49,8 +49,9 @@ templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
 def startup() -> None:
     init_db()
-    admin_user = os.environ.get("ADMIN_USERNAME", "admin")
-    admin_pass = os.environ.get("ADMIN_PASSWORD", "")
+    from backend.config import get_admin_username, get_admin_password
+    admin_user = get_admin_username()
+    admin_pass = get_admin_password()
     if admin_pass:
         ensure_default_admin(admin_user, admin_pass)
 
@@ -293,21 +294,25 @@ async def api_key_revoke(
 @router.get("/server", response_class=HTMLResponse)
 async def server_page(request: Request, current_user: str = Depends(require_auth)):
     snapshot = _snapshot_ctx()
+    from backend.config import (
+        llm_provider, ollama_host, ollama_model, openai_model, anthropic_model, groq_model,
+        azure_pat, get_github_token, get_gitlab_pat, jira_api_token, get_telegram_bot_token,
+    )
     config = {
-        "LLM_PROVIDER":  os.environ.get("LLM_PROVIDER", "—"),
-        "OLLAMA_HOST":   os.environ.get("OLLAMA_HOST", "—"),
-        "OLLAMA_MODEL":  os.environ.get("OLLAMA_MODEL", "—"),
-        "OPENAI_MODEL":  os.environ.get("OPENAI_MODEL", "—"),
-        "ANTHROPIC_MODEL": os.environ.get("ANTHROPIC_MODEL", "—"),
-        "GROQ_MODEL":    os.environ.get("GROQ_MODEL", "—"),
+        "LLM_PROVIDER":  llm_provider() or "—",
+        "OLLAMA_HOST":   ollama_host() or "—",
+        "OLLAMA_MODEL":  ollama_model() or "—",
+        "OPENAI_MODEL":  openai_model() or "—",
+        "ANTHROPIC_MODEL": anthropic_model() or "—",
+        "GROQ_MODEL":    groq_model() or "—",
     }
     integrations = {
-        "Azure DevOps": "configured" if os.environ.get("AZURE_DEVOPS_PAT") else "not set",
-        "GitHub":       "configured" if os.environ.get("GITHUB_TOKEN") else "not set",
-        "GitLab":       "configured" if os.environ.get("GITLAB_PAT") else "not set",
-        "Jira":         "configured" if os.environ.get("JIRA_API_TOKEN") else "not set",
-        "Telegram":     "configured" if os.environ.get("TELEGRAM_BOT_TOKEN") else "not set",
-        "MS Graph":     "configured" if os.environ.get("AZURE_DEVOPS_PAT") else "not set",
+        "Azure DevOps": "configured" if azure_pat() else "not set",
+        "GitHub":       "configured" if get_github_token() else "not set",
+        "GitLab":       "configured" if get_gitlab_pat() else "not set",
+        "Jira":         "configured" if jira_api_token() else "not set",
+        "Telegram":     "configured" if get_telegram_bot_token() else "not set",
+        "MS Graph":     "configured" if azure_pat() else "not set",
     }
     return templates.TemplateResponse(
         "server.html",

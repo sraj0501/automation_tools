@@ -40,6 +40,7 @@ app.include_router(router, prefix="/admin")
 
 def main() -> None:
     import uvicorn
-    port = int(os.environ.get("ADMIN_PORT", "8090"))
-    host = os.environ.get("ADMIN_HOST", "0.0.0.0")
+    from backend.config import get_admin_port, get_admin_host
+    port = get_admin_port()
+    host = get_admin_host()
     uvicorn.run("backend.admin.app:app", host=host, port=port, reload=False)
