@@ -39,20 +39,16 @@ class GitDiffAnalyzer:
             True if Azure DevOps, JIRA, or similar is configured
         """
         # Check for Azure DevOps
-        try:
-            from backend.config import azure_org, azure_pat
-            if azure_org() and azure_pat():
-                return True
-        except ImportError:
-            if os.getenv("ORGANIZATION") and (os.getenv("AZURE_DEVOPS_PAT") or os.getenv("AZURE_API_KEY")):
-                return True
+        from backend.config import azure_org, azure_pat, jira_url, get
+        if azure_org() and azure_pat():
+            return True
 
         # Check for JIRA
-        if os.getenv("JIRA_URL") and os.getenv("JIRA_TOKEN"):
+        if jira_url() and get("JIRA_TOKEN"):
             return True
 
         # Check for GitHub Projects (optional)
-        if os.getenv("GITHUB_PROJECT_ENABLED") == "true":
+        if get("GITHUB_PROJECT_ENABLED") == "true":
             return True
             
         return False

@@ -66,7 +66,8 @@ _TERMS_SUMMARY = """\
 
 def _license_dir() -> Path:
     """Return the Data/license directory, creating it if needed."""
-    data_dir = os.getenv("DATA_DIR")
+    from backend.config import get_data_dir
+    data_dir = get_data_dir()
     if data_dir:
         base = Path(data_dir)
     else:
@@ -182,7 +183,8 @@ def ensure_accepted(non_interactive: bool = False) -> bool:
     Never raises — safe to call at startup.
     """
     # Allow CI/automation to skip via env var
-    if os.getenv("DEVTRACK_AUTO_ACCEPT_TERMS") == "1":
+    from backend.config import get_devtrack_auto_accept_terms
+    if get_devtrack_auto_accept_terms():
         if not is_accepted():
             _save_acceptance()
         return True

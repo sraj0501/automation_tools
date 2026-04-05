@@ -32,13 +32,14 @@ logger = logging.getLogger(__name__)
 
 
 def main():
-    enabled = os.environ.get("SLACK_ENABLED", "false").lower() in ("true", "1", "yes")
+    from backend.config import get_slack_enabled, get_slack_bot_token, get_slack_app_token, get_slack_allowed_channel_ids
+    enabled = get_slack_enabled()
     if not enabled:
         logger.error("Slack bot is disabled. Set SLACK_ENABLED=true in .env")
         sys.exit(1)
 
-    bot_token = os.environ.get("SLACK_BOT_TOKEN", "")
-    app_token = os.environ.get("SLACK_APP_TOKEN", "")
+    bot_token = get_slack_bot_token()
+    app_token = get_slack_app_token()
     if not bot_token:
         logger.error("SLACK_BOT_TOKEN is required (xoxb-...).")
         sys.exit(1)
@@ -46,12 +47,7 @@ def main():
         logger.error("SLACK_APP_TOKEN is required (xapp-...). Enable Socket Mode in your Slack app.")
         sys.exit(1)
 
-    raw_ids = os.environ.get("SLACK_ALLOWED_CHANNEL_IDS", "")
-    allowed_channel_ids: set[str] = set()
-    for part in raw_ids.split(","):
-        part = part.strip()
-        if part:
-            allowed_channel_ids.add(part)
+    allowed_channel_ids: set[str] = set(get_slack_allowed_channel_ids())
 
     if not allowed_channel_ids:
         logger.warning(

@@ -19,11 +19,8 @@ logger = logging.getLogger(__name__)
 # ── config helpers ────────────────────────────────────────────────────────────
 
 def _ollama_host() -> str:
-    try:
-        from backend.config import ollama_host
-        return ollama_host().rstrip("/")
-    except Exception:
-        return "http://localhost:11434"
+    from backend.config import ollama_host
+    return ollama_host().rstrip("/")
 
 
 def _embed_model() -> str:
