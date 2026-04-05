@@ -111,9 +111,21 @@ See [CONFIGURATION.md](CONFIGURATION.md) for all variables.
 
 ### 6. Start DevTrack
 
+The daemon does not load `.env` itself — load it into your shell first:
+
 ```bash
+set -a && source .env && set +a
 devtrack start
 devtrack status
+```
+
+**Tip:** Add `set -a && source /path/to/automation_tools/.env && set +a` to your `~/.zshrc` / `~/.bashrc` so it's always available, or use `direnv` with a `.envrc` containing `dotenv`.
+
+For persistent auto-start on login (recommended for daily use):
+
+```bash
+devtrack autostart-install   # installs launchd (macOS) or systemd unit (Linux)
+                             # bakes all .env vars into the service — no manual sourcing needed
 ```
 
 ### 7. Optional: Shell Integration
@@ -230,6 +242,7 @@ rm -rf /path/to/automation_tools      # removes everything including Data/
 | `spaCy model not found` | `uv run python -m spacy download en_core_web_sm` |
 | `IPC connection failed` | Check port: `lsof -i :35893`. Change `IPC_PORT` in `.env` if in use |
 | `.env not found` | `cp .env_sample .env` from the project root |
+| `missing required environment variables` | You forgot to source `.env` — run `set -a && source .env && set +a` before `devtrack start` |
 | `Ollama unreachable` | `ollama serve` in a separate terminal |
 | `git commit` still uses plain git | Run `source ~/.zshrc`, or check that `eval "$(devtrack shell-init)"` is in your shell config |
 

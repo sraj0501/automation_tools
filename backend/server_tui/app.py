@@ -27,11 +27,13 @@ from textual.widgets import (
 from backend.server_tui.health_client import ServiceHealth, check_all
 from backend.server_tui.log_viewer import LogTailer, available_logs, tail
 from backend.server_tui.process_monitor import ProcessInfo, ProcessMonitor
+from backend.server_tui.stats_client import TriggerStats, get_trigger_stats
 
 # Refresh intervals (seconds)
 PROCESS_REFRESH = 3.0
 HEALTH_REFRESH = 10.0
 LOG_REFRESH = 1.5
+STATS_REFRESH = 15.0
 
 
 def _status_cell(info: ProcessInfo) -> str:
@@ -59,6 +61,27 @@ class StatsBar(Static):
         return " " + _health_line(self.health)
 
 
+class StatsRow(Static):
+    """One-line trigger throughput stats shown between the health bar and process table."""
+
+    stats: reactive[Optional[TriggerStats]] = reactive(None, recompose=False)
+
+    def render(self) -> str:
+        s = self.stats
+        if s is None:
+            return " Loading stats…"
+        errors_color = "red" if s.errors_24h > 0 else "green"
+        errors_part = (
+            f"[{errors_color}]Errors (24h): {s.errors_24h}[/{errors_color}]"
+        )
+        return (
+            f" Triggers today: {s.triggers_today}"
+            f"  |  Commits: {s.commits_today}"
+            f"  |  Last: {s.last_trigger}"
+            f"  |  {errors_part}"
+        )
+
+
 class ServerTUI(App[None]):
     """DevTrack Server — Process Monitor."""
 
@@ -76,6 +99,12 @@ class ServerTUI(App[None]):
         height: 1;
         background: $panel;
         color: $text;
+        padding: 0 1;
+    }
+    StatsRow {
+        height: 1;
+        background: $panel-darken-1;
+        color: $text-muted;
         padding: 0 1;
     }
     DataTable {
@@ -125,6 +154,7 @@ class ServerTUI(App[None]):
         yield Header()
         with Vertical(id="top-pane"):
             yield StatsBar(id="stats-bar")
+            yield StatsRow(id="stats-row")
             yield DataTable(id="proc-table", cursor_type="row", show_cursor=True)
         with Vertical(id="log-pane"):
             yield Label("", id="log-label")
@@ -141,8 +171,10 @@ class ServerTUI(App[None]):
         self.set_interval(PROCESS_REFRESH, self._refresh_processes)
         self.set_interval(HEALTH_REFRESH,  self._refresh_health)
         self.set_interval(LOG_REFRESH,     self._refresh_log)
-        # Initial async health check
+        self.set_interval(STATS_REFRESH,   self._refresh_stats)
+        # Initial async checks
         asyncio.get_event_loop().call_soon(self._schedule_health)
+        asyncio.get_event_loop().call_soon(self._refresh_stats)
 
     def _schedule_health(self) -> None:
         self.run_worker(self._async_health_check, exclusive=False)
@@ -182,6 +214,17 @@ class ServerTUI(App[None]):
 
     def _refresh_health(self) -> None:
         self.run_worker(self._async_health_check, exclusive=False)
+
+    def _refresh_stats(self) -> None:
+        """Update the StatsRow widget with the latest trigger throughput stats."""
+        self.run_worker(self._async_stats_check, exclusive=False)
+
+    async def _async_stats_check(self) -> None:
+        loop = asyncio.get_event_loop()
+        stats = await loop.run_in_executor(None, get_trigger_stats)
+        row: StatsRow = self.query_one("#stats-row", StatsRow)
+        row.stats = stats
+        row.refresh()
 
     def _refresh_log(self) -> None:
         if self._log_tailer is None:
