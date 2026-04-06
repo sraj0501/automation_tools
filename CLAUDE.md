@@ -36,28 +36,33 @@ uv run python validate_env_sample.py            # Validate .env keys match .env_
 ### Running the daemon locally
 
 ```bash
+# Source .env so all vars are in the process environment before the daemon starts
 export PROJECT_ROOT="/path/to/automation_tools"
-export DEVTRACK_ENV_FILE="$PROJECT_ROOT/.env"
-devtrack start &                # Start background daemon
+source "$PROJECT_ROOT/.env"
+devtrack start &                # Start background daemon (starts webhook_server.py as subprocess)
 devtrack status                 # Verify it's running
 devtrack logs                   # View recent log output
 ```
 
+> The daemon reads env vars from the process environment at startup — it does not reload `.env`
+> at runtime. For persistent autostart use `devtrack autostart-install` which bakes all vars
+> into the launchd plist (macOS) or systemd unit (Linux).
+
 ## Architecture
 
-The system has two main runtime components communicating over a TCP socket (default `127.0.0.1:35893`, configurable via `IPC_HOST`/`IPC_PORT` in `.env`):
+The system has two main runtime components. The Go daemon sends triggers to the Python backend over HTTPS POST (CS-1 transport). TCP IPC (`127.0.0.1:35893`) is retained as a legacy internal channel only.
 
 ```
 Git commits / cron timer
         │
         ▼
-┌──────────────────┐     TCP IPC (JSON)     ┌──────────────────────────┐
-│  Go Daemon       │ ──────────────────────▶ │  Python Bridge           │
-│  devtrack-bin/   │                         │  python_bridge.py        │
+┌──────────────────┐   HTTPS POST (JSON)    ┌──────────────────────────┐
+│  Go Daemon       │ ──────────────────────▶ │  Python Backend          │
+│  devtrack-bin/   │                         │  backend/webhook_server  │
 │  - git_monitor   │                         │  - NLP parsing (spaCy)   │
 │  - scheduler     │                         │  - LLM enhancement       │
-│  - ipc (server)  │ ◀────────────────────── │  - TUI user prompts      │
-│  - database      │    task_update / ack    │  - Report generation     │
+│  - http_trigger  │                         │  - TUI user prompts      │
+│  - database      │                         │  - Report generation     │
 │  - cli           │                         │  - Project mgmt APIs     │
 └──────────────────┘                         └──────────────────────────┘
         │                                              │
@@ -72,7 +77,7 @@ Git commits / cron timer
 |---|---|
 | `main.go` | Entry point; routes CLI args or delegates `git` subcommand to shell wrapper |
 | `cli.go` | All CLI command implementations (`start`, `stop`, `status`, `logs`, etc.) |
-| `daemon.go` | Lifecycle management (PID file, signals, Python bridge process) |
+| `daemon.go` | Lifecycle management (PID file, signals, webhook server subprocess) |
 | `integrated.go` | `IntegratedMonitor` — wires together git monitor, scheduler, and IPC server |
 | `git_monitor.go` | fsnotify-based Git repository watcher; fires `commit_trigger` on new commits |
 | `scheduler.go` | Cron-based periodic trigger using robfig/cron; fires `timer_trigger` |
@@ -82,15 +87,17 @@ Git commits / cron timer
 | `config_env.go` | All `.env` key accessors for Go — the single source of truth for env var names |
 | `learning.go` | Personalized AI learning consent and profile management |
 
-### Python layer (`backend/` + `python_bridge.py`)
+### Python layer (`backend/`)
 
 #### Core Infrastructure
 
 | Module | Purpose |
 |---|---|
-| `python_bridge.py` | Entry point started by Go daemon; connects to IPC server and dispatches triggers |
+| `backend/webhook_server.py` | Primary Python entry point started by Go daemon; FastAPI server handling inbound webhook events AND outbound triggers from Go |
+| `backend/webhook_handlers.py` | `WebhookEventHandler` — routes Azure/GitHub/Jira events; separated from HTTP routing for testability |
 | `backend/config.py` | Centralized config — all modules use `backend.config.get()`, not `os.getenv()` directly |
-| `backend/ipc_client.py` | TCP IPC client (Python side); mirrors message types from Go's `ipc.go` |
+| `backend/ipc_client.py` | TCP IPC client (Python side) — legacy internal channel; mirrors message types from Go's `ipc.go` |
+| `python_bridge.py` | Legacy bridge (kept for reference); superseded by `webhook_server.py` as the daemon's Python process |
 
 #### NLP & AI Processing
 
@@ -153,11 +160,13 @@ Git commits / cron timer
 
 ## Configuration Architecture
 
-All configuration flows from a single `.env` file. There are **no hardcoded fallback values** for paths or credentials.
+All configuration flows from environment variables. There are **no hardcoded fallback values** for paths or credentials. The env-first model means variables must be in the process environment before the daemon starts — the daemon does not reload `.env` at runtime.
 
-- Go reads env vars via `config_env.go` (loaded with `joho/godotenv`)
+- **Shell**: `source .env` before running `devtrack start` in a terminal session
+- **Autostart**: `devtrack autostart-install` bakes all `.env` vars into launchd (macOS) / systemd (Linux) so the daemon always starts with the correct env
+- **Docker**: pass `--env-file .env` to `docker run`
+- Go reads env vars via `config_env.go` (`LoadEnvConfig()` reads from the process environment)
 - Python reads via `backend/config.py` functions (`get()`, `get_int()`, `get_bool()`, `get_path()`)
-- `DEVTRACK_ENV_FILE` overrides `.env` location; if unset, Go requires `.env` in the working directory
 - Runtime data lives under `Data/` (db, logs, reports, pids) — paths configurable via `DATA_DIR`, `DATABASE_DIR`, etc.
 
 The LLM provider is selected by `LLM_PROVIDER` (`ollama` | `openai` | `anthropic`). Providers with available credentials are added as automatic fallbacks in `backend/llm/provider_factory.py`.
@@ -269,7 +278,7 @@ except ConfigError as e:
 
 ## Session Completion Status (Current)
 
-**Last Updated**: March 12, 2026
+**Last Updated**: April 6, 2026
 
 **Phases Completed**:
 
@@ -277,26 +286,18 @@ except ConfigError as e:
 - Phase 2: Conflict Resolution & PR-Aware Parsing ✅
 - Phase 3: Event-Driven Integration ✅
 - Phase 4: Project Management ✅
-- Personalization "Talk Like You" ✅ FULLY WORKING
-- git-sage Session UX ✅ (sage-improvements branch)
-
-**Major Accomplishments (March 12, 2026 session)**:
-
-- Personalization pipeline working end-to-end: Teams → MongoDB → Profile → Personalized responses
-- git-sage: session approval mode (auto / review / suggest-only)
-- git-sage: step history with git HEAD snapshots + interactive undo
-- git-sage: follow-up loop (5 questions, shared conversation context)
-- git-sage: Groq cloud API support via openai SDK (no urllib Cloudflare block)
-- git-sage: JSON mode enforcement (`response_format` + Ollama `format:json`)
-- git-sage: squash flow fixed — uses `git reset --soft HEAD~N`, never `git rebase -i`
-- git-sage: model name prefix stripping (`groq/compound` → `compound-beta`)
-- git-sage: informational tasks now surface full answer in done.summary
+- Phase 4B: SQLite PM persistence ✅
+- Personalization "Talk Like You" ✅
+- RAG personalization (ChromaDB few-shot) ✅
+- git-sage Session UX ✅
+- CS-1: HTTP transport (Go → HTTPS POST → webhook_server.py) ✅
+- CS-2: Config audit (os.getenv eliminated) + server-TUI stats panel ✅
+- Autostart (launchd/systemd env-first) ✅
+- Anonymous telemetry ping ✅
+- Jira alerter ✅
+- Webhook server + alert poller ✅
 
 **Production Readiness**: VERY HIGH
-
-**Planned Next**:
-- launchd plist for macOS auto-start on login
-- Multi-repo monitoring with per-repo project management config
 
 ## Phase Implementation Status
 
@@ -318,12 +319,12 @@ Automatic merge conflict resolution and git-aware work update parsing.
 
 ### Phase 3: Event-Driven Integration ✅
 
-python_bridge.py integration with automatic conflict detection and work context enrichment.
+Automatic conflict detection and work context enrichment wired into the trigger pipeline.
 
-- Modified: `python_bridge.py` with Phase 3 imports and handler enhancements
-- New: `_check_and_resolve_conflicts()` method for automatic conflict resolution
-- Enhanced: `handle_timer_trigger()` with work context injection
-- Enhanced: `handle_commit_trigger()` with git context logging
+- Conflict auto-resolution triggered after work updates
+- Timer trigger injects git context (branch, PR, changes) into work updates before NLP parsing
+- Commit trigger logs git metadata
+- Phase 3 logic now lives in `backend/webhook_server.py` and associated handlers
 - File: **PHASE_3_IMPLEMENTATION.md**
 
 ## Documentation Organization
@@ -368,10 +369,11 @@ All user-facing documentation has been reorganized for clarity:
 
 ## Key Patterns
 
+- **Python entry point**: `backend/webhook_server.py` is the Python process the Go daemon spawns. It handles both inbound webhook events (Azure/GitHub/GitLab/Jira) and trigger calls from the Go daemon (`/trigger/commit`, `/trigger/timer`, etc.). `python_bridge.py` is retained as a legacy reference only.
 - **git-sage architecture**: Modular design with GitOperations, ConflictResolver, PRFinder as reusable components. Agent uses these as helpers for autonomous git operations. Can be used standalone via CLI or as Python library.
-- **Phase 3 integration**: python_bridge.py event handlers now integrate git-sage features: timer triggers enhance work context, commit triggers log git metadata, post-update checks detect and resolve conflicts. All features degrade gracefully if git-sage unavailable.
-- **IPC message protocol**: JSON-newline-delimited over TCP. Message types are defined in both `devtrack-bin/ipc.go` (`MessageType` constants) and `backend/ipc_client.py` (`MessageType` enum) — **keep in sync when adding new trigger types**.
-- **Python optional imports**: All Python subsystems (NLP, TUI, LLM, report generator, git_sage, work_enhancer, conflict_resolver) are imported with `try/except` and individually gated; the bridge degrades gracefully if a dependency is missing.
+- **Trigger pipeline**: webhook_server.py trigger handlers integrate git-sage features: timer triggers enhance work context, commit triggers log git metadata, post-update checks detect and resolve conflicts. All features degrade gracefully if git-sage unavailable.
+- **IPC message protocol**: JSON-newline-delimited over TCP. Message types are defined in both `devtrack-bin/ipc.go` (`MessageType` constants) and `backend/ipc_client.py` (`MessageType` enum) — legacy internal channel; new trigger types should use the HTTP `/trigger/*` endpoints instead.
+- **Python optional imports**: All Python subsystems (NLP, TUI, LLM, report generator, git_sage, work_enhancer, conflict_resolver) are imported with `try/except` and individually gated; the webhook server degrades gracefully if a dependency is missing.
 - **Config centralization**: All Python modules access config via `backend.config.get()`, `get_int()`, `get_bool()`, `get_path()` — never `os.getenv()` directly.
 - **Database access**: Centralized via `backend/db/` models; no direct SQLite queries in business logic.
 - **Commit message enhancement**: The `devtrack git commit` workflow is stateful (caches attempt count, original message, refined versions) across up to 5 iterations before creating a commit.
@@ -486,10 +488,10 @@ Cron runs at `LEARNING_CRON_SCHEDULE` (default `0 20 * * *`) via `backend/run_da
 
 **IPC connection errors:**
 
-- Verify `.env` has correct `IPC_HOST` and `IPC_PORT`
+- Verify `IPC_HOST` and `IPC_PORT` are exported in the environment before starting
 - Check for stale processes: `lsof -i :35893`
 - Firewall may block localhost ports on some systems
-- Restart daemon after `.env` changes
+- After changing `.env`, re-source it and restart the daemon (`source .env && devtrack start`)
 
 **Git monitor not detecting commits:**
 
@@ -542,15 +544,15 @@ Cron runs at `LEARNING_CRON_SCHEDULE` (default `0 20 * * *`) via `backend/run_da
 **Phase 3: Work context not enriching work updates:**
 
 - Verify `work_enhancer_available` is True (check logs at startup)
-- Ensure repo_path is correct (default: "." in python_bridge.py)
+- Ensure repo_path is correct (default: "." in webhook_server.py)
 - Check git repo is valid and on a feature branch
-- Review logs: `tail -f Data/logs/python_bridge.log | grep "context"`
+- Review logs: `tail -f Data/logs/daemon.log | grep "context"`
 
 ## Ticket Alerter
 
 ### Overview
 
-A background polling service that watches GitHub and Azure DevOps for ticket events relevant to the developer, delivering OS/terminal notifications and persisting them to MongoDB. Jira support is planned.
+A background polling service that watches GitHub, Azure DevOps, and Jira for ticket events relevant to the developer, delivering OS/terminal notifications and persisting them to MongoDB.
 
 ### Events by Source
 
@@ -558,7 +560,7 @@ A background polling service that watches GitHub and Azure DevOps for ticket eve
 |---|---|---|
 | GitHub | Issue/PR assigned, review requested, comment on involved issue | ✅ Shipped |
 | Azure DevOps | Work item assigned, comment added, state changed | ✅ Shipped |
-| Jira | Assigned to me, comment added, status changed, priority changed | Planned |
+| Jira | Assigned to me, comment added, status changed | ✅ Shipped |
 
 ### Notification Delivery
 
@@ -640,7 +642,7 @@ backend/
   ├── alerters/
   │   ├── github_alerter.py   — GitHub assigned/comments/review-requests ✅
   │   ├── azure_alerter.py    — Azure DevOps assigned/comments/state-changes ✅
-  │   └── jira_alerter.py     — Jira polling logic (planned)
+  │   └── jira_alerter.py     — Jira assigned/comments/status_change polling ✅
   └── db/mongo_alerts.py      — MongoAlertsStore: notifications + alert_state collections
 ```
 
