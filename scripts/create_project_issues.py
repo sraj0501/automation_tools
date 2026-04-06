@@ -15,8 +15,6 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from backend.config import _load_env
-_load_env()
 
 from backend.github.client import GitHubClient
 
