@@ -217,18 +217,17 @@ Normally DevTrack installs hooks when the daemon starts. Use this command to pus
 
 ### Webhook + Trigger server (HTTP mode)
 
-When running in external or Docker mode (`DEVTRACK_SERVER_MODE=external`), the Go daemon sends commit and timer triggers over HTTPS instead of the local TCP IPC socket. The Python backend exposes a FastAPI server that handles both:
+The Go daemon spawns `backend.webhook_server` as a subprocess in the default managed mode. In external/Docker mode the server runs separately and the Go daemon connects to it over HTTPS. Either way the same FastAPI server handles both:
 
 - **Inbound webhooks** from Azure DevOps, GitHub, GitLab, and Jira at `/webhooks/<source>`
 - **Outbound triggers** from the Go daemon at `/trigger/commit` and `/trigger/timer`
 
 ```bash
-python -m backend.webhook_server         # start the webhook + trigger server
+# external/Docker mode only — managed mode starts this automatically
+python -m backend.webhook_server
 ```
 
 All trigger endpoints require the `X-DevTrack-API-Key` header (set `DEVTRACK_API_KEY` in `.env`). Webhook signature verification uses source-specific secrets (`AZURE_WEBHOOK_SECRET`, `GITHUB_WEBHOOK_SECRET`, etc.). GitLab webhooks are registered automatically at startup when `GITLAB_WEBHOOK_URL` is configured.
-
-> In the default managed mode (local daemon + Python subprocess over TCP IPC) this server is not needed.
 
 ### Anonymous telemetry
 
