@@ -11,11 +11,13 @@ DevTrack is configured via a single `.env` file with **no hardcoded defaults for
 - Copy `.env_sample` to `.env`, then fill in your paths and credentials
 - All path variables must be absolute paths (not relative)
 - **The daemon does not load `.env` itself.** You must load it into the shell before running `devtrack`:
+
   ```bash
   set -a && source .env && set +a
   devtrack start
   ```
-  Or use `direnv` (add `dotenv` to `.envrc`) or `op run --env-file=.env -- devtrack start`
+
+  Or use `direnv` (add `dotenv` to `.envrc`) or use any password manager to load the environments at runtime like one password etc.
 - For production (Linux): `devtrack autostart-install` bakes all vars into the systemd unit — no manual sourcing needed
 - After changing `.env`, reload with: `devtrack stop && source .env && devtrack start`
 
@@ -157,14 +159,7 @@ API key sent as `X-DevTrack-API-Key` header on all `/trigger/*` requests. Requir
 DEVTRACK_API_KEY=
 ```
 
-### WEBHOOK_PORT / WEBHOOK_HOST
-
-Port and bind address for the Python webhook server.
-
-```bash
-WEBHOOK_PORT=8089
-WEBHOOK_HOST=0.0.0.0
-```
+> The Python server's port and bind address are configured by `WEBHOOK_PORT` / `WEBHOOK_HOST` — see [Webhook Server](#webhook-server) below.
 
 ---
 
@@ -403,11 +398,7 @@ GITLAB_POLL_INTERVAL_MINS=5
 
 **Webhook auto-registration** (requires public URL):
 
-```bash
-GITLAB_PROJECT_IDS=12345,67890     # comma-separated numeric IDs
-DEVTRACK_WEBHOOK_PUBLIC_URL=https://your-server.com
-WEBHOOK_GITLAB_SECRET=your_webhook_secret
-```
+`GITLAB_PROJECT_IDS`, `DEVTRACK_WEBHOOK_PUBLIC_URL`, and `WEBHOOK_GITLAB_SECRET` are configured in the [Webhook Server](#webhook-server) section.
 
 See [GitLab Guide](GITLAB.md).
 
@@ -451,16 +442,26 @@ AZURE_CLIENT_SECRET=
 
 ## Webhook Server
 
+Receives inbound events from Azure DevOps, GitHub, and GitLab. Also serves as the HTTP endpoint the Go daemon POSTs triggers to.
+
 ```bash
 WEBHOOK_ENABLED=false
 WEBHOOK_PORT=8089
 WEBHOOK_HOST=0.0.0.0
+
+# Authentication for each inbound source
 WEBHOOK_AZURE_USERNAME=devtrack
 WEBHOOK_AZURE_PASSWORD=           # Basic Auth password for Azure webhooks
 WEBHOOK_GITHUB_SECRET=            # HMAC secret for GitHub webhooks
-WEBHOOK_GITLAB_SECRET=            # Token for GitLab webhooks (X-Gitlab-Token)
+WEBHOOK_GITLAB_SECRET=            # Token for GitLab webhooks (X-Gitlab-Token header)
+
+# Notification delivery
 WEBHOOK_NOTIFY_OS=true
 WEBHOOK_NOTIFY_TERMINAL=true
+
+# GitLab webhook auto-registration (optional)
+GITLAB_PROJECT_IDS=               # comma-separated numeric project IDs
+DEVTRACK_WEBHOOK_PUBLIC_URL=      # public URL of this server (e.g. https://myserver.com)
 ```
 
 ---
@@ -709,8 +710,8 @@ devtrack autostart-install
 ## Validation
 
 ```bash
-# Check all 12 required vars are set
-grep -E "IPC_CONNECT_TIMEOUT_SECS|HTTP_TIMEOUT_SHORT|HTTP_TIMEOUT=|HTTP_TIMEOUT_LONG|IPC_RETRY_DELAY_MS|OLLAMA_HOST|LMSTUDIO_HOST|GIT_SAGE_DEFAULT_MODEL|PROMPT_TIMEOUT_SIMPLE_SECS|PROMPT_TIMEOUT_WORK_SECS|PROMPT_TIMEOUT_TASK_SECS|LLM_REQUEST_TIMEOUT_SECS" .env
+# Check all required vars are set
+grep -E "IPC_CONNECT_TIMEOUT_SECS|HTTP_TIMEOUT_SHORT|HTTP_TIMEOUT=|HTTP_TIMEOUT_LONG|IPC_RETRY_DELAY_MS|OLLAMA_HOST|LMSTUDIO_HOST|GIT_SAGE_DEFAULT_MODEL|PROMPT_TIMEOUT_SIMPLE_SECS|PROMPT_TIMEOUT_WORK_SECS|PROMPT_TIMEOUT_TASK_SECS|LLM_REQUEST_TIMEOUT_SECS|SENTIMENT_ANALYSIS_WINDOW_MINUTES" .env
 
 # Test daemon can start
 devtrack start
