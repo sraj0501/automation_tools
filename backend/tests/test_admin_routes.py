@@ -274,6 +274,36 @@ class TestApiKeys:
 
 
 # ---------------------------------------------------------------------------
+# TestTriggerStats — HTMX partial GET /admin/_partials/stats (CS-3 TASK-014)
+# ---------------------------------------------------------------------------
+
+class TestTriggerStats:
+    def test_stats_partial_returns_200(self, client, auth_cookies):
+        r = client.get("/admin/_partials/stats", cookies=auth_cookies)
+        assert r.status_code == 200
+
+    def test_stats_partial_unauthenticated_redirects(self, client):
+        r = client.get("/admin/_partials/stats", follow_redirects=False)
+        assert r.status_code == 303
+        assert "/admin/login" in r.headers["location"]
+
+    def test_stats_partial_returns_html_with_stats_or_unavailable(self, client, auth_cookies):
+        r = client.get("/admin/_partials/stats", cookies=auth_cookies)
+        assert r.status_code == 200
+        # Either the 4-stat grid or the graceful-degrade message must appear
+        assert (
+            b"Triggers Today" in r.content
+            or b"Trigger stats unavailable" in r.content
+        )
+
+    def test_dashboard_includes_stats_panel(self, client, auth_cookies):
+        with patch("backend.admin.routes.get_snapshot", return_value=_make_snapshot()):
+            r = client.get("/admin/", cookies=auth_cookies)
+        assert r.status_code == 200
+        assert b"Trigger Activity" in r.content
+
+
+# ---------------------------------------------------------------------------
 # TestLicensePage — GET /admin/license (CS-3 TASK-013)
 # ---------------------------------------------------------------------------
 

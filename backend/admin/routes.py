@@ -118,6 +118,19 @@ async def logout(current_user: str = Depends(require_auth)):
 # Dashboard
 # ---------------------------------------------------------------------------
 
+def _trigger_stats_ctx():
+    """Return TriggerStats; degrades to zero-valued instance on any error."""
+    try:
+        from backend.server_tui.stats_client import get_trigger_stats, TriggerStats
+        return get_trigger_stats()
+    except Exception:
+        try:
+            from backend.server_tui.stats_client import TriggerStats
+            return TriggerStats()
+        except Exception:
+            return None
+
+
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request, current_user: str = Depends(require_auth)):
     snapshot = _snapshot_ctx()
@@ -129,6 +142,7 @@ async def dashboard(request: Request, current_user: str = Depends(require_auth))
     except Exception:
         tier = "personal"
         tier_label = "Personal (Free)"
+    stats = _trigger_stats_ctx()
     return templates.TemplateResponse(
         "dashboard.html",
         _ctx(
@@ -137,6 +151,7 @@ async def dashboard(request: Request, current_user: str = Depends(require_auth))
             user_count=user_count,
             tier=tier,
             tier_label=tier_label,
+            stats=stats,
         ),
     )
 
@@ -144,6 +159,15 @@ async def dashboard(request: Request, current_user: str = Depends(require_auth))
 # ---------------------------------------------------------------------------
 # HTMX partials
 # ---------------------------------------------------------------------------
+
+@router.get("/_partials/stats", response_class=HTMLResponse)
+async def partial_stats(request: Request, current_user: str = Depends(require_auth)):
+    stats = _trigger_stats_ctx()
+    return templates.TemplateResponse(
+        "_stats_panel.html",
+        {"request": request, "stats": stats},
+    )
+
 
 @router.get("/_partials/processes", response_class=HTMLResponse)
 async def partial_processes(request: Request, current_user: str = Depends(require_auth)):
