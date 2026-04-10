@@ -67,6 +67,23 @@ try:
 except (ImportError, TypeError):
     pass
 
+# Optionally embed the admin console directly on this app (single-process mode).
+# Controlled by ADMIN_EMBED=true in .env.  When false (default) the admin app
+# runs as a separate process on ADMIN_PORT.
+try:
+    from backend.config import get_admin_embed
+    if get_admin_embed():
+        from pathlib import Path
+        from fastapi.staticfiles import StaticFiles
+        from backend.admin.routes import router as _admin_router, startup as _admin_startup
+        _admin_startup()
+        app.include_router(_admin_router, prefix="/admin")
+        _admin_static = Path(__file__).parent / "admin" / "static"
+        app.mount("/admin/static", StaticFiles(directory=str(_admin_static)), name="admin-static")
+        logger.info("Admin console embedded on main webhook server at /admin")
+except Exception as _exc:
+    logger.warning("Admin embed skipped: %s", _exc)
+
 _handler: WebhookEventHandler | None = None
 
 # ---------------------------------------------------------------------------
