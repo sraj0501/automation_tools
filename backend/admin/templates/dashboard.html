@@ -21,9 +21,9 @@
     <div class="stat-sub">trigger API</div>
   </div>
   <div class="stat-card">
-    <div class="stat-label">Admin Users</div>
-    <div class="stat-value">{{ user_count }}</div>
-    <div class="stat-sub"><a href="/admin/users">manage →</a></div>
+    <div class="stat-label">License Tier</div>
+    <div class="stat-value" style="font-size:16px">{{ tier_label }}</div>
+    <div class="stat-sub">{{ user_count }} user{{ 's' if user_count != 1 }} · <a href="/admin/license">details →</a></div>
   </div>
 </div>
 

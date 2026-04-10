@@ -122,9 +122,22 @@ async def logout(current_user: str = Depends(require_auth)):
 async def dashboard(request: Request, current_user: str = Depends(require_auth)):
     snapshot = _snapshot_ctx()
     user_count = len(list_users())
+    try:
+        from backend.license_manager import detect_tier, get_tier_label
+        tier = detect_tier(user_count)
+        tier_label = get_tier_label(tier)
+    except Exception:
+        tier = "personal"
+        tier_label = "Personal (Free)"
     return templates.TemplateResponse(
         "dashboard.html",
-        _ctx(request, current_user, "dashboard", snapshot=snapshot, user_count=user_count),
+        _ctx(
+            request, current_user, "dashboard",
+            snapshot=snapshot,
+            user_count=user_count,
+            tier=tier,
+            tier_label=tier_label,
+        ),
     )
 
 
@@ -331,6 +344,45 @@ async def api_key_revoke(
     # Redirect back to the referring user's key page (best-effort)
     referer = request.headers.get("referer", "/admin/users")
     return RedirectResponse(referer, status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# License page
+# ---------------------------------------------------------------------------
+
+@router.get("/license", response_class=HTMLResponse)
+async def license_page(request: Request, current_user: str = Depends(require_auth)):
+    from backend.license_manager import (
+        detect_tier,
+        get_acceptance_record,
+        get_tier_label,
+        check_seat_limit,
+        is_accepted,
+        LICENSE_TIERS,
+        FREE_TEAM_SEAT_LIMIT,
+    )
+    users = list_users()
+    user_count = len(users)
+    tier = detect_tier(user_count)
+    tier_label = get_tier_label(tier)
+    seat_ok, seat_msg = check_seat_limit(user_count)
+    acceptance = get_acceptance_record()
+    accepted = is_accepted()
+    return templates.TemplateResponse(
+        "license.html",
+        _ctx(
+            request, current_user, "license",
+            acceptance=acceptance,
+            accepted=accepted,
+            user_count=user_count,
+            tier=tier,
+            tier_label=tier_label,
+            seat_ok=seat_ok,
+            seat_msg=seat_msg,
+            license_tiers=LICENSE_TIERS,
+            free_team_seat_limit=FREE_TEAM_SEAT_LIMIT,
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
