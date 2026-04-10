@@ -1128,6 +1128,30 @@ def get_process_refresh_interval_seconds() -> int:
         raise ValueError(f"PROCESS_REFRESH_INTERVAL_SECONDS must be a positive integer: {e}")
 
 
+def get_audit_log_limit() -> int:
+    """Maximum number of audit log entries returned by the admin UI. REQUIRED: AUDIT_LOG_LIMIT."""
+    val = get("AUDIT_LOG_LIMIT")
+    if not val:
+        raise ValueError("AUDIT_LOG_LIMIT environment variable required (e.g., 200)")
+    try:
+        limit = int(val)
+        if limit <= 0:
+            raise ValueError(f"AUDIT_LOG_LIMIT must be > 0, got {limit}")
+        return limit
+    except ValueError as e:
+        raise ValueError(f"AUDIT_LOG_LIMIT must be a positive integer: {e}")
+
+
+def get_license_contact_email() -> str:
+    """Support email shown on the license page. REQUIRED: LICENSE_CONTACT_EMAIL."""
+    val = get("LICENSE_CONTACT_EMAIL")
+    if not val:
+        raise ValueError(
+            "LICENSE_CONTACT_EMAIL environment variable required (e.g., license@devtrack.dev)"
+        )
+    return val
+
+
 # --- GitHub (call-site use) ---
 
 def get_github_token() -> str:

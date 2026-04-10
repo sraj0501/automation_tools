@@ -67,6 +67,8 @@ from backend.config import (
     get_admin_port as _get_admin_port,
     get_stats_refresh_interval_seconds as _get_stats_refresh_secs,
     get_process_refresh_interval_seconds as _get_process_refresh_secs,
+    get_audit_log_limit as _get_audit_log_limit,
+    get_license_contact_email as _get_license_contact_email,
 )
 
 
@@ -472,8 +474,17 @@ async def license_page(request: Request, current_user: str = Depends(require_aut
             seat_msg=seat_msg,
             license_tiers=LICENSE_TIERS,
             free_team_seat_limit=FREE_TEAM_SEAT_LIMIT,
+            license_email=_safe_license_email(),
         ),
     )
+
+
+def _safe_license_email() -> str:
+    """Return the configured license contact email, falling back to the default."""
+    try:
+        return _get_license_contact_email()
+    except ValueError:
+        return "license@devtrack.dev"
 
 
 # ---------------------------------------------------------------------------
@@ -516,7 +527,7 @@ async def server_page(request: Request, current_user: str = Depends(require_auth
 
 @router.get("/audit", response_class=HTMLResponse)
 async def audit_page(request: Request, current_user: str = Depends(require_auth)):
-    entries = get_audit_log(limit=200)
+    entries = get_audit_log(limit=_get_audit_log_limit())
     return templates.TemplateResponse(
         "audit.html",
         _ctx(request, current_user, "audit", entries=entries),

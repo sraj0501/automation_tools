@@ -24,6 +24,8 @@ os.environ.setdefault("ADMIN_SESSION_HOURS", "8")
 os.environ.setdefault("STATS_REFRESH_INTERVAL_SECONDS", "30")
 os.environ.setdefault("PROCESS_REFRESH_INTERVAL_SECONDS", "15")
 os.environ.setdefault("SHUTDOWN_GRACE_PERIOD_SECONDS", "0.5")
+os.environ.setdefault("AUDIT_LOG_LIMIT", "200")
+os.environ.setdefault("LICENSE_CONTACT_EMAIL", "license@devtrack.dev")
 
 
 def pytest_configure(config):

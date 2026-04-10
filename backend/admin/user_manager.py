@@ -263,7 +263,10 @@ def log_action(username: str, action: str, detail: str = "", ip: str = "") -> No
         )
 
 
-def get_audit_log(limit: int = 100) -> list[dict]:
+def get_audit_log(limit: int | None = None) -> list[dict]:
+    if limit is None:
+        from backend.config import get_audit_log_limit
+        limit = get_audit_log_limit()
     with _conn() as con:
         rows = con.execute(
             "SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (limit,)
