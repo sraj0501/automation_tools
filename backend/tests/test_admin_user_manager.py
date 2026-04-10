@@ -237,3 +237,57 @@ class TestAuditLog:
 
     def test_get_audit_log_empty(self, tmp_admin_db):
         assert tmp_admin_db.get_audit_log() == []
+
+
+# ---------------------------------------------------------------------------
+# disable_user / enable_user
+# ---------------------------------------------------------------------------
+
+class TestDisableEnable:
+    def test_new_user_is_enabled_by_default(self, tmp_admin_db):
+        tmp_admin_db.create_user("alice", "pass", "viewer")
+        user = tmp_admin_db.get_user("alice")
+        assert user.disabled is False
+
+    def test_disable_user_sets_flag(self, tmp_admin_db):
+        tmp_admin_db.create_user("alice", "pass", "viewer")
+        result = tmp_admin_db.disable_user("alice")
+        assert result is True
+        user = tmp_admin_db.get_user("alice")
+        assert user.disabled is True
+
+    def test_enable_user_clears_flag(self, tmp_admin_db):
+        tmp_admin_db.create_user("alice", "pass", "viewer")
+        tmp_admin_db.disable_user("alice")
+        result = tmp_admin_db.enable_user("alice")
+        assert result is True
+        user = tmp_admin_db.get_user("alice")
+        assert user.disabled is False
+
+    def test_disable_nonexistent_returns_false(self, tmp_admin_db):
+        assert tmp_admin_db.disable_user("nobody") is False
+
+    def test_enable_nonexistent_returns_false(self, tmp_admin_db):
+        assert tmp_admin_db.enable_user("nobody") is False
+
+    def test_disabled_flag_visible_in_list_users(self, tmp_admin_db):
+        tmp_admin_db.create_user("alice", "pass", "viewer")
+        tmp_admin_db.create_user("bob", "pass", "viewer")
+        tmp_admin_db.disable_user("alice")
+        users = {u.username: u for u in tmp_admin_db.list_users()}
+        assert users["alice"].disabled is True
+        assert users["bob"].disabled is False
+
+    def test_enable_already_enabled_is_idempotent(self, tmp_admin_db):
+        tmp_admin_db.create_user("alice", "pass", "viewer")
+        # enable on an already-enabled user should not raise and should return True
+        result = tmp_admin_db.enable_user("alice")
+        assert result is True
+        assert tmp_admin_db.get_user("alice").disabled is False
+
+    def test_disable_already_disabled_is_idempotent(self, tmp_admin_db):
+        tmp_admin_db.create_user("alice", "pass", "viewer")
+        tmp_admin_db.disable_user("alice")
+        result = tmp_admin_db.disable_user("alice")
+        assert result is True
+        assert tmp_admin_db.get_user("alice").disabled is True

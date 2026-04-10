@@ -26,6 +26,8 @@ from backend.admin.user_manager import (
     create_api_key,
     create_user,
     delete_user,
+    disable_user,
+    enable_user,
     ensure_default_admin,
     get_audit_log,
     get_user,
@@ -35,6 +37,7 @@ from backend.admin.user_manager import (
     log_action,
     revoke_api_key,
     touch_last_login,
+    update_role,
 )
 
 router = APIRouter()
@@ -239,6 +242,49 @@ async def users_delete(
     log_action(current_user, "delete_user", f"username={username}",
                ip=request.client.host if request.client else "")
     return RedirectResponse(f"/admin/users?flash=User+'{username}'+deleted", status_code=303)
+
+
+@router.post("/users/{username}/role")
+async def users_update_role(
+    username: str,
+    request: Request,
+    current_user: str = Depends(require_auth),
+    role: str = Form(...),
+):
+    if role not in ("viewer", "admin"):
+        return RedirectResponse(
+            f"/admin/users?flash=Invalid+role+'{role}'&flash_type=error", status_code=303
+        )
+    update_role(username, role)
+    log_action(current_user, "update_role", f"username={username} role={role}",
+               ip=request.client.host if request.client else "")
+    return RedirectResponse(
+        f"/admin/users?flash=Role+updated+for+'{username}'", status_code=303
+    )
+
+
+@router.post("/users/{username}/disable")
+async def users_disable(
+    username: str, request: Request, current_user: str = Depends(require_auth)
+):
+    if username == current_user:
+        return RedirectResponse(
+            "/admin/users?flash=Cannot+disable+yourself&flash_type=error", status_code=303
+        )
+    disable_user(username)
+    log_action(current_user, "disable_user", f"username={username}",
+               ip=request.client.host if request.client else "")
+    return RedirectResponse(f"/admin/users?flash=User+'{username}'+disabled", status_code=303)
+
+
+@router.post("/users/{username}/enable")
+async def users_enable(
+    username: str, request: Request, current_user: str = Depends(require_auth)
+):
+    enable_user(username)
+    log_action(current_user, "enable_user", f"username={username}",
+               ip=request.client.host if request.client else "")
+    return RedirectResponse(f"/admin/users?flash=User+'{username}'+enabled", status_code=303)
 
 
 # ---------------------------------------------------------------------------
