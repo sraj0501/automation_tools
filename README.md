@@ -229,6 +229,26 @@ python -m backend.webhook_server
 
 All trigger endpoints require the `X-DevTrack-API-Key` header (set `DEVTRACK_API_KEY` in `.env`). Webhook signature verification uses source-specific secrets (`AZURE_WEBHOOK_SECRET`, `GITHUB_WEBHOOK_SECRET`, etc.). GitLab webhooks are registered automatically at startup when `GITLAB_WEBHOOK_URL` is configured.
 
+### AI development agents (Claude Code)
+
+DevTrack ships three Claude Code sub-agents that automate the project's own development workflow. They are invoked inside Claude Code sessions, not from the terminal.
+
+| Agent | Role |
+|-------|------|
+| **project-vision** | PM agent — breaks plans into tasks, writes the project board (`Data/agent_logs/project_board.md`), dispatches the engineer, enforces no-push-to-main and vision alignment, fires docu-agent after major features |
+| **devtrack-engineer** | Engineer agent — always works on a task branch, commits exclusively through `devtrack git commit`, logs every commit to `Data/agent_logs/engineer_log.md`, opens a PR on completion, never pushes directly to `main` |
+| **post-generator** | Turns the weekly engineer log into draft dev.to, Hacker News, and LinkedIn posts saved under `Data/agent_logs/posts/` |
+
+Invoke from a Claude Code session:
+
+```
+/project-vision   # plan a new phase or ask for status
+/devtrack-engineer  # dispatch the engineer on the current board task
+/post-generator   # generate this week's posts from the engineer log
+```
+
+The PM and engineer agents share `Data/agent_logs/project_board.md` as a contract — PM writes tasks, engineer reads and updates status. All agent activity is captured in `Data/agent_logs/engineer_log.md`.
+
 ### Anonymous telemetry
 
 DevTrack sends an anonymous install and daily-active ping (no code, no commit text, no personal data). To opt out:
@@ -305,6 +325,7 @@ docker compose up -d   # starts Python backend + MongoDB, Redis, PostgreSQL
 | Manage opt-out telemetry | [Telemetry](docs/TELEMETRY_PLAN.md) |
 | Use external/Docker mode (HTTP triggers + webhooks) | [Webhook Server](docs/WEBHOOK_SERVER.md) |
 | Monitor server health and trigger stats | [Server TUI](docs/SERVER_TUI.md) |
+| Use AI agents for development workflow | [`.claude/agents/`](.claude/agents/) |
 | Fix a problem | [Troubleshooting](docs/TROUBLESHOOTING.md) |
 | Understand the architecture | [Architecture](docs/ARCHITECTURE.md) |
 | Full documentation index | [docs/INDEX.md](docs/INDEX.md) |
@@ -318,7 +339,11 @@ cd devtrack-bin && go test ./...              # Go layer (20+ tests)
 uv run pytest backend/tests/                 # Python backend (433+ tests)
 uv run pytest backend/tests/ -k cs1         # CS-1 HTTP trigger suite (28 tests)
 uv run pytest backend/tests/test_server_tui.py  # server_tui helpers (37 headless tests)
+uv run pytest backend/tests/test_admin_auth.py  # admin auth (19 tests)
+uv run pytest backend/tests/test_jira_alerter.py  # Jira alerter (26 tests)
 ```
+
+The CS-2 config audit enforces that **no Python business-logic module calls `os.getenv()` directly** — all 40+ backend modules were audited (TASK-001 through TASK-007) and now route through `backend.config` typed accessors. Missing required env vars produce a `ConfigError` with the exact variable name rather than a silent `None`.
 
 ---
 
