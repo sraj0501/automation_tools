@@ -274,6 +274,39 @@ class TestApiKeys:
 
 
 # ---------------------------------------------------------------------------
+# TestLicensePage — GET /admin/license (CS-3 TASK-013)
+# ---------------------------------------------------------------------------
+
+class TestLicensePage:
+    def test_license_page_returns_200(self, client, auth_cookies):
+        r = client.get("/admin/license", cookies=auth_cookies)
+        assert r.status_code == 200
+
+    def test_license_page_unauthenticated_redirects(self, client):
+        r = client.get("/admin/license", follow_redirects=False)
+        assert r.status_code == 303
+        assert "/admin/login" in r.headers["location"]
+
+    def test_license_page_shows_tier_info(self, client, auth_cookies):
+        r = client.get("/admin/license", cookies=auth_cookies)
+        assert r.status_code == 200
+        # Should contain tier label text somewhere on the page
+        assert b"Personal" in r.content or b"Team" in r.content or b"Enterprise" in r.content
+
+    def test_dashboard_shows_license_tier_card(self, client, auth_cookies):
+        with patch("backend.admin.routes.get_snapshot", return_value=_make_snapshot()):
+            r = client.get("/admin/", cookies=auth_cookies)
+        assert r.status_code == 200
+        assert b"License Tier" in r.content
+
+    def test_license_nav_link_in_base(self, client, auth_cookies):
+        r = client.get("/admin/license", cookies=auth_cookies)
+        assert r.status_code == 200
+        # The sidebar nav should contain a link to /admin/license
+        assert b"/admin/license" in r.content
+
+
+# ---------------------------------------------------------------------------
 # TestUserRoleDisable — new CS-3 routes
 # ---------------------------------------------------------------------------
 
