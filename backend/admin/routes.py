@@ -61,6 +61,9 @@ def startup() -> None:
         ensure_default_admin(admin_user, admin_pass)
 
 
+from backend.config import get_admin_session_hours as _get_admin_session_hours
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -105,7 +108,8 @@ async def login(
     log_action(username, "login", ip=request.client.host if request.client else "")
     token = create_token(username)
     resp = RedirectResponse("/admin/", status_code=303)
-    resp.set_cookie(COOKIE_NAME, token, httponly=True, samesite="lax", max_age=8 * 3600)
+    resp.set_cookie(COOKIE_NAME, token, httponly=True, samesite="lax",
+                    max_age=_get_admin_session_hours() * 3600)
     return resp
 
 

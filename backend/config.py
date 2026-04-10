@@ -1010,6 +1010,76 @@ def get_admin_embed() -> bool:
     return get_bool("ADMIN_EMBED", False)
 
 
+def get_admin_session_hours() -> int:
+    """Admin console session lifetime in hours. REQUIRED: ADMIN_SESSION_HOURS."""
+    val = get("ADMIN_SESSION_HOURS")
+    if not val:
+        raise ValueError("ADMIN_SESSION_HOURS environment variable required (e.g., 8)")
+    try:
+        hours = int(val)
+        if hours <= 0:
+            raise ValueError(f"ADMIN_SESSION_HOURS must be > 0, got {hours}")
+        return hours
+    except ValueError as e:
+        raise ValueError(f"ADMIN_SESSION_HOURS must be a positive integer: {e}")
+
+
+def get_scrypt_n() -> int:
+    """Scrypt CPU/memory cost factor. REQUIRED: SCRYPT_N (must be a power of 2, >= 2)."""
+    val = get("SCRYPT_N")
+    if not val:
+        raise ValueError("SCRYPT_N environment variable required (e.g., 16384)")
+    try:
+        n = int(val)
+    except ValueError:
+        raise ValueError(f"SCRYPT_N must be an integer, got: {val!r}")
+    if n < 2 or (n & (n - 1)) != 0:
+        raise ValueError(f"SCRYPT_N must be a power of 2 and >= 2, got {n}")
+    return n
+
+
+def get_scrypt_r() -> int:
+    """Scrypt block size. REQUIRED: SCRYPT_R (must be > 0)."""
+    val = get("SCRYPT_R")
+    if not val:
+        raise ValueError("SCRYPT_R environment variable required (e.g., 8)")
+    try:
+        r = int(val)
+        if r <= 0:
+            raise ValueError(f"SCRYPT_R must be > 0, got {r}")
+        return r
+    except ValueError as e:
+        raise ValueError(f"SCRYPT_R must be a positive integer: {e}")
+
+
+def get_scrypt_p() -> int:
+    """Scrypt parallelisation factor. REQUIRED: SCRYPT_P (must be > 0)."""
+    val = get("SCRYPT_P")
+    if not val:
+        raise ValueError("SCRYPT_P environment variable required (e.g., 1)")
+    try:
+        p = int(val)
+        if p <= 0:
+            raise ValueError(f"SCRYPT_P must be > 0, got {p}")
+        return p
+    except ValueError as e:
+        raise ValueError(f"SCRYPT_P must be a positive integer: {e}")
+
+
+def get_scrypt_dklen() -> int:
+    """Scrypt derived key length in bytes. REQUIRED: SCRYPT_DKLEN (must be > 0)."""
+    val = get("SCRYPT_DKLEN")
+    if not val:
+        raise ValueError("SCRYPT_DKLEN environment variable required (e.g., 32)")
+    try:
+        dklen = int(val)
+        if dklen <= 0:
+            raise ValueError(f"SCRYPT_DKLEN must be > 0, got {dklen}")
+        return dklen
+    except ValueError as e:
+        raise ValueError(f"SCRYPT_DKLEN must be a positive integer: {e}")
+
+
 # --- GitHub (call-site use) ---
 
 def get_github_token() -> str:
