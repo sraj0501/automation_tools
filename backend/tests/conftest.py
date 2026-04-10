@@ -21,6 +21,9 @@ os.environ.setdefault("SCRYPT_R", "8")
 os.environ.setdefault("SCRYPT_P", "1")
 os.environ.setdefault("SCRYPT_DKLEN", "32")
 os.environ.setdefault("ADMIN_SESSION_HOURS", "8")
+os.environ.setdefault("STATS_REFRESH_INTERVAL_SECONDS", "30")
+os.environ.setdefault("PROCESS_REFRESH_INTERVAL_SECONDS", "15")
+os.environ.setdefault("SHUTDOWN_GRACE_PERIOD_SECONDS", "0.5")
 
 
 def pytest_configure(config):

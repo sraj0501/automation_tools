@@ -169,6 +169,14 @@ class TestDashboard:
         # The page should contain navigation markers
         assert b"Dashboard" in r.content or b"dashboard" in r.content
 
+    def test_dashboard_uses_stats_refresh_interval_from_env(self, client, auth_cookies, monkeypatch):
+        """Dashboard HTML must use the value from STATS_REFRESH_INTERVAL_SECONDS, not a hardcoded literal."""
+        monkeypatch.setenv("STATS_REFRESH_INTERVAL_SECONDS", "42")
+        with patch("backend.admin.routes.get_snapshot", return_value=_make_snapshot()):
+            r = client.get("/admin/", cookies=auth_cookies)
+        assert r.status_code == 200
+        assert b"42s" in r.content
+
 
 # ---------------------------------------------------------------------------
 # TestUsers — GET/POST /admin/users

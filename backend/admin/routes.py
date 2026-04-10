@@ -61,7 +61,13 @@ def startup() -> None:
         ensure_default_admin(admin_user, admin_pass)
 
 
-from backend.config import get_admin_session_hours as _get_admin_session_hours
+from backend.config import (
+    get_admin_session_hours as _get_admin_session_hours,
+    get_webhook_port as _get_webhook_port,
+    get_admin_port as _get_admin_port,
+    get_stats_refresh_interval_seconds as _get_stats_refresh_secs,
+    get_process_refresh_interval_seconds as _get_process_refresh_secs,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -78,8 +84,16 @@ def _snapshot_ctx():
         return get_snapshot()
     except Exception:
         from backend.admin.server_status import ServerSnapshot
+        try:
+            _wport = _get_webhook_port()
+        except ValueError:
+            _wport = 0
+        try:
+            _aport = _get_admin_port()
+        except ValueError:
+            _aport = 0
         return ServerSnapshot(processes=[], services=[], llm_provider="—",
-                              llm_model="—", webhook_port=8089, admin_port=8090)
+                              llm_model="—", webhook_port=_wport, admin_port=_aport)
 
 
 # ---------------------------------------------------------------------------
@@ -149,6 +163,14 @@ async def dashboard(request: Request, current_user: str = Depends(require_auth))
         tier = "personal"
         tier_label = "Personal (Free)"
     stats = _trigger_stats_ctx()
+    try:
+        stats_refresh_secs = _get_stats_refresh_secs()
+    except ValueError:
+        stats_refresh_secs = 30
+    try:
+        process_refresh_secs = _get_process_refresh_secs()
+    except ValueError:
+        process_refresh_secs = 15
     return templates.TemplateResponse(
         "dashboard.html",
         _ctx(
@@ -158,6 +180,8 @@ async def dashboard(request: Request, current_user: str = Depends(require_auth))
             tier=tier,
             tier_label=tier_label,
             stats=stats,
+            stats_refresh_secs=stats_refresh_secs,
+            process_refresh_secs=process_refresh_secs,
         ),
     )
 

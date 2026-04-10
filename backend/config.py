@@ -1080,6 +1080,54 @@ def get_scrypt_dklen() -> int:
         raise ValueError(f"SCRYPT_DKLEN must be a positive integer: {e}")
 
 
+def get_shutdown_grace_period_seconds() -> float:
+    """Seconds to wait before sending SIGTERM on shutdown. REQUIRED: SHUTDOWN_GRACE_PERIOD_SECONDS."""
+    val = get("SHUTDOWN_GRACE_PERIOD_SECONDS")
+    if not val:
+        raise ValueError(
+            "SHUTDOWN_GRACE_PERIOD_SECONDS environment variable required (e.g., 0.5)"
+        )
+    try:
+        secs = float(val)
+        if secs <= 0:
+            raise ValueError(f"SHUTDOWN_GRACE_PERIOD_SECONDS must be > 0, got {secs}")
+        return secs
+    except ValueError as e:
+        raise ValueError(f"SHUTDOWN_GRACE_PERIOD_SECONDS must be a positive number: {e}")
+
+
+def get_stats_refresh_interval_seconds() -> int:
+    """How often the trigger stats panel polls in seconds. REQUIRED: STATS_REFRESH_INTERVAL_SECONDS."""
+    val = get("STATS_REFRESH_INTERVAL_SECONDS")
+    if not val:
+        raise ValueError(
+            "STATS_REFRESH_INTERVAL_SECONDS environment variable required (e.g., 30)"
+        )
+    try:
+        secs = int(val)
+        if secs <= 0:
+            raise ValueError(f"STATS_REFRESH_INTERVAL_SECONDS must be > 0, got {secs}")
+        return secs
+    except ValueError as e:
+        raise ValueError(f"STATS_REFRESH_INTERVAL_SECONDS must be a positive integer: {e}")
+
+
+def get_process_refresh_interval_seconds() -> int:
+    """How often the process table polls in seconds. REQUIRED: PROCESS_REFRESH_INTERVAL_SECONDS."""
+    val = get("PROCESS_REFRESH_INTERVAL_SECONDS")
+    if not val:
+        raise ValueError(
+            "PROCESS_REFRESH_INTERVAL_SECONDS environment variable required (e.g., 15)"
+        )
+    try:
+        secs = int(val)
+        if secs <= 0:
+            raise ValueError(f"PROCESS_REFRESH_INTERVAL_SECONDS must be > 0, got {secs}")
+        return secs
+    except ValueError as e:
+        raise ValueError(f"PROCESS_REFRESH_INTERVAL_SECONDS must be a positive integer: {e}")
+
+
 # --- GitHub (call-site use) ---
 
 def get_github_token() -> str:
