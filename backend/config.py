@@ -1010,6 +1010,148 @@ def get_admin_embed() -> bool:
     return get_bool("ADMIN_EMBED", False)
 
 
+def get_admin_session_hours() -> int:
+    """Admin console session lifetime in hours. REQUIRED: ADMIN_SESSION_HOURS."""
+    val = get("ADMIN_SESSION_HOURS")
+    if not val:
+        raise ValueError("ADMIN_SESSION_HOURS environment variable required (e.g., 8)")
+    try:
+        hours = int(val)
+        if hours <= 0:
+            raise ValueError(f"ADMIN_SESSION_HOURS must be > 0, got {hours}")
+        return hours
+    except ValueError as e:
+        raise ValueError(f"ADMIN_SESSION_HOURS must be a positive integer: {e}")
+
+
+def get_scrypt_n() -> int:
+    """Scrypt CPU/memory cost factor. REQUIRED: SCRYPT_N (must be a power of 2, >= 2)."""
+    val = get("SCRYPT_N")
+    if not val:
+        raise ValueError("SCRYPT_N environment variable required (e.g., 16384)")
+    try:
+        n = int(val)
+    except ValueError:
+        raise ValueError(f"SCRYPT_N must be an integer, got: {val!r}")
+    if n < 2 or (n & (n - 1)) != 0:
+        raise ValueError(f"SCRYPT_N must be a power of 2 and >= 2, got {n}")
+    return n
+
+
+def get_scrypt_r() -> int:
+    """Scrypt block size. REQUIRED: SCRYPT_R (must be > 0)."""
+    val = get("SCRYPT_R")
+    if not val:
+        raise ValueError("SCRYPT_R environment variable required (e.g., 8)")
+    try:
+        r = int(val)
+        if r <= 0:
+            raise ValueError(f"SCRYPT_R must be > 0, got {r}")
+        return r
+    except ValueError as e:
+        raise ValueError(f"SCRYPT_R must be a positive integer: {e}")
+
+
+def get_scrypt_p() -> int:
+    """Scrypt parallelisation factor. REQUIRED: SCRYPT_P (must be > 0)."""
+    val = get("SCRYPT_P")
+    if not val:
+        raise ValueError("SCRYPT_P environment variable required (e.g., 1)")
+    try:
+        p = int(val)
+        if p <= 0:
+            raise ValueError(f"SCRYPT_P must be > 0, got {p}")
+        return p
+    except ValueError as e:
+        raise ValueError(f"SCRYPT_P must be a positive integer: {e}")
+
+
+def get_scrypt_dklen() -> int:
+    """Scrypt derived key length in bytes. REQUIRED: SCRYPT_DKLEN (must be > 0)."""
+    val = get("SCRYPT_DKLEN")
+    if not val:
+        raise ValueError("SCRYPT_DKLEN environment variable required (e.g., 32)")
+    try:
+        dklen = int(val)
+        if dklen <= 0:
+            raise ValueError(f"SCRYPT_DKLEN must be > 0, got {dklen}")
+        return dklen
+    except ValueError as e:
+        raise ValueError(f"SCRYPT_DKLEN must be a positive integer: {e}")
+
+
+def get_shutdown_grace_period_seconds() -> float:
+    """Seconds to wait before sending SIGTERM on shutdown. REQUIRED: SHUTDOWN_GRACE_PERIOD_SECONDS."""
+    val = get("SHUTDOWN_GRACE_PERIOD_SECONDS")
+    if not val:
+        raise ValueError(
+            "SHUTDOWN_GRACE_PERIOD_SECONDS environment variable required (e.g., 0.5)"
+        )
+    try:
+        secs = float(val)
+        if secs <= 0:
+            raise ValueError(f"SHUTDOWN_GRACE_PERIOD_SECONDS must be > 0, got {secs}")
+        return secs
+    except ValueError as e:
+        raise ValueError(f"SHUTDOWN_GRACE_PERIOD_SECONDS must be a positive number: {e}")
+
+
+def get_stats_refresh_interval_seconds() -> int:
+    """How often the trigger stats panel polls in seconds. REQUIRED: STATS_REFRESH_INTERVAL_SECONDS."""
+    val = get("STATS_REFRESH_INTERVAL_SECONDS")
+    if not val:
+        raise ValueError(
+            "STATS_REFRESH_INTERVAL_SECONDS environment variable required (e.g., 30)"
+        )
+    try:
+        secs = int(val)
+        if secs <= 0:
+            raise ValueError(f"STATS_REFRESH_INTERVAL_SECONDS must be > 0, got {secs}")
+        return secs
+    except ValueError as e:
+        raise ValueError(f"STATS_REFRESH_INTERVAL_SECONDS must be a positive integer: {e}")
+
+
+def get_process_refresh_interval_seconds() -> int:
+    """How often the process table polls in seconds. REQUIRED: PROCESS_REFRESH_INTERVAL_SECONDS."""
+    val = get("PROCESS_REFRESH_INTERVAL_SECONDS")
+    if not val:
+        raise ValueError(
+            "PROCESS_REFRESH_INTERVAL_SECONDS environment variable required (e.g., 15)"
+        )
+    try:
+        secs = int(val)
+        if secs <= 0:
+            raise ValueError(f"PROCESS_REFRESH_INTERVAL_SECONDS must be > 0, got {secs}")
+        return secs
+    except ValueError as e:
+        raise ValueError(f"PROCESS_REFRESH_INTERVAL_SECONDS must be a positive integer: {e}")
+
+
+def get_audit_log_limit() -> int:
+    """Maximum number of audit log entries returned by the admin UI. REQUIRED: AUDIT_LOG_LIMIT."""
+    val = get("AUDIT_LOG_LIMIT")
+    if not val:
+        raise ValueError("AUDIT_LOG_LIMIT environment variable required (e.g., 200)")
+    try:
+        limit = int(val)
+        if limit <= 0:
+            raise ValueError(f"AUDIT_LOG_LIMIT must be > 0, got {limit}")
+        return limit
+    except ValueError as e:
+        raise ValueError(f"AUDIT_LOG_LIMIT must be a positive integer: {e}")
+
+
+def get_license_contact_email() -> str:
+    """Support email shown on the license page. REQUIRED: LICENSE_CONTACT_EMAIL."""
+    val = get("LICENSE_CONTACT_EMAIL")
+    if not val:
+        raise ValueError(
+            "LICENSE_CONTACT_EMAIL environment variable required (e.g., license@devtrack.dev)"
+        )
+    return val
+
+
 # --- GitHub (call-site use) ---
 
 def get_github_token() -> str:

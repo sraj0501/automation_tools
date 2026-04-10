@@ -140,3 +140,53 @@ class TestCheckCredentials:
         from backend.admin import auth as _auth
         assert _auth.check_credentials("admin", "mypassword") is True
         assert _auth.check_credentials("admin", "wrong") is False
+
+
+# ---------------------------------------------------------------------------
+# Scrypt config accessor validation
+# ---------------------------------------------------------------------------
+
+class TestScryptConfig:
+    def test_get_scrypt_n_raises_when_unset(self, monkeypatch):
+        """get_scrypt_n() must raise ValueError when SCRYPT_N is not set."""
+        monkeypatch.delenv("SCRYPT_N", raising=False)
+        # Force re-import of config to avoid cached module state
+        import importlib
+        import backend.config as cfg
+        importlib.reload(cfg)
+        with pytest.raises(ValueError, match="SCRYPT_N"):
+            cfg.get_scrypt_n()
+
+    def test_get_scrypt_n_raises_for_non_power_of_two(self, monkeypatch):
+        """get_scrypt_n() must raise ValueError when SCRYPT_N is not a power of 2."""
+        monkeypatch.setenv("SCRYPT_N", "100")
+        import importlib
+        import backend.config as cfg
+        importlib.reload(cfg)
+        with pytest.raises(ValueError, match="power of 2"):
+            cfg.get_scrypt_n()
+
+    def test_get_scrypt_n_accepts_valid_power_of_two(self, monkeypatch):
+        """get_scrypt_n() returns the integer when SCRYPT_N is a valid power of 2."""
+        monkeypatch.setenv("SCRYPT_N", "16384")
+        import importlib
+        import backend.config as cfg
+        importlib.reload(cfg)
+        assert cfg.get_scrypt_n() == 16384
+
+    def test_get_admin_session_hours_raises_when_unset(self, monkeypatch):
+        """get_admin_session_hours() must raise ValueError when ADMIN_SESSION_HOURS is not set."""
+        monkeypatch.delenv("ADMIN_SESSION_HOURS", raising=False)
+        import importlib
+        import backend.config as cfg
+        importlib.reload(cfg)
+        with pytest.raises(ValueError, match="ADMIN_SESSION_HOURS"):
+            cfg.get_admin_session_hours()
+
+    def test_get_admin_session_hours_returns_value(self, monkeypatch):
+        """get_admin_session_hours() returns the configured integer."""
+        monkeypatch.setenv("ADMIN_SESSION_HOURS", "12")
+        import importlib
+        import backend.config as cfg
+        importlib.reload(cfg)
+        assert cfg.get_admin_session_hours() == 12

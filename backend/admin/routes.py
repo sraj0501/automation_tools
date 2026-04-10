@@ -61,6 +61,17 @@ def startup() -> None:
         ensure_default_admin(admin_user, admin_pass)
 
 
+from backend.config import (
+    get_admin_session_hours as _get_admin_session_hours,
+    get_webhook_port as _get_webhook_port,
+    get_admin_port as _get_admin_port,
+    get_stats_refresh_interval_seconds as _get_stats_refresh_secs,
+    get_process_refresh_interval_seconds as _get_process_refresh_secs,
+    get_audit_log_limit as _get_audit_log_limit,
+    get_license_contact_email as _get_license_contact_email,
+)
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -75,8 +86,16 @@ def _snapshot_ctx():
         return get_snapshot()
     except Exception:
         from backend.admin.server_status import ServerSnapshot
+        try:
+            _wport = _get_webhook_port()
+        except ValueError:
+            _wport = 0
+        try:
+            _aport = _get_admin_port()
+        except ValueError:
+            _aport = 0
         return ServerSnapshot(processes=[], services=[], llm_provider="—",
-                              llm_model="—", webhook_port=8089, admin_port=8090)
+                              llm_model="—", webhook_port=_wport, admin_port=_aport)
 
 
 # ---------------------------------------------------------------------------
@@ -105,7 +124,8 @@ async def login(
     log_action(username, "login", ip=request.client.host if request.client else "")
     token = create_token(username)
     resp = RedirectResponse("/admin/", status_code=303)
-    resp.set_cookie(COOKIE_NAME, token, httponly=True, samesite="lax", max_age=8 * 3600)
+    resp.set_cookie(COOKIE_NAME, token, httponly=True, samesite="lax",
+                    max_age=_get_admin_session_hours() * 3600)
     return resp
 
 
@@ -145,6 +165,14 @@ async def dashboard(request: Request, current_user: str = Depends(require_auth))
         tier = "personal"
         tier_label = "Personal (Free)"
     stats = _trigger_stats_ctx()
+    try:
+        stats_refresh_secs = _get_stats_refresh_secs()
+    except ValueError:
+        stats_refresh_secs = 30
+    try:
+        process_refresh_secs = _get_process_refresh_secs()
+    except ValueError:
+        process_refresh_secs = 15
     return templates.TemplateResponse(
         "dashboard.html",
         _ctx(
@@ -154,6 +182,8 @@ async def dashboard(request: Request, current_user: str = Depends(require_auth))
             tier=tier,
             tier_label=tier_label,
             stats=stats,
+            stats_refresh_secs=stats_refresh_secs,
+            process_refresh_secs=process_refresh_secs,
         ),
     )
 
@@ -444,8 +474,17 @@ async def license_page(request: Request, current_user: str = Depends(require_aut
             seat_msg=seat_msg,
             license_tiers=LICENSE_TIERS,
             free_team_seat_limit=FREE_TEAM_SEAT_LIMIT,
+            license_email=_safe_license_email(),
         ),
     )
+
+
+def _safe_license_email() -> str:
+    """Return the configured license contact email, falling back to the default."""
+    try:
+        return _get_license_contact_email()
+    except ValueError:
+        return "license@devtrack.dev"
 
 
 # ---------------------------------------------------------------------------
@@ -488,7 +527,7 @@ async def server_page(request: Request, current_user: str = Depends(require_auth
 
 @router.get("/audit", response_class=HTMLResponse)
 async def audit_page(request: Request, current_user: str = Depends(require_auth)):
-    entries = get_audit_log(limit=200)
+    entries = get_audit_log(limit=_get_audit_log_limit())
     return templates.TemplateResponse(
         "audit.html",
         _ctx(request, current_user, "audit", entries=entries),

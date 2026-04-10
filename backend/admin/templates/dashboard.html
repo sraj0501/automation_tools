@@ -70,16 +70,16 @@
 <div class="card">
   <div class="section-header">
     <div class="card-title" style="margin-bottom:0">Trigger Activity</div>
-    <span class="text-muted" style="font-size:12px">auto-refreshes every 30s</span>
+    <span class="text-muted" style="font-size:12px">auto-refreshes every {{ stats_refresh_secs }}s</span>
   </div>
   <div id="stats-panel"
        hx-get="/admin/_partials/stats"
-       hx-trigger="every 30s"
+       hx-trigger="every {{ stats_refresh_secs }}s"
        hx-swap="innerHTML">
     {% include "_stats_panel.html" %}
   </div>
 </div>
 
-<!-- Auto-refresh every 15s -->
-<div hx-get="/admin/_partials/processes" hx-trigger="every 15s" hx-target="#proc-table-body" hx-swap="innerHTML" style="display:none"></div>
+<!-- Auto-refresh every {{ process_refresh_secs }}s -->
+<div hx-get="/admin/_partials/processes" hx-trigger="every {{ process_refresh_secs }}s" hx-target="#proc-table-body" hx-swap="innerHTML" style="display:none"></div>
 {% endblock %}

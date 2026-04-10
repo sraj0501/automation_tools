@@ -169,6 +169,14 @@ class TestDashboard:
         # The page should contain navigation markers
         assert b"Dashboard" in r.content or b"dashboard" in r.content
 
+    def test_dashboard_uses_stats_refresh_interval_from_env(self, client, auth_cookies, monkeypatch):
+        """Dashboard HTML must use the value from STATS_REFRESH_INTERVAL_SECONDS, not a hardcoded literal."""
+        monkeypatch.setenv("STATS_REFRESH_INTERVAL_SECONDS", "42")
+        with patch("backend.admin.routes.get_snapshot", return_value=_make_snapshot()):
+            r = client.get("/admin/", cookies=auth_cookies)
+        assert r.status_code == 200
+        assert b"42s" in r.content
+
 
 # ---------------------------------------------------------------------------
 # TestUsers — GET/POST /admin/users
@@ -525,3 +533,33 @@ class TestPartials:
             r = client.get("/admin/_partials/processes", cookies=auth_cookies)
         # Should return an HTML table body fragment (tr elements or "No processes" message)
         assert b"<tr>" in r.content or b"No processes" in r.content
+
+
+# ---------------------------------------------------------------------------
+# TestAuditLogLimitConfig — config accessor validation
+# ---------------------------------------------------------------------------
+
+class TestAuditLogLimitConfig:
+    def test_get_audit_log_limit_raises_when_unset(self, monkeypatch):
+        """get_audit_log_limit() must raise ValueError when AUDIT_LOG_LIMIT is not set."""
+        monkeypatch.delenv("AUDIT_LOG_LIMIT", raising=False)
+        import importlib
+        import backend.config as cfg
+        importlib.reload(cfg)
+        with pytest.raises(ValueError, match="AUDIT_LOG_LIMIT"):
+            cfg.get_audit_log_limit()
+
+    def test_get_audit_log_limit_returns_value(self, monkeypatch):
+        """get_audit_log_limit() returns the configured integer."""
+        monkeypatch.setenv("AUDIT_LOG_LIMIT", "500")
+        import importlib
+        import backend.config as cfg
+        importlib.reload(cfg)
+        assert cfg.get_audit_log_limit() == 500
+
+    def test_license_page_shows_configured_email(self, client, auth_cookies, monkeypatch):
+        """License page must use LICENSE_CONTACT_EMAIL, not a hardcoded literal."""
+        monkeypatch.setenv("LICENSE_CONTACT_EMAIL", "support@example.com")
+        r = client.get("/admin/license", cookies=auth_cookies)
+        assert r.status_code == 200
+        assert b"support@example.com" in r.content

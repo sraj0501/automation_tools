@@ -786,7 +786,8 @@ async def http_shutdown(
     logger.info("Shutdown signal received from Go daemon")
     # Schedule actual process exit after the response is sent
     import threading
-    threading.Timer(0.5, lambda: os.kill(os.getpid(), signal.SIGTERM)).start()
+    from backend.config import get_shutdown_grace_period_seconds as _grace
+    threading.Timer(_grace(), lambda: os.kill(os.getpid(), signal.SIGTERM)).start()
     return {"status": "ok"}
 
 
