@@ -37,7 +37,9 @@ from backend.admin.user_manager import (
     log_action,
     revoke_api_key,
     touch_last_login,
+    update_password,
     update_role,
+    verify_user_password,
 )
 
 router = APIRouter()
@@ -322,6 +324,43 @@ async def users_enable(
     log_action(current_user, "enable_user", f"username={username}",
                ip=request.client.host if request.client else "")
     return RedirectResponse(f"/admin/users?flash=User+'{username}'+enabled", status_code=303)
+
+
+@router.post("/users/{username}/reset-password")
+async def users_reset_password(
+    username: str,
+    request: Request,
+    current_user: str = Depends(require_auth),
+    new_password: str = Form(...),
+    current_password: str = Form(""),
+):
+    """Reset a user's password.
+
+    - For other users: admin can reset directly (no current password required).
+    - For own account: current_password must be verified first.
+    """
+    if username == current_user:
+        if not current_password:
+            return RedirectResponse(
+                f"/admin/users/{username}/keys?flash=Current+password+required+to+reset+own+account&flash_type=error",
+                status_code=303,
+            )
+        if not verify_user_password(current_user, current_password):
+            return RedirectResponse(
+                f"/admin/users/{username}/keys?flash=Current+password+incorrect&flash_type=error",
+                status_code=303,
+            )
+    if not new_password:
+        return RedirectResponse(
+            f"/admin/users?flash=New+password+cannot+be+empty&flash_type=error",
+            status_code=303,
+        )
+    update_password(username, new_password)
+    log_action(current_user, "reset_password", f"username={username}",
+               ip=request.client.host if request.client else "")
+    return RedirectResponse(
+        f"/admin/users?flash=Password+reset+for+'{username}'", status_code=303
+    )
 
 
 # ---------------------------------------------------------------------------

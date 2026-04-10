@@ -274,6 +274,63 @@ class TestApiKeys:
 
 
 # ---------------------------------------------------------------------------
+# TestPasswordReset — POST /admin/users/{username}/reset-password (CS-3 TASK-015)
+# ---------------------------------------------------------------------------
+
+class TestPasswordReset:
+    def test_reset_other_user_password(self, client, auth_cookies, db_dir):
+        db_dir.create_user("alice", "oldpass", "viewer")
+        r = client.post(
+            "/admin/users/alice/reset-password",
+            data={"new_password": "newpass123", "current_password": ""},
+            cookies=auth_cookies,
+            follow_redirects=False,
+        )
+        assert r.status_code == 303
+        assert db_dir.verify_user_password("alice", "newpass123") is True
+
+    def test_reset_own_password_requires_current_password(self, client, auth_cookies, db_dir):
+        r = client.post(
+            "/admin/users/admin/reset-password",
+            data={"new_password": "new123", "current_password": ""},
+            cookies=auth_cookies,
+            follow_redirects=False,
+        )
+        assert r.status_code == 303
+        assert "error" in r.headers["location"].lower()
+
+    def test_reset_own_password_with_wrong_current_password(self, client, auth_cookies, db_dir):
+        r = client.post(
+            "/admin/users/admin/reset-password",
+            data={"new_password": "new123", "current_password": "wrongcurrent"},
+            cookies=auth_cookies,
+            follow_redirects=False,
+        )
+        assert r.status_code == 303
+        assert "error" in r.headers["location"].lower()
+
+    def test_reset_password_empty_new_password_blocked(self, client, auth_cookies, db_dir):
+        db_dir.create_user("alice", "oldpass", "viewer")
+        r = client.post(
+            "/admin/users/alice/reset-password",
+            data={"new_password": "", "current_password": ""},
+            cookies=auth_cookies,
+            follow_redirects=False,
+        )
+        assert r.status_code in (303, 422)  # redirect with error or FastAPI validation
+
+    def test_reset_password_unauthenticated_redirects(self, client, db_dir):
+        db_dir.create_user("alice", "oldpass", "viewer")
+        r = client.post(
+            "/admin/users/alice/reset-password",
+            data={"new_password": "new123"},
+            follow_redirects=False,
+        )
+        assert r.status_code == 303
+        assert "/admin/login" in r.headers["location"]
+
+
+# ---------------------------------------------------------------------------
 # TestTriggerStats — HTMX partial GET /admin/_partials/stats (CS-3 TASK-014)
 # ---------------------------------------------------------------------------
 

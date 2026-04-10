@@ -278,7 +278,7 @@ except ConfigError as e:
 
 ## Session Completion Status (Current)
 
-**Last Updated**: April 6, 2026
+**Last Updated**: April 10, 2026
 
 **Phases Completed**:
 
@@ -292,12 +292,36 @@ except ConfigError as e:
 - git-sage Session UX ✅
 - CS-1: HTTP transport (Go → HTTPS POST → webhook_server.py) ✅
 - CS-2: Config audit (os.getenv eliminated) + server-TUI stats panel ✅
+- CS-3: Admin GUI MVP (users/licenses/health web UI on FastAPI) ✅
 - Autostart (launchd/systemd env-first) ✅
 - Anonymous telemetry ping ✅
 - Jira alerter ✅
 - Webhook server + alert poller ✅
 
 **Production Readiness**: VERY HIGH
+
+### CS-3 Admin GUI — Key Components
+
+| Route | Description |
+|---|---|
+| `GET /admin/login` `POST /admin/login` | JWT cookie auth against env ADMIN_USERNAME/PASSWORD |
+| `GET /admin/` | Dashboard: process health, LLM info, license tier, trigger stats |
+| `GET /admin/users` | List users; inline role-change select; disable/enable/delete |
+| `POST /admin/users/create` | Create user with username/password/role |
+| `POST /admin/users/{u}/role` | Update role (viewer/admin) |
+| `POST /admin/users/{u}/disable` / `/enable` | Soft-disable user (self blocked) |
+| `POST /admin/users/{u}/reset-password` | Password reset (self requires current_password) |
+| `GET /admin/users/{u}/keys` | API key listing |
+| `POST /admin/users/{u}/keys/create` | Create API key; raw key shown once |
+| `POST /admin/keys/{id}/revoke` | Revoke API key |
+| `GET /admin/license` | License tier, T&C acceptance, seat check |
+| `GET /admin/server` | LLM config, integration status, process control |
+| `GET /admin/audit` | Audit log (last 200 events) |
+| `GET /admin/_partials/processes` | HTMX fragment for process table |
+| `GET /admin/_partials/stats` | HTMX fragment for trigger activity stats |
+
+**ADMIN_EMBED**: Set `ADMIN_EMBED=true` to mount the admin UI directly on the main webhook
+server (port 8089) instead of running a separate process on ADMIN_PORT.
 
 ## Phase Implementation Status
 

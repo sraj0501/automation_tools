@@ -1001,6 +1001,15 @@ def get_admin_password() -> str:
     return get("ADMIN_PASSWORD", "")
 
 
+def get_admin_embed() -> bool:
+    """Mount admin UI on main webhook server. ADMIN_EMBED (default: false).
+
+    When true, the admin FastAPI router is mounted directly on the main
+    webhook_server app at /admin, removing the need for a separate process.
+    """
+    return get_bool("ADMIN_EMBED", False)
+
+
 # --- GitHub (call-site use) ---
 
 def get_github_token() -> str:
