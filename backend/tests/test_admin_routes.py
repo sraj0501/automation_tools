@@ -274,6 +274,75 @@ class TestApiKeys:
 
 
 # ---------------------------------------------------------------------------
+# TestUserRoleDisable — new CS-3 routes
+# ---------------------------------------------------------------------------
+
+class TestUserRoleDisable:
+    def test_update_role_to_admin(self, client, auth_cookies, db_dir):
+        db_dir.create_user("alice", "pass", "viewer")
+        r = client.post(
+            "/admin/users/alice/role",
+            data={"role": "admin"},
+            cookies=auth_cookies,
+            follow_redirects=False,
+        )
+        assert r.status_code == 303
+        assert db_dir.get_user("alice").role == "admin"
+
+    def test_update_role_invalid_value_redirects_with_error(self, client, auth_cookies, db_dir):
+        db_dir.create_user("alice", "pass", "viewer")
+        r = client.post(
+            "/admin/users/alice/role",
+            data={"role": "superuser"},
+            cookies=auth_cookies,
+            follow_redirects=False,
+        )
+        assert r.status_code == 303
+        assert "error" in r.headers["location"].lower()
+
+    def test_disable_user(self, client, auth_cookies, db_dir):
+        db_dir.create_user("alice", "pass", "viewer")
+        r = client.post(
+            "/admin/users/alice/disable",
+            cookies=auth_cookies,
+            follow_redirects=False,
+        )
+        assert r.status_code == 303
+        assert db_dir.get_user("alice").disabled is True
+
+    def test_cannot_disable_self(self, client, auth_cookies, db_dir):
+        r = client.post(
+            "/admin/users/admin/disable",
+            cookies=auth_cookies,
+            follow_redirects=False,
+        )
+        assert r.status_code == 303
+        assert "error" in r.headers["location"].lower() or "cannot" in r.headers["location"].lower()
+        assert db_dir.get_user("admin").disabled is False
+
+    def test_enable_user(self, client, auth_cookies, db_dir):
+        db_dir.create_user("alice", "pass", "viewer")
+        db_dir.disable_user("alice")
+        r = client.post(
+            "/admin/users/alice/enable",
+            cookies=auth_cookies,
+            follow_redirects=False,
+        )
+        assert r.status_code == 303
+        assert db_dir.get_user("alice").disabled is False
+
+    def test_role_update_unauthenticated_redirects(self, client, db_dir):
+        db_dir.create_user("alice", "pass", "viewer")
+        r = client.post(
+            "/admin/users/alice/role",
+            data={"role": "admin"},
+            follow_redirects=False,
+        )
+        assert r.status_code == 303
+        assert "/admin/login" in r.headers["location"]
+
+
+# ---------------------------------------------------------------------------
 # TestServerPage — GET /admin/server
 # ---------------------------------------------------------------------------
 
