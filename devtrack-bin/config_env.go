@@ -138,7 +138,10 @@ func LoadEnvConfig() (*EnvConfig, error) {
 	}
 	if len(missing) > 0 {
 		return nil, fmt.Errorf(
-			"missing required environment variables (set these before starting devtrack):\n  %s",
+			"missing required environment variables:\n  %s\n\n"+
+				"First time? Run: devtrack setup\n"+
+				"Already configured? Run: source /path/to/.env && devtrack start\n"+
+				"See docs/CONFIGURATION.md for details.",
 			strings.Join(missing, "\n  "),
 		)
 	}
