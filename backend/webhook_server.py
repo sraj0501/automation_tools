@@ -33,7 +33,6 @@ from fastapi.responses import JSONResponse
 
 try:
     from backend import config
-    config._load_env()
 except ImportError:
     config = None
 
@@ -67,6 +66,23 @@ try:
     logger.info("runtime-narrative middleware enabled for webhook server")
 except (ImportError, TypeError):
     pass
+
+# Optionally embed the admin console directly on this app (single-process mode).
+# Controlled by ADMIN_EMBED=true in .env.  When false (default) the admin app
+# runs as a separate process on ADMIN_PORT.
+try:
+    from backend.config import get_admin_embed
+    if get_admin_embed():
+        from pathlib import Path
+        from fastapi.staticfiles import StaticFiles
+        from backend.admin.routes import router as _admin_router, startup as _admin_startup
+        _admin_startup()
+        app.include_router(_admin_router, prefix="/admin")
+        _admin_static = Path(__file__).parent / "admin" / "static"
+        app.mount("/admin/static", StaticFiles(directory=str(_admin_static)), name="admin-static")
+        logger.info("Admin console embedded on main webhook server at /admin")
+except Exception as _exc:
+    logger.warning("Admin embed skipped: %s", _exc)
 
 _handler: WebhookEventHandler | None = None
 
@@ -357,14 +373,13 @@ def _get_handler() -> WebhookEventHandler:
 def _cfg(key: str, default: str = "") -> str:
     if config:
         return config.get(key, default)
-    return os.getenv(key, default)
+    return default
 
 
 def _cfg_bool(key: str, default: bool = False) -> bool:
     if config:
         return config.get_bool(key, default)
-    val = os.getenv(key, "").lower().strip()
-    return val in ("true", "1", "yes", "on") if val else default
+    return default
 
 
 async def _verify_trigger_key(request: Request) -> None:
@@ -372,7 +387,7 @@ async def _verify_trigger_key(request: Request) -> None:
 
     Skipped when DEVTRACK_API_KEY is not set (dev/testing mode).
     """
-    expected = os.environ.get("DEVTRACK_API_KEY", "")
+    expected = config.get_devtrack_api_key() if config else ""
     if not expected:
         return  # auth not configured — allow all (dev mode)
     key = request.headers.get("X-DevTrack-API-Key", "")
@@ -771,7 +786,8 @@ async def http_shutdown(
     logger.info("Shutdown signal received from Go daemon")
     # Schedule actual process exit after the response is sent
     import threading
-    threading.Timer(0.5, lambda: os.kill(os.getpid(), signal.SIGTERM)).start()
+    from backend.config import get_shutdown_grace_period_seconds as _grace
+    threading.Timer(_grace(), lambda: os.kill(os.getpid(), signal.SIGTERM)).start()
     return {"status": "ok"}
 
 
@@ -854,9 +870,9 @@ def main() -> None:
 
     # TLS: Go passes DEVTRACK_TLS_CERT / DEVTRACK_TLS_KEY via the subprocess env.
     # If TLS is enabled and both paths are present, start uvicorn with SSL.
-    tls_enabled = os.environ.get("DEVTRACK_TLS", "true").lower() not in ("false", "0", "no")
-    cert_path = os.environ.get("DEVTRACK_TLS_CERT", "")
-    key_path = os.environ.get("DEVTRACK_TLS_KEY", "")
+    tls_enabled = config.get_devtrack_tls_enabled() if config else True
+    cert_path = config.get_devtrack_tls_cert() if config else ""
+    key_path = config.get_devtrack_tls_key() if config else ""
 
     ssl_kwargs: dict = {}
     if tls_enabled and cert_path and key_path:

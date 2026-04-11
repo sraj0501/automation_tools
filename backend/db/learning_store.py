@@ -33,8 +33,9 @@ def _db_path() -> str:
         from backend.config import database_path
         return str(database_path())
     except Exception:
+        from backend.config import get_project_root
+        root = get_project_root() or "."
         import os
-        root = os.getenv("PROJECT_ROOT", ".")
         return os.path.join(root, "Data", "db", "devtrack.db")
 
 

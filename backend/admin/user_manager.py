@@ -23,8 +23,9 @@ from backend.admin.auth import hash_password, verify_password
 
 
 def _admin_db_path() -> Path:
-    db_dir = os.environ.get("DATABASE_DIR") or (
-        Path(os.environ.get("PROJECT_ROOT", ".")) / "Data" / "db"
+    from backend.config import get_database_dir, get_project_root
+    db_dir = get_database_dir() or (
+        Path(get_project_root() or ".") / "Data" / "db"
     )
     return Path(db_dir) / "admin.db"
 
@@ -71,6 +72,13 @@ def init_db() -> None:
                 ts       TEXT NOT NULL DEFAULT (datetime('now'))
             );
         """)
+        # Idempotent migration: add `disabled` column if it doesn't exist yet.
+        try:
+            con.execute(
+                "ALTER TABLE admin_users ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0"
+            )
+        except Exception:
+            pass  # column already exists — safe to ignore
 
 
 # ---------------------------------------------------------------------------
@@ -84,6 +92,7 @@ class AdminUser:
     role: str
     created_at: str
     last_login: Optional[str]
+    disabled: bool = False
 
 
 @dataclass
@@ -103,18 +112,20 @@ class ApiKey:
 def list_users() -> list[AdminUser]:
     with _conn() as con:
         rows = con.execute(
-            "SELECT id, username, role, created_at, last_login FROM admin_users ORDER BY id"
+            "SELECT id, username, role, created_at, last_login, disabled "
+            "FROM admin_users ORDER BY id"
         ).fetchall()
-    return [AdminUser(**dict(r)) for r in rows]
+    return [AdminUser(**{**dict(r), "disabled": bool(r["disabled"])}) for r in rows]
 
 
 def get_user(username: str) -> Optional[AdminUser]:
     with _conn() as con:
         row = con.execute(
-            "SELECT id, username, role, created_at, last_login FROM admin_users WHERE username=?",
+            "SELECT id, username, role, created_at, last_login, disabled "
+            "FROM admin_users WHERE username=?",
             (username,),
         ).fetchone()
-    return AdminUser(**dict(row)) if row else None
+    return AdminUser(**{**dict(row), "disabled": bool(row["disabled"])}) if row else None
 
 
 def create_user(username: str, password: str, role: str = "viewer") -> AdminUser:
@@ -149,6 +160,24 @@ def update_role(username: str, role: str) -> bool:
 def delete_user(username: str) -> bool:
     with _conn() as con:
         cur = con.execute("DELETE FROM admin_users WHERE username=?", (username,))
+    return cur.rowcount > 0
+
+
+def disable_user(username: str) -> bool:
+    """Set disabled=1 for the given user. Returns True if a row was updated."""
+    with _conn() as con:
+        cur = con.execute(
+            "UPDATE admin_users SET disabled=1 WHERE username=?", (username,)
+        )
+    return cur.rowcount > 0
+
+
+def enable_user(username: str) -> bool:
+    """Set disabled=0 for the given user. Returns True if a row was updated."""
+    with _conn() as con:
+        cur = con.execute(
+            "UPDATE admin_users SET disabled=0 WHERE username=?", (username,)
+        )
     return cur.rowcount > 0
 
 
@@ -234,7 +263,10 @@ def log_action(username: str, action: str, detail: str = "", ip: str = "") -> No
         )
 
 
-def get_audit_log(limit: int = 100) -> list[dict]:
+def get_audit_log(limit: int | None = None) -> list[dict]:
+    if limit is None:
+        from backend.config import get_audit_log_limit
+        limit = get_audit_log_limit()
     with _conn() as con:
         rows = con.execute(
             "SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (limit,)

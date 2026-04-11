@@ -60,7 +60,8 @@ class GitLabSync:
             clear_sync_items(_PLATFORM)
         else:
             # Incremental default: read window from env
-            window_hours = int(os.getenv("GITLAB_SYNC_WINDOW_HOURS", "0") or "0")
+            from backend.config import get_gitlab_sync_window_hours
+            window_hours = get_gitlab_sync_window_hours()
             if window_hours > 0:
                 changed_after = datetime.now(timezone.utc) - timedelta(hours=window_hours)
                 existing = load_sync_items(_PLATFORM)
@@ -100,7 +101,8 @@ class GitLabSync:
         # Merge: fetched records overwrite existing ones
         merged = {**existing, **fetched_records}
 
-        mode = f"windowed:{hours}h" if hours else ("full" if not existing else f"windowed:{int(os.getenv('GITLAB_SYNC_WINDOW_HOURS', '0'))}h" if changed_after else "full")
+        from backend.config import get_gitlab_sync_window_hours as _gl_win
+        mode = f"windowed:{hours}h" if hours else ("full" if not existing else f"windowed:{_gl_win()}h" if changed_after else "full")
         save_sync_items(_PLATFORM, merged, now)
         logger.info(f"GitLab sync complete: {len(items)} fetched, {len(merged)} total in cache")
 

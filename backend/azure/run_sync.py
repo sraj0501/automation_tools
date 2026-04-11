@@ -65,7 +65,9 @@ async def run(full: bool, hours: int | None) -> int:
         if fetched == 0 and total == 0:
             print("No work items assigned to you.")
             print()
-            sync_states = os.getenv("AZURE_SYNC_STATES", "any state")
+            from backend.config import get_azure_sync_states
+            states_list = get_azure_sync_states()
+            sync_states = ", ".join(states_list) if states_list else "any state"
             print(f"States checked: {sync_states}")
             return 0
 

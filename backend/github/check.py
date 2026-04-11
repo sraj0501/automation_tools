@@ -31,11 +31,12 @@ def main() -> int:
 
     import requests
 
-    raw_url = os.getenv("GITHUB_API_URL", "").rstrip("/")
+    from backend.config import get_github_token, get_github_owner, get_github_repo, get_github_api_url, get_github_api_version
+    raw_url = get_github_api_url().rstrip("/")
     api_base = raw_url if raw_url else "https://api.github.com"
-    token = os.getenv("GITHUB_TOKEN", "")
-    owner = os.getenv("GITHUB_OWNER", "")
-    repo = os.getenv("GITHUB_REPO", "")
+    token = get_github_token()
+    owner = get_github_owner()
+    repo = get_github_repo()
 
     print("GitHub Connection Check")
     print("=" * 40)
@@ -62,7 +63,7 @@ def main() -> int:
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": os.getenv("GITHUB_API_VERSION", "2022-11-28"),
+        "X-GitHub-Api-Version": get_github_api_version(),
     }
     timeout = 15
 

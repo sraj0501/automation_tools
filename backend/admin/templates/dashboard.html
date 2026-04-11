@@ -21,9 +21,9 @@
     <div class="stat-sub">trigger API</div>
   </div>
   <div class="stat-card">
-    <div class="stat-label">Admin Users</div>
-    <div class="stat-value">{{ user_count }}</div>
-    <div class="stat-sub"><a href="/admin/users">manage →</a></div>
+    <div class="stat-label">License Tier</div>
+    <div class="stat-value" style="font-size:16px">{{ tier_label }}</div>
+    <div class="stat-sub">{{ user_count }} user{{ 's' if user_count != 1 }} · <a href="/admin/license">details →</a></div>
   </div>
 </div>
 
@@ -66,6 +66,20 @@
   </div>
 </div>
 
-<!-- Auto-refresh every 15s -->
-<div hx-get="/admin/_partials/processes" hx-trigger="every 15s" hx-target="#proc-table-body" hx-swap="innerHTML" style="display:none"></div>
+<!-- Trigger activity stats -->
+<div class="card">
+  <div class="section-header">
+    <div class="card-title" style="margin-bottom:0">Trigger Activity</div>
+    <span class="text-muted" style="font-size:12px">auto-refreshes every {{ stats_refresh_secs }}s</span>
+  </div>
+  <div id="stats-panel"
+       hx-get="/admin/_partials/stats"
+       hx-trigger="every {{ stats_refresh_secs }}s"
+       hx-swap="innerHTML">
+    {% include "_stats_panel.html" %}
+  </div>
+</div>
+
+<!-- Auto-refresh every {{ process_refresh_secs }}s -->
+<div hx-get="/admin/_partials/processes" hx-trigger="every {{ process_refresh_secs }}s" hx-target="#proc-table-body" hx-swap="innerHTML" style="display:none"></div>
 {% endblock %}

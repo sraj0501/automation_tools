@@ -24,7 +24,8 @@ from fastapi import Cookie, HTTPException, Request, status
 # Read config once at import time — all values required to be set, or we use
 # safe defaults suitable for a self-hosted local install.
 def _cfg(key: str, default: str = "") -> str:
-    return os.environ.get(key, default)
+    from backend.config import get
+    return get(key, default)
 
 
 def _secret_key() -> str:
@@ -35,10 +36,22 @@ def _secret_key() -> str:
     return key
 
 
+from backend.config import (
+    get_scrypt_n,
+    get_scrypt_r,
+    get_scrypt_p,
+    get_scrypt_dklen,
+)
+
 _SECRET = _secret_key()
 _ALGORITHM = "HS256"
 _SESSION_HOURS = int(_cfg("ADMIN_SESSION_HOURS", "8"))
 COOKIE_NAME = "devtrack_admin_session"
+
+_SCRYPT_N    = get_scrypt_n()
+_SCRYPT_R    = get_scrypt_r()
+_SCRYPT_P    = get_scrypt_p()
+_SCRYPT_DKLEN = get_scrypt_dklen()
 
 
 # ---------------------------------------------------------------------------
@@ -48,7 +61,8 @@ COOKIE_NAME = "devtrack_admin_session"
 def hash_password(plain: str) -> str:
     """Hash password with scrypt (stdlib, no external deps)."""
     salt = secrets.token_hex(16)
-    key = hashlib.scrypt(plain.encode(), salt=salt.encode(), n=16384, r=8, p=1, dklen=32)
+    key = hashlib.scrypt(plain.encode(), salt=salt.encode(),
+                         n=_SCRYPT_N, r=_SCRYPT_R, p=_SCRYPT_P, dklen=_SCRYPT_DKLEN)
     return f"scrypt${salt}${key.hex()}"
 
 
@@ -56,7 +70,8 @@ def verify_password(plain: str, hashed: str) -> bool:
     try:
         if hashed.startswith("scrypt$"):
             _, salt, stored_hex = hashed.split("$", 2)
-            key = hashlib.scrypt(plain.encode(), salt=salt.encode(), n=16384, r=8, p=1, dklen=32)
+            key = hashlib.scrypt(plain.encode(), salt=salt.encode(),
+                                 n=_SCRYPT_N, r=_SCRYPT_R, p=_SCRYPT_P, dklen=_SCRYPT_DKLEN)
             return hmac.compare_digest(key.hex(), stored_hex)
         # Legacy plain-text check (migration path)
         return hmac.compare_digest(plain, hashed)

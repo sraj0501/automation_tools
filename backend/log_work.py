@@ -57,7 +57,8 @@ def _find_workspace(repo_path: str):
     repo_abs = str(Path(repo_path).resolve())
     home = str(Path.home())
 
-    ws_file_env = os.environ.get("WORKSPACES_FILE", "")
+    from backend.config import get_workspaces_file
+    ws_file_env = get_workspaces_file()
     candidates = []
     if ws_file_env:
         candidates.append(Path(ws_file_env))
@@ -190,7 +191,8 @@ async def _sync_github(
             pass
 
         # 3. create_on_no_match
-        create = os.environ.get("GITHUB_CREATE_ON_NO_MATCH", "false").lower() == "true"
+        from backend.config import get_github_create_on_no_match
+        create = get_github_create_on_no_match()
         if create:
             title = (description or commit_info.get("commit_message", ""))[:80]
             body  = (
@@ -238,7 +240,8 @@ async def _sync_gitlab(
 
     comment  = _build_comment(commit_info, description, status, time_spent)
     query    = description or commit_info.get("commit_message", "")
-    proj_env = os.environ.get("GITLAB_PROJECT_ID", "")
+    from backend.config import get_gitlab_project_id_str
+    proj_env = get_gitlab_project_id_str()
 
     try:
         # 1. Explicit ticket selected by user (picker) — numeric IID like #42

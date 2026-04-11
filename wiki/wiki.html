@@ -524,7 +524,7 @@
         <span class="current" id="breadcrumbCurrent">Home</span>
       </div>
       <div class="topbar-actions">
-        <span class="version-chip">v1.4-dev</span>
+        <span class="version-chip">v2.0.0</span>
         <button class="icon-btn" id="themeToggle" title="Toggle theme">
           <svg id="themeIcon" viewBox="0 0 20 20" fill="currentColor"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>
         </button>
@@ -667,7 +667,26 @@ const CONTENT = {
 <p>Requires <code>PROJECT_ROOT</code> to be set in your <code>.env</code> file so the TUI knows where to find the server processes. The daemon does not need to be running first — the TUI can also be used to start individual processes from cold.</p>
 
 <h2>What It Shows</h2>
-<p>The main panel is a table with one row per server process:</p>
+<p>The screen is divided into three stacked sections:</p>
+
+<h3>Health Bar (top)</h3>
+<p>Shows the aggregate status of the webhook server and Ollama — a quick glance tells you if the two most latency-sensitive services are reachable.</p>
+
+<h3>Trigger Stats Panel</h3>
+<p>A row of four live counters, refreshed every 15 seconds by <code>backend/server_tui/stats_client.py</code>:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Counter</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><strong>Triggers today</strong></td><td>Total trigger events (commit + timer) fired since midnight</td></tr>
+<tr><td><strong>Commits today</strong></td><td>Commit-type triggers fired since midnight</td></tr>
+<tr><td><strong>Last trigger</strong></td><td>Timestamp of the most recent trigger event</td></tr>
+<tr><td><strong>Errors (24 h)</strong></td><td>Failed trigger dispatches in the last 24 hours — shown in red when non-zero</td></tr>
+</tbody>
+</table></div>
+<p>Stats are read directly from the <code>triggers</code> table in <code>Data/devtrack.db</code>. All counters degrade gracefully to zero when the database is absent or unreadable (e.g. before the daemon has been started for the first time).</p>
+
+<h3>Process Table</h3>
+<p>One row per server process:</p>
 <div class="table-wrap"><table>
 <thead><tr><th>Process</th><th>Description</th></tr></thead>
 <tbody>
@@ -678,7 +697,6 @@ const CONTENT = {
 </tbody>
 </table></div>
 <p>Each row shows live CPU%, memory usage, current status (<strong>running</strong> / <strong>stopped</strong> / <strong>error</strong>), and the process uptime.</p>
-<p>A <strong>health bar</strong> at the top of the screen shows the aggregate status of the webhook server and Ollama — a quick glance tells you if the two most latency-sensitive services are reachable.</p>
 
 <h2>Keyboard Shortcuts</h2>
 <div class="table-wrap"><table>
@@ -706,23 +724,31 @@ const CONTENT = {
 
   ADMIN_CONSOLE: `<div class="md-body">
 <h1>Admin Console</h1>
-<p>The Admin Console is a lightweight web UI for managing DevTrack's Python backend — users, API keys, LLM configuration, and integration credentials — without touching the command line or <code>.env</code> directly. It is built with HTMX + Jinja2 and has no JavaScript build step.</p>
+<p>The Admin Console is a lightweight web UI for managing DevTrack's Python backend — users, roles, API keys, LLM configuration, integration credentials, license status, and a trigger throughput stats panel — without touching the command line or <code>.env</code> directly. It is built with HTMX + Jinja2 and has no JavaScript build step.</p>
+
+<div class="home-badge" style="margin-bottom:24px;background:var(--callout-tip);border-color:var(--callout-tip-border);color:#166534;">CS-3 complete — v2.0.0</div>
 
 <h2>Launching</h2>
 <pre><code class="language-bash">devtrack admin-start</code></pre>
 <p>Then open <a href="http://localhost:8090/admin/" target="_blank" rel="noopener">http://localhost:8090/admin/</a> in a browser.</p>
 <p>The Admin Console runs on a <strong>separate port (8090)</strong> from the webhook server (8089) so it can be firewall-restricted independently in production deployments.</p>
 
+<h3>Single-Process Mode (ADMIN_EMBED)</h3>
+<p>Set <code>ADMIN_EMBED=true</code> in <code>.env</code> to mount the admin console directly on the webhook server process (port 8089). In this mode the admin UI is served at <code>/admin</code> on the same port — useful for minimal deployments or containers where running two processes is inconvenient. When <code>ADMIN_EMBED=false</code> (the default) the admin console runs as a separate process and the two apps are fully independent.</p>
+<pre><code class="language-bash"># Mount admin on port 8089 instead of starting a separate process
+ADMIN_EMBED=true devtrack start   # or set in .env</code></pre>
+
 <h2>Required .env Variables</h2>
 <div class="table-wrap"><table>
 <thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
 <tbody>
-<tr><td><code>ADMIN_PORT</code></td><td><code>8090</code></td><td>Port the admin server listens on</td></tr>
+<tr><td><code>ADMIN_PORT</code></td><td><code>8090</code></td><td>Port the admin server listens on (ignored when <code>ADMIN_EMBED=true</code>)</td></tr>
 <tr><td><code>ADMIN_HOST</code></td><td><code>0.0.0.0</code></td><td>Bind address (<code>127.0.0.1</code> to restrict to localhost)</td></tr>
 <tr><td><code>ADMIN_USERNAME</code></td><td><code>admin</code></td><td>Login username</td></tr>
 <tr><td><code>ADMIN_PASSWORD</code></td><td><code>changeme</code></td><td>Login password — <strong>change before exposing to a network</strong></td></tr>
 <tr><td><code>ADMIN_SECRET_KEY</code></td><td>—</td><td>Secret used to sign JWT session cookies — required, no default</td></tr>
 <tr><td><code>ADMIN_SESSION_HOURS</code></td><td><code>8</code></td><td>Session lifetime in hours before re-login is required</td></tr>
+<tr><td><code>ADMIN_EMBED</code></td><td><code>false</code></td><td>Mount admin console on webhook server (single-process mode)</td></tr>
 </tbody>
 </table></div>
 
@@ -731,14 +757,38 @@ const CONTENT = {
 <h3>Dashboard</h3>
 <p>Live overview of all server processes (same data as the Server TUI), service health checks (webhook server reachability, Ollama availability), and summary stats — total commits logged, work sessions this week, alerts delivered.</p>
 
+<h4>Trigger Stats Panel</h4>
+<p>An HTMX-powered stats panel on the dashboard shows four counters that auto-refresh every 30 seconds without a full page reload:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Counter</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><strong>Triggers today</strong></td><td>Total trigger events (commit + timer) fired since midnight</td></tr>
+<tr><td><strong>Commits today</strong></td><td>Commit-type triggers fired since midnight</td></tr>
+<tr><td><strong>Last trigger</strong></td><td>Timestamp of the most recent trigger event</td></tr>
+<tr><td><strong>Errors (24 h)</strong></td><td>Failed trigger dispatches in the last 24 hours — displayed in red when non-zero</td></tr>
+</tbody>
+</table></div>
+<p>Stats are read from <code>Data/devtrack.db</code> via <code>backend/server_tui/stats_client.py</code>. All counters degrade to zero gracefully when the database is absent.</p>
+
 <h3>Users</h3>
-<p>Create and delete DevTrack users. Each user gets an <strong>API key</strong> that clients use to authenticate against the webhook server and REST endpoints. Keys can be rotated from this page without touching <code>.env</code>.</p>
+<p>Full user lifecycle management without touching <code>.env</code>:</p>
+<ul>
+<li><strong>Create user</strong> — set username, assign a role (<code>admin</code> or <code>viewer</code>), generate an API key.</li>
+<li><strong>Update role</strong> — promote a <code>viewer</code> to <code>admin</code> or demote an <code>admin</code> to <code>viewer</code> with a single click. Role changes take effect immediately.</li>
+<li><strong>Soft disable / enable</strong> — disable a user account without deleting it. Disabled users cannot authenticate; their API key is preserved. Re-enable in one click. You cannot disable your own account.</li>
+<li><strong>Reset password</strong> — generate a new temporary password for any user and send it via the on-screen flash message. The user is prompted to change it on next login.</li>
+<li><strong>Rotate API key</strong> — issue a new API key; the old key is invalidated immediately.</li>
+<li><strong>Delete user</strong> — permanently removes the user and their API key.</li>
+</ul>
+
+<h3>License</h3>
+<p>Displays the active license tier, seat count, T&amp;C acceptance status, and expiry date (for time-limited tiers). Shows a clear indicator of which tier is active — Community, Pro, or Enterprise — and links to the upgrade path. Tier detection is performed by <code>backend/license_manager.py</code> and cached for the session.</p>
 
 <h3>Server</h3>
 <p>Read-only view of the active LLM provider configuration (which provider is primary, which are fallbacks), and the status of each external integration credential (Azure DevOps, GitHub, GitLab, Jira, Telegram, Slack, MongoDB, Redis). A green tick means the credential is present and the service responded to a ping; red means missing or unreachable.</p>
 
 <h3>Audit Log</h3>
-<p>Timestamped log of every admin action — login, user creation/deletion, key rotation — with the acting username and IP address. Useful for auditing shared team deployments.</p>
+<p>Timestamped log of every admin action — login, user creation/deletion, role change, disable/enable, password reset, key rotation — with the acting username and IP address. Useful for auditing shared team deployments.</p>
 
 <h2>Authentication</h2>
 <p>The console uses a <strong>JWT session cookie</strong>. Credentials are set via <code>ADMIN_USERNAME</code> / <code>ADMIN_PASSWORD</code> in <code>.env</code>. On first login you will be prompted to change the default password if <code>ADMIN_PASSWORD=changeme</code> is still set — the console will refuse to serve any page other than the password-change form until it is updated.</p>
@@ -753,17 +803,31 @@ ADMIN_USERNAME=admin
 ADMIN_PASSWORD=your-secure-password   # change from default
 
 # 3. Start the console
-devtrack admin-start</code></pre>
+devtrack admin-start
+
+# Or embed on the webhook server (single-process mode)
+# ADMIN_EMBED=true  # add to .env, then devtrack start as normal</code></pre>
+
+<h2>HTTP Route Tests (CS-3)</h2>
+<p><code>backend/tests/test_admin_routes.py</code> ships 31 HTTP-level tests covering every admin route introduced or extended in CS-3. The test client fires real HTTP requests against a TestClient-wrapped FastAPI instance — no mocking of route handlers. Coverage includes:</p>
+<ul>
+<li>Dashboard stats panel HTMX fragment (<code>GET /admin/stats-panel</code>) — correct counter values and zero-degradation when DB absent</li>
+<li>User role update (<code>POST /admin/users/{username}/role</code>) — promotion, demotion, self-role-change rejected</li>
+<li>Soft disable / enable (<code>POST /admin/users/{username}/disable</code> and <code>/enable</code>) — disabled user cannot auth; self-disable rejected</li>
+<li>Password reset (<code>POST /admin/users/{username}/reset-password</code>) — new password accepted, old rejected</li>
+<li>License page (<code>GET /admin/license</code>) — renders for all three tiers; correct tier label shown</li>
+<li>Unauthenticated access to all new routes returns 302 redirect to login</li>
+</ul>
 
 <h2>Design Notes</h2>
 <ul>
 <li><strong>Dark theme</strong> — matches the DevTrack aesthetic; inherits CSS variables so it respects the system theme.</li>
 <li><strong>No JS build step</strong> — HTMX is loaded from CDN; all interactivity is server-rendered HTML fragments. Works without a bundler.</li>
-<li><strong>Separate from the webhook server</strong> — the admin console and the webhook server (port 8089) are two distinct FastAPI apps. Stopping the admin console does not affect webhook delivery.</li>
-<li><strong>All state in SQLite</strong> — user records, API keys, and audit log entries are stored in <code>Data/devtrack.db</code> alongside all other DevTrack runtime state. No separate database or file is required.</li>
+<li><strong>Separate from the webhook server by default</strong> — the admin console and the webhook server (port 8089) are two distinct FastAPI apps. Stopping the admin console does not affect webhook delivery. Use <code>ADMIN_EMBED=true</code> to co-host them.</li>
+<li><strong>All state in SQLite</strong> — user records, API keys, roles, and audit log entries are stored in <code>Data/devtrack.db</code> alongside all other DevTrack runtime state. No separate database or file is required.</li>
 </ul>
 
-<blockquote><p><strong>Storage note:</strong> All DevTrack state — trigger history, work sessions, sync cache (Azure/GitLab items), learning data (consent, profile, samples), user records, and audit log — now lives in a single SQLite database at <code>Data/devtrack.db</code>. MongoDB remains the primary store when <code>MONGODB_URI</code> is set; SQLite is the always-available local fallback. No migration is needed for a clean install.</p></blockquote>
+<blockquote><p><strong>Storage note:</strong> All DevTrack state — trigger history, work sessions, sync cache (Azure/GitLab items), learning data (consent, profile, samples), user records, roles, and audit log — now lives in a single SQLite database at <code>Data/devtrack.db</code>. MongoDB remains the primary store when <code>MONGODB_URI</code> is set; SQLite is the always-available local fallback. No migration is needed for a clean install.</p></blockquote>
 </div>`,
 
   SLACK_BOT: `<div class="md-body">
@@ -1267,10 +1331,105 @@ curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
 
   WHATS_NEW: `<div class="md-body">
 <h1>What's New</h1>
-<div class="home-badge" style="margin-bottom:24px;background:var(--callout-warn);border-color:var(--callout-warn-border);color:#92400e;">v1.4-dev — unreleased — on features/release_ready</div>
+<div class="home-badge" style="margin-bottom:24px;background:var(--callout-warn);border-color:var(--callout-warn-border);color:#92400e;">v2.0.0 — released</div>
 
-<h2>v1.4-dev — Jira Alerter, Env-First Config, PM Persistence &amp; More</h2>
-<p>These changes are on the <code>features/release_ready</code> branch and have not yet been tagged as a release. They represent the next batch of production-readiness improvements.</p>
+<h2>v2.0.0 — CS-3 Admin GUI MVP</h2>
+<p>CS-3 completes the Admin Console with a full user management workflow, a license status page, an HTMX trigger stats panel with 30-second auto-refresh, password reset, and <code>ADMIN_EMBED</code> single-process mode. 31 new HTTP-level admin route tests bring the total to <strong>492 tests</strong> (455 Python + 37 Go).</p>
+
+<div class="feature-list" style="margin-bottom:32px;">
+  <div class="feature-item"><div class="feature-dot">1</div><div><h4>Admin route HTTP tests — 31 new tests (TASK-011)</h4><p>New test file <code>backend/tests/test_admin_routes.py</code> adds 31 HTTP-level tests against the Admin Console FastAPI router. Tests fire real HTTP requests via a <code>TestClient</code>-wrapped app — no route handler mocking. Every new route introduced in TASK-012 through TASK-015 is covered, plus authentication guards (unauthenticated access returns 302) and edge cases (self-disable rejected, duplicate role update no-ops, stats panel zeros gracefully when DB absent). See the <a href="#TEST_SUITE" onclick="navigate('TEST_SUITE');return false;">Test Suite</a> page.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">2</div><div><h4>User role update and soft disable/enable (TASK-012)</h4><p>Two new route groups in <code>backend/admin/routes.py</code> and corresponding helpers in <code>backend/admin/user_manager.py</code>: <strong>role update</strong> (<code>POST /admin/users/{username}/role</code>) promotes a <code>viewer</code> to <code>admin</code> or demotes an <code>admin</code> to <code>viewer</code>; <strong>soft disable/enable</strong> (<code>POST /admin/users/{username}/disable</code> / <code>/enable</code>) suspends an account without deleting it. Guards: you cannot change your own role or disable yourself. All actions are written to the audit log with acting username and IP. See the <a href="#ADMIN_CONSOLE" onclick="navigate('ADMIN_CONSOLE');return false;">Admin Console</a> page.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">3</div><div><h4>License status page in admin console (TASK-013)</h4><p>New <code>GET /admin/license</code> route renders a <code>license.html</code> template showing the active license tier (Community / Pro / Enterprise), seat count, T&amp;C acceptance status, and expiry date. Tier detection delegates to <code>backend/license_manager.py</code>. The page is accessible to any authenticated admin user and linked from the sidebar navigation. See the <a href="#ADMIN_CONSOLE" onclick="navigate('ADMIN_CONSOLE');return false;">Admin Console</a> page.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">4</div><div><h4>Trigger stats HTMX panel on admin dashboard (TASK-014)</h4><p>The admin dashboard gains a live trigger throughput panel that auto-refreshes every 30 seconds via HTMX (<code>hx-trigger="every 30s"</code>) without a full page reload. The <code>GET /admin/stats-panel</code> endpoint returns an HTML fragment with four counters: triggers today, commits today, last trigger timestamp, and errors in last 24 h (highlighted in red when non-zero). Data comes from <code>backend/server_tui/stats_client.py</code> reading <code>Data/devtrack.db</code> directly; all counters degrade gracefully to zero when the database is absent or unreadable. See the <a href="#ADMIN_CONSOLE" onclick="navigate('ADMIN_CONSOLE');return false;">Admin Console</a> page.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">5</div><div><h4>Password reset and ADMIN_EMBED single-process mode (TASK-015)</h4><p><strong>Password reset:</strong> <code>POST /admin/users/{username}/reset-password</code> generates a new scrypt-hashed temporary password, invalidates the old one, and surfaces the cleartext value in the UI flash message for the admin to relay to the user. <strong>ADMIN_EMBED:</strong> setting <code>ADMIN_EMBED=true</code> in <code>.env</code> causes <code>backend/webhook_server.py</code> to mount the admin router under <code>/admin</code> at startup, co-hosting both services on the webhook server's port 8089. This avoids running a second process in single-host or container deployments. When <code>ADMIN_EMBED=false</code> (default) the two apps remain independent. See the <a href="#ADMIN_CONSOLE" onclick="navigate('ADMIN_CONSOLE');return false;">Admin Console</a> page.</p></div></div>
+</div>
+
+<h2>New .env Variables (v2.0.0)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>ADMIN_EMBED</code></td><td><code>false</code></td><td>Mount the admin console on the webhook server (single-process mode). When <code>true</code>, admin UI is served at <code>/admin</code> on port 8089; <code>ADMIN_PORT</code> is ignored.</td></tr>
+</tbody>
+</table></div>
+
+<h2>New Source Files (v2.0.0)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><em>none</em></td><td>CS-3 extended existing files in <code>backend/admin/</code> — no new source modules added.</td></tr>
+</tbody>
+</table></div>
+
+<h2>New Test Files (v2.0.0)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Layer</th><th>Tests added</th></tr></thead>
+<tbody>
+<tr><td><code>backend/tests/test_admin_routes.py</code></td><td>Python</td><td>31 HTTP-level tests for admin routes — role update, soft disable/enable, password reset, license page, trigger stats HTMX panel, and auth guards on all new endpoints</td></tr>
+</tbody>
+</table></div>
+
+<hr>
+<div class="home-badge" style="margin-bottom:24px;background:var(--callout-warn);border-color:var(--callout-warn-border);color:#92400e;">v1.6-dev — merged to main</div>
+
+<h2>v1.6-dev — No-Direct-Push-to-Main Rule &amp; Docs Sync</h2>
+<p>Post-CS-2 polish: project governance rules enforced in AI agents, documentation fully synced to CS-1 runtime reality.</p>
+
+<div class="feature-list" style="margin-bottom:32px;">
+  <div class="feature-item"><div class="feature-dot">1</div><div><h4>No-direct-push-to-main rule enforced in PM and Engineer agents</h4><p>The <code>.claude/agents/devtrack-engineer.md</code> and <code>.claude/agents/project-vision.md</code> agent configurations now explicitly prohibit direct pushes to <code>main</code>. All code changes must go via a feature branch + pull request workflow. This rule is checked at agent session startup and referenced in any commit or push instruction generated by the agents.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">2</div><div><h4>CLAUDE.md and README synced to CS-1 reality (TASK-010)</h4><p><code>CLAUDE.md</code> was rewritten to accurately reflect the CS-1 HTTP transport architecture (Go daemon → HTTPS POST → <code>backend/webhook_server.py</code>). TCP IPC is correctly described as a legacy internal channel only. <code>README.md</code> received matching updates. Both files previously contained pre-CS-1 language referencing the old Python bridge startup path.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">3</div><div><h4>Env-first startup flow docs corrected across install/quickstart/getting-started</h4><p><code>docs/GETTING_STARTED.md</code>, <code>docs/INSTALLATION.md</code>, and <code>docs/QUICK_START.md</code> updated to reflect the env-first startup model: <code>source .env</code> must be run before <code>devtrack start</code>, and <code>devtrack autostart-install</code> bakes all vars into the plist/service unit. Previously these guides showed outdated sequences that assumed runtime <code>.env</code> file loading.</p></div></div>
+</div>
+
+<h2>New Source Files (v1.6-dev)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><em>none</em></td><td>v1.6-dev is a docs and agent-config release; no new runtime source files.</td></tr>
+</tbody>
+</table></div>
+
+<hr>
+<div class="home-badge" style="margin-bottom:24px;background:var(--callout-warn);border-color:var(--callout-warn-border);color:#92400e;">v1.5-dev — merged to main</div>
+
+<h2>v1.5-dev — Config Refactor, Trigger Stats Panel &amp; Server TUI Test Coverage</h2>
+<p>This batch (TASK-001 through TASK-009) completes the env-first config refactor across the entire Python codebase, adds a live trigger throughput stats panel to the Server TUI, and ships 37 headless tests for the server_tui helper modules. Platform strategy is now recorded: <strong>Linux-first</strong> for the Python server layer, macOS secondary, Windows/WSL last.</p>
+
+<div class="feature-list" style="margin-bottom:32px;">
+  <div class="feature-item"><div class="feature-dot">1</div><div><h4>Config refactor complete — all <code>os.getenv</code> violations eliminated (TASK-001 → TASK-007)</h4><p>Seven commits systematically replaced every direct <code>os.getenv</code> / <code>os.environ.get</code> call across the entire Python backend with typed accessors from <code>backend/config.py</code>. Modules covered: <code>azure/</code> (client, check, sync, list_items, run_sync, assignment_poller), <code>data_collectors.py</code>, <code>github/</code> (client, check, sync, pr_analyzer, ghAnalysis), <code>pm_agent.py</code>, <code>log_work.py</code>, <code>gitlab/</code> (client, check, sync, assignment_poller), <code>admin/</code> (app, auth, routes, server_status, user_manager), <code>server_tui/</code> (health_client, log_viewer), <code>auth/</code>, <code>db/</code>, <code>rag/embedder.py</code>, <code>telemetry.py</code>, <code>license_manager.py</code>, <code>project_spec/</code>, <code>work_tracker/</code>, <code>commit_message_enhancer.py</code>, <code>git_diff_analyzer.py</code>, <code>telegram/</code>, <code>slack/</code>, <code>webhook_server.py</code>, and <code>git_sage/agent.py</code>. TASK-001 added 50+ new typed accessor functions to <code>backend/config.py</code> and filled in all missing <code>.env_sample</code> entries. Exempted by spec: <code>DEVTRACK_ENV_FILE</code> (bootstrap), <code>DEVTRACK_INPUT</code> (test injection), <code>GIT_AUTHOR_NAME</code>/<code>GIT_DIR</code> (git-provided), <code>USER</code>/<code>USERNAME</code>/<code>USER_NAME</code> (OS-level). All 397 tests continue to pass. See <a href="#CONFIGURATION" onclick="navigate('CONFIGURATION');return false;">Configuration</a>.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">2</div><div><h4>Trigger throughput stats panel in Server TUI (TASK-008)</h4><p>A new <strong>StatsRow</strong> widget appears between the health bar and the process table in the Server TUI. It shows four counters refreshed every 15 seconds: <strong>triggers today</strong>, <strong>commits today</strong>, <strong>last trigger timestamp</strong>, and <strong>errors in last 24 h</strong> (displayed in red when non-zero). The data is pulled by <code>backend/server_tui/stats_client.py</code> via a direct SQLite read of the <code>triggers</code> table in <code>Data/devtrack.db</code>; all counters degrade gracefully to zero when the database is absent or unreadable. See the <a href="#SERVER_TUI" onclick="navigate('SERVER_TUI');return false;">Server TUI</a> page.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">3</div><div><h4>37 headless tests for server_tui helper modules (TASK-009)</h4><p>New test file <code>backend/tests/test_server_tui.py</code> covers <code>ProcessMonitor</code>, <code>log_viewer</code>, <code>stats_client</code>, and <code>health_client</code> with 37 tests. All fixtures use POSIX <code>tmp_path</code>, generic process cmdlines, and no macOS-specific process names or service-management APIs — the suite runs cleanly on Linux CI. See the <a href="#TEST_SUITE" onclick="navigate('TEST_SUITE');return false;">Test Suite</a> page.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">4</div><div><h4>Platform strategy: Linux-first</h4><p>The Python server layer is now developed and tested Linux-first (Ubuntu/Debian primary CI target). macOS is supported as a secondary target; Windows/WSL is last priority. This is reflected in the new server_tui tests (POSIX-only fixtures) and will guide future CI matrix decisions. The Go daemon binary continues to build for all three platforms.</p></div></div>
+</div>
+
+<h2>New .env Variables (v1.5-dev)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Variable</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><em>none required</em></td><td>All new config accessors added in TASK-001 use variables already present in <code>.env_sample</code> or variables that were previously read inline — no new required vars are added.</td></tr>
+</tbody>
+</table></div>
+
+<h2>New Source Files (v1.5-dev)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>backend/server_tui/stats_client.py</code></td><td>Reads trigger throughput counters from SQLite; returns a <code>TriggerStats</code> dataclass; degrades to zeros on missing DB</td></tr>
+</tbody>
+</table></div>
+
+<h2>New Test Files (v1.5-dev)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Layer</th><th>Tests added</th></tr></thead>
+<tbody>
+<tr><td><code>backend/tests/test_server_tui.py</code></td><td>Python</td><td>37 headless tests for <code>ProcessMonitor</code>, <code>log_viewer</code>, <code>stats_client</code>, and <code>health_client</code> — POSIX fixtures, no macOS-specific dependencies</td></tr>
+</tbody>
+</table></div>
+
+<hr>
+<div class="home-badge" style="margin-bottom:24px;background:var(--callout-warn);border-color:var(--callout-warn-border);color:#92400e;">v1.4-dev — merged to main — not yet tagged as a release</div>
+
+<h2>v1.4-dev — Webhook Server, Alert Poller, Jira Alerter, Env-First Config &amp; More</h2>
+<p>These changes have been merged from <code>features/release_ready</code> into <code>main</code> and are ready for release tagging. They represent the full production-readiness batch for v1.4.</p>
 
 <div class="feature-list" style="margin-bottom:32px;">
   <div class="feature-item"><div class="feature-dot">1</div><div><h4>Jira Alerter — 26 new tests</h4><p><code>backend/alerters/jira_alerter.py</code> is now implemented and fully tested. The <code>JiraAlerter</code> class polls Jira Cloud for three event types: <strong>assigned to me</strong>, <strong>comment added</strong>, and <strong>status changed</strong>. 26 tests covering all polling paths, deduplication, and edge cases are in <code>backend/tests/test_jira_alerter.py</code>. The alert poller is updated to include Jira alongside GitHub and Azure DevOps. See the <a href="#TICKET_ALERTER" onclick="navigate('TICKET_ALERTER');return false;">Ticket Alerter</a> page.</p></div></div>
@@ -1282,6 +1441,8 @@ curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
   <div class="feature-item"><div class="feature-dot">7</div><div><h4>Anonymous install &amp; active telemetry ping (Tier 2 implemented)</h4><p><code>devtrack-bin/ping.go</code> implements the Tier-2 anonymous usage pings described in the Telemetry plan. On install, a random UUID is created at <code>~/.devtrack/id</code>. A SHA-256 of the hardware platform UUID is computed as a stable fingerprint (raw value never leaves the machine). Two events are fired: <code>install</code> on first run, and <code>active</code> at most once per 24 hours when the daemon is running. Both POSTs are fire-and-forget goroutines — failures are silent. The telemetry endpoint is <code>https://ping.devtrack.dev</code> (Cloudflare Worker). Disabled by a sentinel file written by <code>devtrack telemetry off</code>. See <a href="#TELEMETRY" onclick="navigate('TELEMETRY');return false;">Telemetry</a>.</p></div></div>
   <div class="feature-item"><div class="feature-dot">8</div><div><h4>SQLite alert_state fallback for ticket alerter</h4><p>The ticket alerter now persists <code>last_checked</code> timestamps to SQLite when MongoDB is unavailable. The <code>alert_state</code> table in <code>Data/devtrack.db</code> tracks the last poll time per source (github/azure/jira), enabling full delta-sync functionality in offline-first mode. Go accessors <code>GetAlertLastChecked</code>/<code>SetAlertLastChecked</code> added to <code>database.go</code>. See <a href="#TICKET_ALERTER" onclick="navigate('TICKET_ALERTER');return false;">Ticket Alerter</a>.</p></div></div>
   <div class="feature-item"><div class="feature-dot">9</div><div><h4>Per-workspace PM overrides (WorkspaceRouter)</h4><p>Workspaces now support per-platform PM overrides: <code>pm_assignee</code>, <code>pm_iteration_path</code> (Azure), <code>pm_area_path</code> (Azure), and <code>pm_milestone</code> (GitHub/GitLab). These are extracted from commit trigger POST data and forwarded to the appropriate platform API when creating work items or issues. Azure gets assigned_to/area_path/iteration_path; GitHub gets assignees/milestone; GitLab gets assignee_ids/milestone_id. See <a href="#MULTI_REPO" onclick="navigate('MULTI_REPO');return false;">Multi-Repo Setup</a>.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">10</div><div><h4>Webhook + Trigger Server added (<code>backend/webhook_server.py</code>)</h4><p>The CS-1 FastAPI webhook and trigger server is now present in the repository as <code>backend/webhook_server.py</code>. It serves as the single HTTP entry-point for both inbound platform webhooks (Azure DevOps, GitHub, GitLab, Jira) and outbound trigger calls from the Go daemon (<code>commit_trigger</code>, <code>timer_trigger</code>, and the full IPC message vocabulary). All <code>/trigger/*</code> endpoints require the <code>X-DevTrack-API-Key</code> header. Run with <code>python -m backend.webhook_server</code> or via the Server TUI. The <code>alert_poller</code> background service is also now present as <code>backend/alert_poller.py</code> — start it as a subprocess or via <code>devtrack server-tui</code>. See the <a href="#SERVER_TUI" onclick="navigate('SERVER_TUI');return false;">Server TUI</a> page.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">11</div><div><h4>Bug fix: stale <code>config._load_env()</code> call removed</h4><p>After the env-first config refactor (item 2 above), a residual <code>config._load_env()</code> call remained in one Python module. This caused an <code>AttributeError</code> at import time for any code path that hit that module while running in env-first mode. The call has been removed. No configuration changes are required; all existing env var exports continue to work as before.</p></div></div>
 </div>
 
 <h2>New .env Variables (v1.4-dev)</h2>
@@ -1297,6 +1458,19 @@ curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
 <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
 <tbody>
 <tr><td><code>ignore_branches</code></td><td><code>[]string</code></td><td>Branch names (or glob patterns) whose commits are silently skipped. Example: <code>["main", "release/*"]</code></td></tr>
+</tbody>
+</table></div>
+
+<h2>New Source Files (v1.4-dev)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>backend/webhook_server.py</code></td><td>CS-1 FastAPI webhook + trigger server — single HTTP entry-point for inbound platform webhooks and Go daemon trigger calls</td></tr>
+<tr><td><code>backend/alert_poller.py</code></td><td>Async background poller — polls GitHub, Azure DevOps, and Jira for developer-relevant events; stores to MongoDB or SQLite fallback</td></tr>
+<tr><td><code>backend/alerters/jira_alerter.py</code></td><td>Jira-specific alerter — assigned, comment, and status-change polling via Jira Cloud REST API</td></tr>
+<tr><td><code>devtrack-bin/ping.go</code></td><td>Anonymous install + active telemetry pings (Tier 2)</td></tr>
+<tr><td><code>backend/db/project_store.py</code></td><td>SQLite CRUD store for PM projects, backlog items, and sprints (Phase 4B)</td></tr>
+<tr><td><code>backend/workspace_router.py</code></td><td>Routes commit triggers to the correct PM platform with per-workspace PM override support</td></tr>
 </tbody>
 </table></div>
 
@@ -1456,6 +1630,29 @@ curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
 </tbody>
 </table></div>
 
+<h2>In v2.0.0</h2>
+<ul>
+<li>CS-3 Admin GUI MVP — user role update, soft disable/enable, license status page ✅ (TASK-011 → TASK-015)</li>
+<li>HTMX trigger stats panel on admin dashboard with 30s auto-refresh ✅ (TASK-014)</li>
+<li>Password reset and ADMIN_EMBED single-process mode ✅ (TASK-015)</li>
+<li>31 new HTTP-level admin route tests; 492 total tests ✅ (TASK-011)</li>
+</ul>
+
+<h2>In v1.6 (merged to main — see v1.6-dev above)</h2>
+<ul>
+<li>No-direct-push-to-main rule enforced in PM and Engineer AI agents ✅</li>
+<li>CLAUDE.md + README synced to CS-1 architecture reality (TASK-010) ✅</li>
+<li>Env-first startup docs corrected across install/quickstart/getting-started ✅</li>
+</ul>
+
+<h2>In v1.5 (merged to main — see v1.5-dev above)</h2>
+<ul>
+<li>Config refactor — all <code>os.getenv</code> violations eliminated across 22+ modules ✅ (TASK-001 → TASK-007)</li>
+<li>Trigger throughput stats panel in Server TUI ✅ (TASK-008)</li>
+<li>37 headless tests for server_tui helpers; Linux-first test strategy ✅ (TASK-009)</li>
+<li>433 total tests (396 Python + 37 Go) ✅</li>
+</ul>
+
 <h2>In v1.4 (partial — see v1.4-dev above)</h2>
 <ul>
 <li>Jira alerter with 26 tests ✅ (shipped in v1.4-dev)</li>
@@ -1477,6 +1674,8 @@ curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
 <p>DevTrack is configured entirely through environment variables. Copy <code>.env_sample</code> to <code>.env</code>, fill in your values, then <strong>export them</strong> before running <code>devtrack start</code>. All path values must be absolute. Restart the daemon after changes.</p>
 
 <blockquote><p><strong>v1.4-dev — Env-first config:</strong> The Go daemon no longer reads a <code>.env</code> file at startup. All variables must be exported into the process environment beforehand (e.g. via <code>source .env</code> in your shell profile, or baked into the launchd/systemd plist by running <code>devtrack autostart-install</code>). Running <code>set -a; source .env; set +a</code> before <code>devtrack start</code> is the quickest migration path for interactive use.</p></blockquote>
+
+<blockquote><p><strong>v1.5-dev — Config accessor coverage complete:</strong> All Python modules now access configuration exclusively through typed accessor functions in <code>backend/config.py</code> — no direct <code>os.getenv</code> or <code>os.environ.get</code> calls remain in application code (TASK-001 through TASK-007). Over 50 new typed accessors were added covering Azure, GitHub, GitLab, admin, server_tui, auth, RAG, Telegram, Slack, and more. If you add new environment variables, add a typed accessor to <code>backend/config.py</code> and an entry to <code>.env_sample</code> before using them.</p></blockquote>
 
 <h2>Minimum Required Setup</h2>
 <pre><code class="language-bash">PROJECT_ROOT=/path/to/automation_tools
@@ -1728,7 +1927,7 @@ SENTIMENT_ANALYSIS_WINDOW_MINUTES=120</code></pre>
 
   TEST_SUITE: `<div class="md-body">
 <h1>Test Suite</h1>
-<p>DevTrack ships a comprehensive test suite covering the Go daemon, the Python backend, and the HTTP trigger layer. As of <strong>v1.4-dev</strong>, the suite contains <strong>185+ tests</strong> (159+ CS-1 validation tests + 26 Jira alerter tests) spread across Go and Python, with full coverage of HTTP trigger validation, admin authentication, user management, license enforcement, and Jira alerter polling.</p>
+<p>DevTrack ships a comprehensive test suite covering the Go daemon, the Python backend, and the HTTP trigger layer. As of <strong>v2.0.0</strong>, the suite contains <strong>492 tests</strong> (455 Python + 37 Go) spread across Go and Python, with full coverage of HTTP trigger validation, admin authentication, user management, admin routes, license enforcement, Jira alerter polling, and server_tui helper modules.</p>
 
 <h2>Running the Tests</h2>
 <h3>Go tests</h3>
@@ -1747,8 +1946,10 @@ uv run pytest backend/tests/
 uv run pytest backend/tests/test_http_triggers.py
 uv run pytest backend/tests/test_admin_auth.py
 uv run pytest backend/tests/test_admin_user_manager.py
+uv run pytest backend/tests/test_admin_routes.py
 uv run pytest backend/tests/test_license_manager.py
 uv run pytest backend/tests/test_jira_alerter.py
+uv run pytest backend/tests/test_server_tui.py
 
 # Run by name filter
 uv run pytest backend/tests/ -k test_name</code></pre>
@@ -1763,6 +1964,8 @@ uv run pytest backend/tests/ -k test_name</code></pre>
 <tr><td><code>backend/tests/test_admin_user_manager.py</code></td><td>Python</td><td>User lifecycle via the Admin Console — create, delete, list, and API key rotation; enforces that duplicate usernames are rejected</td></tr>
 <tr><td><code>backend/tests/test_license_manager.py</code></td><td>Python</td><td>License tier detection, T&amp;C acceptance recording and re-prompt logic, offline vs SaaS mode enforcement, <code>DEVTRACK_AUTO_ACCEPT_TERMS</code> flag behaviour</td></tr>
 <tr><td><code>backend/tests/test_jira_alerter.py</code></td><td>Python</td><td>26 tests for <code>JiraAlerter</code> — assigned polling, comment detection, status-change events, deduplication, and all edge cases. No real network calls — all <code>JiraClient</code> methods are mocked.</td></tr>
+<tr><td><code>backend/tests/test_server_tui.py</code></td><td>Python</td><td>37 headless tests for server_tui helpers — <code>ProcessMonitor</code> (process discovery, CPU/MEM sampling, start/stop), <code>log_viewer</code> (tail, rotation, missing file), <code>stats_client</code> (SQLite reads, graceful degradation when DB absent), <code>health_client</code> (HTTP health probes, timeout handling). All fixtures use POSIX <code>tmp_path</code>; no macOS-specific dependencies — runs on Linux CI.</td></tr>
+<tr><td><code>backend/tests/test_admin_routes.py</code></td><td>Python</td><td>31 HTTP-level tests for admin console routes — user role update, soft disable/enable, password reset, license status page, trigger stats HTMX panel (<code>GET /admin/stats-panel</code>), and auth guards on all new endpoints. Uses <code>TestClient</code>-wrapped FastAPI app; no route handler mocking.</td></tr>
 </tbody>
 </table></div>
 
@@ -1800,12 +2003,22 @@ def teardown_function():
 </tbody>
 </table></div>
 
+<h2>Platform Notes</h2>
+<p>The test suite is <strong>Linux-first</strong>. All new tests added from v1.5-dev onward follow these conventions:</p>
+<ul>
+<li>Fixtures use POSIX <code>tmp_path</code> — no platform-specific temp directories</li>
+<li>Process cmdlines use generic names (e.g. <code>python server.py</code>) — no macOS <code>launchd</code> or Windows service references</li>
+<li>Tests pass on Ubuntu/Debian CI without modification; macOS is secondary; Windows/WSL is not a CI target</li>
+</ul>
+<p>If you add new server_tui or system-level tests, follow the same conventions so they run on the primary CI platform.</p>
+
 <h2>Troubleshooting</h2>
 <ul>
 <li><strong>Tests hang at collection</strong> — likely caused by the <code>.env</code> FIFO bug. Run <code>file .env</code>; if it shows <em>fifo (named pipe)</em>, delete and recreate: <code>rm .env &amp;&amp; cp .env_sample .env</code>.</li>
 <li><strong>"provider not found" errors</strong> — call <code>reset_provider_cache()</code> in test setup/teardown when changing <code>LLM_PROVIDER</code>.</li>
 <li><strong>Admin auth tests fail with 500</strong> — confirm <code>ADMIN_SECRET_KEY</code> is set in the test environment (can be any non-empty string for tests).</li>
 <li><strong>License manager tests fail offline</strong> — expected: tests that require <code>DEVTRACK_API_URL</code> are skipped automatically when the variable is absent. Set <code>DEVTRACK_AUTO_ACCEPT_TERMS=1</code> to prevent interactive prompts during CI runs.</li>
+<li><strong>server_tui tests fail on macOS with "process not found"</strong> — the server_tui test fixtures use generic POSIX process names. If you see platform-specific failures, check that your test environment is not injecting macOS service names into the process mock.</li>
 </ul>
 </div>`,
 
@@ -2182,7 +2395,7 @@ function renderHome() {
   const content = document.getElementById('content');
   content.innerHTML = `
     <div class="home-hero">
-      <div class="home-badge">Local-First · v1.4-dev</div>
+      <div class="home-badge">Local-First · v2.0.0</div>
       <h1 class="home-title">Developer automation<br>that handles the <span>overhead</span>.</h1>
       <p class="home-sub">DevTrack monitors your Git activity, prompts for work updates, routes them through AI, and keeps your project management systems in sync — all running locally on your machine.</p>
     </div>
@@ -2190,7 +2403,7 @@ function renderHome() {
     <div class="home-grid">
       ${[
         // ── Get Started ────────────────────────────────────────────────────────
-        { id:'WHATS_NEW',        icon:'🎉', title:"What's New",         desc:'v1.4-dev: Jira alerter (26 tests), SQLite alert_state fallback, per-workspace PM overrides, env-first config, post-commit hook auto-install, ignore_branches, Phase 4B SQLite PM persistence, env-baking autostart, anonymous telemetry ping. v1.3: 133 new tests, .env FIFO fix.' },
+        { id:'WHATS_NEW',        icon:'🎉', title:"What's New",         desc:'v2.0.0: CS-3 Admin GUI MVP — user role update, soft disable/enable, license status page, trigger stats HTMX panel (30s auto-refresh), password reset, ADMIN_EMBED single-process mode, 31 new HTTP-level admin route tests (492 total). v1.6-dev (merged): no-direct-push-to-main in AI agents; CLAUDE.md + README synced to CS-1 reality. v1.5-dev: config refactor; 433 tests.' },
         { id:'GETTING_STARTED',  icon:'🚀', title:'Getting Started',    desc:'New to DevTrack? Start here — concepts, setup, and first run.' },
         { id:'QUICK_START',      icon:'⚡', title:'Quick Start',        desc:'Get running in 5 minutes with the minimal setup guide.' },
         // ── Reference ─────────────────────────────────────────────────────────
@@ -2216,8 +2429,8 @@ function renderHome() {
         { id:'PERSONALIZATION', icon:'🎨', title:'Personalization',     desc:'"Talk Like You" — AI that learns your communication style from Teams messages and writes in your voice using RAG-powered few-shot examples.' },
         // ── System Integration ────────────────────────────────────────────────
         { id:'AUTOSTART',       icon:'🔌', title:'Auto-Start',          desc:'Auto-start DevTrack at login — OS-aware. Run <code>devtrack autostart-install</code>: launchd LaunchAgent on macOS, systemd user service on Linux/WSL, or a shell profile block on WSL without systemd. <strong>v1.4-dev:</strong> all env vars are now baked into the plist/unit at install time — no separate <code>.env</code> file needed at runtime.' },
-        { id:'SERVER_TUI',      icon:'🖥️', title:'Server TUI',          desc:'Textual process monitor for the Python backend. Shows all server processes with live CPU/MEM/status and a health bar. Navigate with ↑↓, restart with r, toggle logs with l.' },
-        { id:'ADMIN_CONSOLE',   icon:'🛡️', title:'Admin Console',       desc:'Web UI at <code>http://localhost:8090/admin/</code> — manage users, API keys, review server health, LLM config, integration credentials, and a full audit log. Run with <code>devtrack admin-start</code>.' },
+        { id:'SERVER_TUI',      icon:'🖥️', title:'Server TUI',          desc:'Textual process monitor for the Python backend. Shows all server processes with live CPU/MEM/status, a health bar, and a trigger throughput stats panel (triggers today, commits today, errors in last 24 h). Navigate with ↑↓, restart with r, toggle logs with l.' },
+        { id:'ADMIN_CONSOLE',   icon:'🛡️', title:'Admin Console',       desc:'Web UI at <code>http://localhost:8090/admin/</code> — manage users, roles, API keys; soft disable/enable users; reset passwords; license status page; HTMX trigger stats panel (30s auto-refresh); LLM config, integration credentials, and a full audit log. Run with <code>devtrack admin-start</code> or set <code>ADMIN_EMBED=true</code> to co-host on port 8089.' },
         { id:'TELEMETRY',       icon:'📊', title:'Telemetry',           desc:'Optional usage tracking: download counts, command frequencies, version adoption. Fully transparent, no PII. Designed for a real-time admin dashboard via Server-Sent Events. See the plan in <code>docs/TELEMETRY_PLAN.md</code>.' },
         { id:'CLOUD_MODE',      icon:'☁️', title:'Cloud Mode',          desc:'Connect your local daemon to a remote managed backend. <code>devtrack cloud login --url URL --key KEY</code> saves credentials to <code>~/.devtrack/cloud.json</code>. Bypasses cert-pinning for CA-signed remote certs.' },
         { id:'TUI_DASHBOARD',   icon:'📟', title:'TUI Dashboard',       desc:'Bubble Tea full-screen dashboard. 4 tabs: Overview (uptime, latency, counts), Activity (last 30 triggers), Workspaces (all repos + PM platform), Alerts (last 30 notifications). Tab/1–4 to switch, <code>r</code> refresh, <code>q</code> quit.' },

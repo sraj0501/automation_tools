@@ -4,9 +4,16 @@ Bridges server_tui.process_monitor and server_tui.health_client.
 """
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Optional
+
+from backend.config import (
+    llm_provider as _llm_provider,
+    ollama_model as _ollama_model,
+    openai_model as _openai_model,
+    get_webhook_port as _webhook_port,
+    get_admin_port as _admin_port,
+)
 
 
 @dataclass
@@ -69,8 +76,8 @@ def get_snapshot() -> ServerSnapshot:
     return ServerSnapshot(
         processes=processes,
         services=services,
-        llm_provider=os.environ.get("LLM_PROVIDER", "—"),
-        llm_model=os.environ.get("OLLAMA_MODEL") or os.environ.get("OPENAI_MODEL") or "—",
-        webhook_port=int(os.environ.get("WEBHOOK_PORT", "8089")),
-        admin_port=int(os.environ.get("ADMIN_PORT", "8090")),
+        llm_provider=_llm_provider() or "—",
+        llm_model=_ollama_model() or _openai_model() or "—",
+        webhook_port=_webhook_port(),
+        admin_port=_admin_port(),
     )

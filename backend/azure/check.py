@@ -32,10 +32,11 @@ def main() -> int:
     import requests
     from requests.auth import HTTPBasicAuth
 
-    pat = os.getenv("AZURE_DEVOPS_PAT") or os.getenv("AZURE_API_KEY", "")
-    org = os.getenv("AZURE_ORGANIZATION", "")
-    project = os.getenv("AZURE_PROJECT", "")
-    api_version = os.getenv("AZURE_API_VERSION", "7.1")
+    from backend.config import azure_pat, get_azure_organization, get_azure_project_name, get_azure_api_version
+    pat = azure_pat()
+    org = get_azure_organization()
+    project = get_azure_project_name()
+    api_version = get_azure_api_version()
 
     print("Azure DevOps Connection Check")
     print("=" * 40)

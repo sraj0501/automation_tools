@@ -51,7 +51,8 @@ def _is_enabled() -> bool:
 
 
 def _api_url() -> Optional[str]:
-    return os.getenv("DEVTRACK_API_URL")
+    from backend.config import get_devtrack_api_url
+    return get_devtrack_api_url() or None
 
 
 def _devtrack_version() -> str:
@@ -59,7 +60,8 @@ def _devtrack_version() -> str:
         from importlib.metadata import version
         return version("devtrack")
     except Exception:
-        return os.getenv("DEVTRACK_VERSION", "unknown")
+        from backend.config import get_devtrack_version
+        return get_devtrack_version()
 
 
 # ── Public API ────────────────────────────────────────────────────────────────

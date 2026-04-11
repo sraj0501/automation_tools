@@ -30,7 +30,6 @@ workspaces.yaml
 # Test temp dirs
 .test_commit_enhancer_tmp
 
-# Claude Code — exclude machine-specific settings, keep shared memory
+# Claude Code — exclude machine-specific settings, keep shared agents
 .claude/settings.local.json
 .claude/worktrees/
-.claude/agent*

@@ -74,8 +74,9 @@ Your Git Repo
     TCP/IP (JSON messages)
             │
             ▼
-    Python Bridge
-    (python_bridge.py)
+    Python Webhook Server
+    (backend/webhook_server.py)
+    ├─ FastAPI HTTP server (TLS)
     ├─ NLP parsing (spaCy)
     ├─ LLM enhancement (Ollama)
     ├─ TUI prompts
@@ -151,7 +152,12 @@ Key variables to set:
 - `LLM_PROVIDER` - Which AI to use (ollama, openai, or anthropic)
 
 ### 3. Start the Daemon
+
+The daemon reads config from the process environment — source `.env` first:
+
 ```bash
+set -a && source .env && set +a
+
 # Start DevTrack
 devtrack start
 

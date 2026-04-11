@@ -127,8 +127,9 @@ class DevTrackBot:
 def _format_ipc_event(message: IPCMessage) -> str:
     """Format an IPC event for Telegram display. Returns empty string to suppress."""
     data = message.data or {}
+    from backend.config import get_telegram_notify_commits, get_telegram_notify_triggers, get_telegram_notify_health
     if message.type == MessageType.COMMIT_TRIGGER:
-        if os.environ.get("TELEGRAM_NOTIFY_COMMITS", "false").lower() != "true":
+        if not get_telegram_notify_commits():
             return ""
         branch = data.get("branch", "")
         msg = data.get("message", "")
@@ -141,15 +142,15 @@ def _format_ipc_event(message: IPCMessage) -> str:
             text += f"Message: {msg}\n"
         return text
     elif message.type == MessageType.TIMER_TRIGGER:
-        if os.environ.get("TELEGRAM_NOTIFY_TRIGGERS", "true").lower() != "true":
+        if not get_telegram_notify_triggers():
             return ""
         return "*Timer trigger fired* -- work update prompt sent"
     elif message.type == MessageType.REPORT_TRIGGER:
-        if os.environ.get("TELEGRAM_NOTIFY_TRIGGERS", "true").lower() != "true":
+        if not get_telegram_notify_triggers():
             return ""
         return "*Report generation triggered*"
     elif message.type == MessageType.WEBHOOK_EVENT:
-        if os.environ.get("TELEGRAM_NOTIFY_HEALTH", "true").lower() != "true":
+        if not get_telegram_notify_health():
             return ""
         source = data.get("source", "unknown")
         event = data.get("event_type", "unknown")

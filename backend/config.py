@@ -681,6 +681,11 @@ def get_webhook_github_secret() -> str:
     return get("WEBHOOK_GITHUB_SECRET", "")
 
 
+def get_webhook_gitlab_secret() -> str:
+    """GitLab webhook token (optional). WEBHOOK_GITLAB_SECRET."""
+    return get("WEBHOOK_GITLAB_SECRET", "")
+
+
 def is_webhook_notify_os() -> bool:
     """Send OS notifications for webhook events. WEBHOOK_NOTIFY_OS (default: true)."""
     return get_bool("WEBHOOK_NOTIFY_OS", True)
@@ -918,3 +923,412 @@ def is_alert_notify_status_changes() -> bool:
 def is_alert_notify_review_requested() -> bool:
     """Deliver notifications for review-request events. ALERT_NOTIFY_REVIEW_REQUESTED (default: true)."""
     return get_bool("ALERT_NOTIFY_REVIEW_REQUESTED", True)
+
+
+# --- Core paths ---
+
+def get_data_dir() -> str:
+    """Root data directory. DATA_DIR (default: "")."""
+    return get("DATA_DIR", "")
+
+
+def get_project_root() -> str:
+    """Project root directory. PROJECT_ROOT (default: "")."""
+    return get("PROJECT_ROOT", "")
+
+
+def get_database_dir() -> str:
+    """Database directory. DATABASE_DIR (default: "")."""
+    return get("DATABASE_DIR", "")
+
+
+# --- DevTrack server / cloud ---
+
+def get_devtrack_api_url() -> str:
+    """DevTrack cloud API URL. DEVTRACK_API_URL (default: "")."""
+    return get("DEVTRACK_API_URL", "")
+
+
+def get_devtrack_api_key() -> str:
+    """DevTrack API key for /trigger/* requests. DEVTRACK_API_KEY (default: "")."""
+    return get("DEVTRACK_API_KEY", "")
+
+
+def get_devtrack_version() -> str:
+    """DevTrack build version string. DEVTRACK_VERSION (default: "unknown")."""
+    return get("DEVTRACK_VERSION", "unknown")
+
+
+def get_devtrack_tls_enabled() -> bool:
+    """Whether TLS is enabled on the Go<->Python channel. DEVTRACK_TLS (default: True)."""
+    return get_bool("DEVTRACK_TLS", True)
+
+
+def get_devtrack_tls_cert() -> str:
+    """Path to TLS certificate file. DEVTRACK_TLS_CERT (default: "")."""
+    return get("DEVTRACK_TLS_CERT", "")
+
+
+def get_devtrack_tls_key() -> str:
+    """Path to TLS private key file. DEVTRACK_TLS_KEY (default: "")."""
+    return get("DEVTRACK_TLS_KEY", "")
+
+
+def get_devtrack_auto_accept_terms() -> bool:
+    """Auto-accept terms of service on install. DEVTRACK_AUTO_ACCEPT_TERMS (default: False)."""
+    return get_bool("DEVTRACK_AUTO_ACCEPT_TERMS", False)
+
+
+# --- Admin console ---
+
+def get_admin_port() -> int:
+    """Admin console listen port. ADMIN_PORT (default: 8090)."""
+    return get_int("ADMIN_PORT", 8090)
+
+
+def get_admin_host() -> str:
+    """Admin console listen host. ADMIN_HOST (default: '0.0.0.0')."""
+    return get("ADMIN_HOST", "0.0.0.0")
+
+
+def get_admin_username() -> str:
+    """Admin console username. ADMIN_USERNAME (default: 'admin')."""
+    return get("ADMIN_USERNAME", "admin")
+
+
+def get_admin_password() -> str:
+    """Admin console password. ADMIN_PASSWORD (default: "")."""
+    return get("ADMIN_PASSWORD", "")
+
+
+def get_admin_embed() -> bool:
+    """Mount admin UI on main webhook server. ADMIN_EMBED (default: false).
+
+    When true, the admin FastAPI router is mounted directly on the main
+    webhook_server app at /admin, removing the need for a separate process.
+    """
+    return get_bool("ADMIN_EMBED", False)
+
+
+def get_admin_session_hours() -> int:
+    """Admin console session lifetime in hours. REQUIRED: ADMIN_SESSION_HOURS."""
+    val = get("ADMIN_SESSION_HOURS")
+    if not val:
+        raise ValueError("ADMIN_SESSION_HOURS environment variable required (e.g., 8)")
+    try:
+        hours = int(val)
+        if hours <= 0:
+            raise ValueError(f"ADMIN_SESSION_HOURS must be > 0, got {hours}")
+        return hours
+    except ValueError as e:
+        raise ValueError(f"ADMIN_SESSION_HOURS must be a positive integer: {e}")
+
+
+def get_scrypt_n() -> int:
+    """Scrypt CPU/memory cost factor. REQUIRED: SCRYPT_N (must be a power of 2, >= 2)."""
+    val = get("SCRYPT_N")
+    if not val:
+        raise ValueError("SCRYPT_N environment variable required (e.g., 16384)")
+    try:
+        n = int(val)
+    except ValueError:
+        raise ValueError(f"SCRYPT_N must be an integer, got: {val!r}")
+    if n < 2 or (n & (n - 1)) != 0:
+        raise ValueError(f"SCRYPT_N must be a power of 2 and >= 2, got {n}")
+    return n
+
+
+def get_scrypt_r() -> int:
+    """Scrypt block size. REQUIRED: SCRYPT_R (must be > 0)."""
+    val = get("SCRYPT_R")
+    if not val:
+        raise ValueError("SCRYPT_R environment variable required (e.g., 8)")
+    try:
+        r = int(val)
+        if r <= 0:
+            raise ValueError(f"SCRYPT_R must be > 0, got {r}")
+        return r
+    except ValueError as e:
+        raise ValueError(f"SCRYPT_R must be a positive integer: {e}")
+
+
+def get_scrypt_p() -> int:
+    """Scrypt parallelisation factor. REQUIRED: SCRYPT_P (must be > 0)."""
+    val = get("SCRYPT_P")
+    if not val:
+        raise ValueError("SCRYPT_P environment variable required (e.g., 1)")
+    try:
+        p = int(val)
+        if p <= 0:
+            raise ValueError(f"SCRYPT_P must be > 0, got {p}")
+        return p
+    except ValueError as e:
+        raise ValueError(f"SCRYPT_P must be a positive integer: {e}")
+
+
+def get_scrypt_dklen() -> int:
+    """Scrypt derived key length in bytes. REQUIRED: SCRYPT_DKLEN (must be > 0)."""
+    val = get("SCRYPT_DKLEN")
+    if not val:
+        raise ValueError("SCRYPT_DKLEN environment variable required (e.g., 32)")
+    try:
+        dklen = int(val)
+        if dklen <= 0:
+            raise ValueError(f"SCRYPT_DKLEN must be > 0, got {dklen}")
+        return dklen
+    except ValueError as e:
+        raise ValueError(f"SCRYPT_DKLEN must be a positive integer: {e}")
+
+
+def get_shutdown_grace_period_seconds() -> float:
+    """Seconds to wait before sending SIGTERM on shutdown. REQUIRED: SHUTDOWN_GRACE_PERIOD_SECONDS."""
+    val = get("SHUTDOWN_GRACE_PERIOD_SECONDS")
+    if not val:
+        raise ValueError(
+            "SHUTDOWN_GRACE_PERIOD_SECONDS environment variable required (e.g., 0.5)"
+        )
+    try:
+        secs = float(val)
+        if secs <= 0:
+            raise ValueError(f"SHUTDOWN_GRACE_PERIOD_SECONDS must be > 0, got {secs}")
+        return secs
+    except ValueError as e:
+        raise ValueError(f"SHUTDOWN_GRACE_PERIOD_SECONDS must be a positive number: {e}")
+
+
+def get_stats_refresh_interval_seconds() -> int:
+    """How often the trigger stats panel polls in seconds. REQUIRED: STATS_REFRESH_INTERVAL_SECONDS."""
+    val = get("STATS_REFRESH_INTERVAL_SECONDS")
+    if not val:
+        raise ValueError(
+            "STATS_REFRESH_INTERVAL_SECONDS environment variable required (e.g., 30)"
+        )
+    try:
+        secs = int(val)
+        if secs <= 0:
+            raise ValueError(f"STATS_REFRESH_INTERVAL_SECONDS must be > 0, got {secs}")
+        return secs
+    except ValueError as e:
+        raise ValueError(f"STATS_REFRESH_INTERVAL_SECONDS must be a positive integer: {e}")
+
+
+def get_process_refresh_interval_seconds() -> int:
+    """How often the process table polls in seconds. REQUIRED: PROCESS_REFRESH_INTERVAL_SECONDS."""
+    val = get("PROCESS_REFRESH_INTERVAL_SECONDS")
+    if not val:
+        raise ValueError(
+            "PROCESS_REFRESH_INTERVAL_SECONDS environment variable required (e.g., 15)"
+        )
+    try:
+        secs = int(val)
+        if secs <= 0:
+            raise ValueError(f"PROCESS_REFRESH_INTERVAL_SECONDS must be > 0, got {secs}")
+        return secs
+    except ValueError as e:
+        raise ValueError(f"PROCESS_REFRESH_INTERVAL_SECONDS must be a positive integer: {e}")
+
+
+def get_audit_log_limit() -> int:
+    """Maximum number of audit log entries returned by the admin UI. REQUIRED: AUDIT_LOG_LIMIT."""
+    val = get("AUDIT_LOG_LIMIT")
+    if not val:
+        raise ValueError("AUDIT_LOG_LIMIT environment variable required (e.g., 200)")
+    try:
+        limit = int(val)
+        if limit <= 0:
+            raise ValueError(f"AUDIT_LOG_LIMIT must be > 0, got {limit}")
+        return limit
+    except ValueError as e:
+        raise ValueError(f"AUDIT_LOG_LIMIT must be a positive integer: {e}")
+
+
+def get_license_contact_email() -> str:
+    """Support email shown on the license page. REQUIRED: LICENSE_CONTACT_EMAIL."""
+    val = get("LICENSE_CONTACT_EMAIL")
+    if not val:
+        raise ValueError(
+            "LICENSE_CONTACT_EMAIL environment variable required (e.g., license@devtrack.dev)"
+        )
+    return val
+
+
+# --- GitHub (call-site use) ---
+
+def get_github_token() -> str:
+    """GitHub Personal Access Token. GITHUB_TOKEN (default: "")."""
+    return get("GITHUB_TOKEN", "")
+
+
+def get_github_owner() -> str:
+    """GitHub org/user owner. GITHUB_OWNER (default: "")."""
+    return get("GITHUB_OWNER", "")
+
+
+def get_github_repo() -> str:
+    """GitHub repository name. GITHUB_REPO (default: "")."""
+    return get("GITHUB_REPO", "")
+
+
+def get_github_api_url() -> str:
+    """GitHub API base URL (empty = github.com). GITHUB_API_URL (default: "")."""
+    return get("GITHUB_API_URL", "")
+
+
+def get_github_api_version() -> str:
+    """GitHub REST API version header. GITHUB_API_VERSION (default: '2022-11-28')."""
+    return get("GITHUB_API_VERSION", "2022-11-28")
+
+
+def get_github_sync_window_hours() -> int:
+    """GitHub sync window in hours (0 = full resync). GITHUB_SYNC_WINDOW_HOURS (default: 0)."""
+    return get_int("GITHUB_SYNC_WINDOW_HOURS", 0)
+
+
+def get_github_create_on_no_match() -> bool:
+    """Create GitHub issue when no match found. GITHUB_CREATE_ON_NO_MATCH (default: False)."""
+    return get_bool("GITHUB_CREATE_ON_NO_MATCH", False)
+
+
+def get_github_log_path() -> str:
+    """Path for GitHub analysis log output. GITHUB_LOG_PATH (default: "")."""
+    return get("GITHUB_LOG_PATH", "")
+
+
+# --- Azure DevOps (call-site use, supplements existing) ---
+
+def get_azure_organization() -> str:
+    """Azure DevOps organization name. AZURE_ORGANIZATION (default: "")."""
+    return get("AZURE_ORGANIZATION") or get("ORGANIZATION", "")
+
+
+def get_azure_project_name() -> str:
+    """Azure DevOps project name. AZURE_PROJECT (default: "")."""
+    return get("AZURE_PROJECT") or get("PROJECT", "")
+
+
+def get_azure_poll_interval_mins() -> int:
+    """Azure assignment poll interval in minutes. AZURE_POLL_INTERVAL_MINS (default: 5)."""
+    return get_int("AZURE_POLL_INTERVAL_MINS", 5)
+
+
+def get_azure_sync_window_hours() -> int:
+    """Azure sync window in hours (0 = full resync). AZURE_SYNC_WINDOW_HOURS (default: 0)."""
+    return get_int("AZURE_SYNC_WINDOW_HOURS", 0)
+
+
+def get_azure_client_id() -> str:
+    """Azure AD application (client) ID. AZURE_CLIENT_ID (default: "")."""
+    return get("AZURE_CLIENT_ID", "")
+
+
+def get_azure_tenant_id() -> str:
+    """Azure AD tenant ID. AZURE_TENANT_ID (default: "")."""
+    return get("AZURE_TENANT_ID", "")
+
+
+def get_azure_client_secret() -> str:
+    """Azure AD client secret. AZURE_CLIENT_SECRET (default: "")."""
+    return get("AZURE_CLIENT_SECRET", "")
+
+
+# --- GitLab (call-site use, supplements existing) ---
+
+def get_gitlab_url() -> str:
+    """GitLab instance base URL. GITLAB_URL (default: 'https://gitlab.com')."""
+    return get("GITLAB_URL", "https://gitlab.com")
+
+
+def get_gitlab_pat() -> str:
+    """GitLab Personal Access Token. GITLAB_PAT or GITLAB_API_KEY (default: "")."""
+    return get("GITLAB_PAT") or get("GITLAB_API_KEY", "")
+
+
+def get_gitlab_project_id_str() -> str:
+    """GitLab project ID as string. GITLAB_PROJECT_ID (default: "")."""
+    return get("GITLAB_PROJECT_ID", "")
+
+
+def get_gitlab_poll_interval_mins() -> int:
+    """GitLab assignment poll interval in minutes. GITLAB_POLL_INTERVAL_MINS (default: 5)."""
+    return get_int("GITLAB_POLL_INTERVAL_MINS", 5)
+
+
+def get_gitlab_sync_window_hours() -> int:
+    """GitLab sync window in hours (0 = full resync). GITLAB_SYNC_WINDOW_HOURS (default: 0)."""
+    return get_int("GITLAB_SYNC_WINDOW_HOURS", 0)
+
+
+# --- Slack ---
+
+def get_slack_enabled() -> bool:
+    """Whether the Slack bot is enabled. SLACK_ENABLED (default: False)."""
+    return get_bool("SLACK_ENABLED", False)
+
+
+def get_slack_bot_token() -> str:
+    """Slack bot OAuth token (xoxb-...). SLACK_BOT_TOKEN (default: "")."""
+    return get("SLACK_BOT_TOKEN", "")
+
+
+def get_slack_app_token() -> str:
+    """Slack app-level token for Socket Mode (xapp-...). SLACK_APP_TOKEN (default: "")."""
+    return get("SLACK_APP_TOKEN", "")
+
+
+def get_slack_allowed_channel_ids() -> list:
+    """Comma-separated Slack channel IDs to respond in. SLACK_ALLOWED_CHANNEL_IDS (default: [])."""
+    raw = get("SLACK_ALLOWED_CHANNEL_IDS", "")
+    if not raw:
+        return []
+    return [c.strip() for c in raw.split(",") if c.strip()]
+
+
+# --- Telegram flags (supplements existing token/ids) ---
+
+def get_telegram_notify_commits() -> bool:
+    """Send commit notifications to Telegram. TELEGRAM_NOTIFY_COMMITS (default: False)."""
+    return get_bool("TELEGRAM_NOTIFY_COMMITS", False)
+
+
+def get_telegram_notify_triggers() -> bool:
+    """Send timer trigger notifications to Telegram. TELEGRAM_NOTIFY_TRIGGERS (default: True)."""
+    return get_bool("TELEGRAM_NOTIFY_TRIGGERS", True)
+
+
+def get_telegram_notify_health() -> bool:
+    """Send health alert notifications to Telegram. TELEGRAM_NOTIFY_HEALTH (default: True)."""
+    return get_bool("TELEGRAM_NOTIFY_HEALTH", True)
+
+
+# --- Email / reporting ---
+
+def get_eod_report_email() -> str:
+    """Default recipient for auto EOD reports. EOD_REPORT_EMAIL (default: "")."""
+    return get("EOD_REPORT_EMAIL", "")
+
+
+# --- Misc ---
+
+def get_commit_enhance_mode() -> bool:
+    """Whether AI commit message enhancement is active. COMMIT_ENHANCE_MODE (default: False)."""
+    return get_bool("COMMIT_ENHANCE_MODE", False)
+
+
+def get_workspaces_file() -> str:
+    """Path to workspaces YAML file. WORKSPACES_FILE (default: "")."""
+    return get("WORKSPACES_FILE", "")
+
+
+def get_spec_review_base_url() -> str:
+    """Base URL for spec review web form. SPEC_REVIEW_BASE_URL (default: "")."""
+    return get("SPEC_REVIEW_BASE_URL", "")
+
+
+def get_mongodb_uri() -> str:
+    """MongoDB connection URI. MONGODB_URI (default: "")."""
+    return get("MONGODB_URI", "")
+
+
+def get_mongodb_db() -> str:
+    """MongoDB database name. MONGODB_DB (default: 'devtrack')."""
+    return get("MONGODB_DB", "") or get("MONGODB_DB_NAME", "devtrack")

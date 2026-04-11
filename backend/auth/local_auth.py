@@ -13,11 +13,11 @@ from typing import Optional
 
 
 def _session_path() -> Path:
-    data_dir = os.getenv("DATA_DIR")
+    from backend.config import get_data_dir, _find_project_root
+    data_dir = get_data_dir()
     if data_dir:
         base = Path(data_dir)
     else:
-        from backend.config import _find_project_root
         base = _find_project_root() / "Data"
     lic_dir = base / "license"
     lic_dir.mkdir(parents=True, exist_ok=True)

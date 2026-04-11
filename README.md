@@ -94,7 +94,7 @@ After that, `git commit` routes through DevTrack automatically for monitored rep
 |-------------|-------------------|
 | **Azure DevOps** | Post commit comments, transition work item states, create missing items |
 | **GitHub** | Comment on issues/PRs, sync recent activity, alert on review requests |
-| **GitLab** | Comment on issues, list and view issues assigned to you |
+| **GitLab** | Comment on issues, list and view issues assigned to you, alert on assignments/notes/MR reviews |
 | **Jira** | Alert on assignments, comments, and status changes |
 | **Microsoft Teams** | Learn your communication style for personalized AI output |
 | **Outlook / MS Graph** | Send EOD reports by email |
@@ -171,11 +171,12 @@ devtrack alerts --all
 devtrack alerts --clear
 ```
 
-Background poller watches **GitHub**, **Azure DevOps**, and **Jira** for assigned issues, new comments, review requests, and status changes. Delivers macOS OS notifications and terminal output.
+Background poller watches **GitHub**, **Azure DevOps**, **Jira**, and **GitLab** for assigned issues, new comments, review requests, and status changes. Delivers macOS OS notifications and terminal output.
 
 - **GitHub**: Issue/PR assigned, review requested, comment on involved issue
 - **Azure DevOps**: Work item assigned, comment added, state changed
 - **Jira**: Assigned to you, new comments, status transitions (via REST API)
+- **GitLab**: Issue assigned, new notes (comments), merge request review requested (`ALERT_GITLAB_ENABLED=true`)
 
 Alert state (`last_checked` timestamps per source) persists to **SQLite** when MongoDB is unavailable, so poll continuity survives daemon restarts even without a MongoDB connection.
 
@@ -214,6 +215,40 @@ devtrack workspace install-hooks    # install post-commit hook in every enabled 
 
 Normally DevTrack installs hooks when the daemon starts. Use this command to push hooks to all workspaces at once — useful after adding new repos to `workspaces.yaml`.
 
+### Webhook + Trigger server (HTTP mode)
+
+The Go daemon spawns `backend.webhook_server` as a subprocess in the default managed mode. In external/Docker mode the server runs separately and the Go daemon connects to it over HTTPS. Either way the same FastAPI server handles both:
+
+- **Inbound webhooks** from Azure DevOps, GitHub, GitLab, and Jira at `/webhooks/<source>`
+- **Outbound triggers** from the Go daemon at `/trigger/commit` and `/trigger/timer`
+
+```bash
+# external/Docker mode only — managed mode starts this automatically
+python -m backend.webhook_server
+```
+
+All trigger endpoints require the `X-DevTrack-API-Key` header (set `DEVTRACK_API_KEY` in `.env`). Webhook signature verification uses source-specific secrets (`AZURE_WEBHOOK_SECRET`, `GITHUB_WEBHOOK_SECRET`, etc.). GitLab webhooks are registered automatically at startup when `GITLAB_WEBHOOK_URL` is configured.
+
+### AI development agents (Claude Code)
+
+DevTrack ships three Claude Code sub-agents that automate the project's own development workflow. They are invoked inside Claude Code sessions, not from the terminal.
+
+| Agent | Role |
+|-------|------|
+| **project-vision** | PM agent — breaks plans into tasks, writes the project board (`Data/agent_logs/project_board.md`), dispatches the engineer, enforces no-push-to-main and vision alignment, fires docu-agent after major features |
+| **devtrack-engineer** | Engineer agent — always works on a task branch, commits exclusively through `devtrack git commit`, logs every commit to `Data/agent_logs/engineer_log.md`, opens a PR on completion, never pushes directly to `main` |
+| **post-generator** | Turns the weekly engineer log into draft dev.to, Hacker News, and LinkedIn posts saved under `Data/agent_logs/posts/` |
+
+Invoke from a Claude Code session:
+
+```
+/project-vision   # plan a new phase or ask for status
+/devtrack-engineer  # dispatch the engineer on the current board task
+/post-generator   # generate this week's posts from the engineer log
+```
+
+The PM and engineer agents share `Data/agent_logs/project_board.md` as a contract — PM writes tasks, engineer reads and updates status. All agent activity is captured in `Data/agent_logs/engineer_log.md`.
+
 ### Anonymous telemetry
 
 DevTrack sends an anonymous install and daily-active ping (no code, no commit text, no personal data). To opt out:
@@ -226,13 +261,54 @@ devtrack telemetry status   # show current setting
 
 The ping sends: a random install UUID, a hashed hardware fingerprint, the event type (`install` / `active`), OS, arch, and version. Nothing else leaves your machine.
 
+### Admin console (CS-3)
+
+A browser-based admin console built with FastAPI + HTMX. Start it with:
+
+```bash
+devtrack admin-start       # web admin console at localhost:8090/admin/
+```
+
+Sign in with `ADMIN_USERNAME` / `ADMIN_PASSWORD` (set in `.env`). The dashboard shows live trigger-activity stats (triggers today, commits today, last trigger time, errors in the last 24 h) that refresh every 30 seconds via HTMX without a full page reload.
+
+**Pages and capabilities:**
+
+| Page | What you can do |
+|------|----------------|
+| **Dashboard** | Health overview, trigger throughput stats, quick links |
+| **Users** | Create/delete users, change roles (`admin` / `viewer`), disable/enable accounts, reset passwords |
+| **API Keys** | Generate and revoke per-user API keys |
+| **License** | View current license tier, seat count, and terms acceptance status |
+| **Server** | Real-time process table (CPU %, memory, health) with restart/stop/start controls |
+| **Audit Log** | Full history of all admin actions |
+
+**Single-process mode (`ADMIN_EMBED`):** By default the admin console runs as a separate process on `ADMIN_PORT` (default `8090`). Set `ADMIN_EMBED=true` to mount the admin router directly on the main webhook server at `/admin` — no extra port, no extra process:
+
+```bash
+# .env
+ADMIN_EMBED=true          # mount admin at /admin on the webhook server (port 8089)
+# or leave false (default) to run on a dedicated port:
+ADMIN_PORT=8090
+```
+
+**Required `.env` keys for the admin console:**
+
+```bash
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=changeme          # plain text (dev) or bcrypt hash ($2b$...)
+ADMIN_SECRET_KEY=<random-string> # JWT signing key — generate with: openssl rand -hex 32
+ADMIN_PORT=8090                  # ignored when ADMIN_EMBED=true
+ADMIN_EMBED=false
+```
+
 ### Server management
 
 ```bash
-devtrack server-tui    # live process monitor (CPU%, memory, health)
-devtrack admin-start   # web admin console at localhost:8090/admin/
+devtrack server-tui    # live process monitor — CPU%, memory, health + trigger throughput stats
 devtrack tui           # full-screen dashboard: overview, activity, workspaces, alerts
 ```
+
+The `server-tui` panel includes a **trigger throughput stats** pane that reads directly from the SQLite database and shows triggers fired today, commits today, last trigger time (HH:MM), and unprocessed-trigger error count for the last 24 hours. The pane degrades gracefully — it displays zeroes rather than crashing if the database is unavailable.
 
 ---
 
@@ -260,8 +336,9 @@ docker compose up -d   # starts Python backend + MongoDB, Redis, PostgreSQL
 | Storage | SQLite (app state + projects/backlog/sprints), ChromaDB (RAG), optional MongoDB |
 | Remote control | Telegram (python-telegram-bot) · Slack (slack-bolt Socket Mode) |
 | PM integrations | Azure DevOps · GitLab · GitHub · Jira REST APIs |
-| Admin console | FastAPI + HTMX, JWT auth |
+| Admin console | FastAPI + HTMX, JWT auth, bcrypt passwords, SQLite user/audit store |
 | Observability | runtime-narrative — structured story/stage traces on every webhook request |
+| Config discipline | All Python modules use `backend.config.get()` — no `os.getenv()` calls in business logic |
 
 ---
 
@@ -285,6 +362,10 @@ docker compose up -d   # starts Python backend + MongoDB, Redis, PostgreSQL
 | Get ticket alerts (GitHub / Azure / Jira) | [Ticket Alerter](docs/TICKET_ALERTER.md) |
 | Plan a project with AI | [AI Project Planning](docs/PROJECT_PLANNING.md) |
 | Manage opt-out telemetry | [Telemetry](docs/TELEMETRY_PLAN.md) |
+| Use external/Docker mode (HTTP triggers + webhooks) | [Webhook Server](docs/WEBHOOK_SERVER.md) |
+| Monitor server health and trigger stats | [Server TUI](docs/SERVER_TUI.md) |
+| Manage users, licenses, and API keys in a browser | [Admin Console](#admin-console-cs-3) |
+| Use AI agents for development workflow | [`.claude/agents/`](.claude/agents/) |
 | Fix a problem | [Troubleshooting](docs/TROUBLESHOOTING.md) |
 | Understand the architecture | [Architecture](docs/ARCHITECTURE.md) |
 | Full documentation index | [docs/INDEX.md](docs/INDEX.md) |
@@ -294,10 +375,17 @@ docker compose up -d   # starts Python backend + MongoDB, Redis, PostgreSQL
 ## Testing
 
 ```bash
-cd devtrack-bin && go test ./...          # Go layer (20+ tests)
-uv run pytest backend/tests/             # Python backend (159+ tests)
-uv run pytest backend/tests/ -k cs1     # CS-1 HTTP trigger suite (28 tests)
+cd devtrack-bin && go test ./...                    # Go layer (20+ tests)
+uv run pytest backend/tests/                        # Python backend (492+ tests)
+uv run pytest backend/tests/ -k cs1                # CS-1 HTTP trigger suite (28 tests)
+uv run pytest backend/tests/test_server_tui.py     # server_tui helpers (37 headless tests)
+uv run pytest backend/tests/test_admin_auth.py     # admin auth (19 tests)
+uv run pytest backend/tests/test_admin_routes.py   # admin console routes (59+ tests)
+uv run pytest backend/tests/test_admin_user_manager.py  # user manager (33+ tests)
+uv run pytest backend/tests/test_jira_alerter.py   # Jira alerter (26 tests)
 ```
+
+The CS-2 config audit enforces that **no Python business-logic module calls `os.getenv()` directly** — all 40+ backend modules were audited (TASK-001 through TASK-007) and now route through `backend.config` typed accessors. Missing required env vars produce a `ConfigError` with the exact variable name rather than a silent `None`.
 
 ---
 
