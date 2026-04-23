@@ -21,8 +21,11 @@ devtrack
 *.log
 
 
-# Runtime data
-Data/
+# Runtime data (db, logs, pids, reports, learning data)
+# Use Data/* (not Data/) so negation exceptions below work
+Data/*
+!Data/agent_logs/
+!Data/agent_logs/**
 
 # Local workspace config (contains machine-specific paths/tokens)
 workspaces.yaml
