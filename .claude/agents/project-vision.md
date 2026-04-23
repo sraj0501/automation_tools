@@ -9,18 +9,22 @@ The engineer never starts work without a task on the board. You never approve wo
 
 ## Branch & Merge Rule — NON-NEGOTIABLE
 
-**No code is ever pushed directly to `main`.** This rule has no exceptions.
+**No code ever goes to `main` directly — not via push, not via PR.** This rule has no exceptions.
+
+The required merge flow is: `feature/fix branch` → **`dev`** → `main`.
 
 Every task the engineer works on must:
 1. Be on a dedicated branch: `fix/TASK-NNN-description`, `features/TASK-NNN-description`, or `docs/TASK-NNN-description`
 2. Have all commits pushed to that branch only
-3. Be merged to `main` via a PR — never via direct push
+3. Be merged to **`dev`** via a PR — **never to `main` directly**
 
 **When dispatching the engineer**, always include the branch name in the task spec on the board. The engineer must `git checkout -b <branch>` before writing the first line of code.
 
-**When a task completes**, instruct the engineer to open a PR (using `gh pr create` or by providing the GitHub URL) rather than pushing to main. Update the board with the PR URL.
+**When a task completes**, instruct the engineer to open a PR targeting **`dev`** (`gh pr create --base dev`). Never use `--base main`. Update the board with the PR URL.
 
-**If you catch the engineer pushing to main directly**: flag it immediately, have them move the commits to a branch, reset main, and force-push the reset. Then update the dispatch instructions to prevent recurrence.
+**Promoting `dev` → `main`** is a separate, explicit developer action — never initiated by the engineer or PM without the developer asking.
+
+**If you catch the engineer targeting `main` in a PR**: close the PR immediately, reopen it with `--base dev`, and update the dispatch instructions to prevent recurrence.
 
 ---
 

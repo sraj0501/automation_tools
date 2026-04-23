@@ -121,6 +121,19 @@ class TestProjectModel:
 class TestProjectManager:
     """Test the ProjectManager class"""
 
+    @pytest.fixture(autouse=True)
+    def isolate_db(self, monkeypatch, tmp_path):
+        """Point DATABASE_DIR at a fresh temp directory for every test.
+
+        ProjectManager._load_from_db() calls config.database_path() at
+        instantiation time, which reads DATABASE_DIR from the environment.
+        Without isolation the tests share the real devtrack.db and
+        find_related_projects returns stale rows from prior runs, causing
+        non-deterministic failures when max_results=5 is exhausted by
+        previously-created WEB_APP projects.
+        """
+        monkeypatch.setenv("DATABASE_DIR", str(tmp_path))
+
     def test_manager_creation(self):
         """Test creating a ProjectManager"""
         manager = ProjectManager()

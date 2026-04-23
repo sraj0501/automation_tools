@@ -9,6 +9,10 @@ import (
 )
 
 func main() {
+	// Auto-load .env before any command processing.
+	// Existing env vars (shell exports, CI, secret managers) are never overridden.
+	AutoLoadEnv()
+
 	// Check if CLI command is provided
 	if len(os.Args) > 1 {
 		cmd := os.Args[1]
@@ -25,7 +29,16 @@ func main() {
 			return
 		}
 
-		// devtrack install — extract bundled Python backend + run uv sync
+		// devtrack setup — interactive first-run configuration wizard
+		if cmd == "setup" {
+			if err := RunSetup(); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+
+		// devtrack install — server architecture info
 		if cmd == "install" {
 			if err := RunInstall(); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -105,6 +118,7 @@ func printBasicUsage() {
 	fmt.Println()
 	fmt.Println("Usage: devtrack <command> [options]")
 	fmt.Println()
+	fmt.Println("SETUP:     setup                          (first-run configuration wizard)")
 	fmt.Println("DAEMON:    start | stop | restart | status")
 	fmt.Println("SCHEDULER: pause | resume | force-trigger | skip-next | send-summary")
 	fmt.Println("INFO:      logs | db-stats | stats | version | help")
@@ -115,6 +129,7 @@ func printBasicUsage() {
 	fmt.Println("REPORTS:   preview-report | send-report | save-report")
 	fmt.Println("ACCOUNT:   login | logout | whoami | license | terms | telemetry [on|off]")
 	fmt.Println()
+	fmt.Println("New install? Run: devtrack setup")
 	fmt.Println("Run 'devtrack help' for full usage.")
 	fmt.Println()
 }
