@@ -50,6 +50,19 @@ devtrack status
 
 > Full walkthrough: [Installation Guide](docs/INSTALLATION.md) · [Quick Start](docs/QUICK_START.md)
 
+#### Moving to a new machine?
+
+Project memory and agent logs are committed to the repo (`.claude/memory/`, `Data/agent_logs/`). After cloning, wire up Claude Code's memory system with one command:
+
+```bash
+# Replace <path-key> with the absolute repo path, slashes replaced by hyphens
+# e.g. repo at /home/sraj/devtrack → -home-sraj-devtrack
+mkdir -p ~/.claude/projects/<path-key>/
+ln -s $(pwd)/.claude/memory ~/.claude/projects/<path-key>/memory
+```
+
+Claude Code will then read and write memory directly to the repo, keeping it in sync with git.
+
 ---
 
 ## The core loop
