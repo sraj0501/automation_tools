@@ -524,7 +524,7 @@
         <span class="current" id="breadcrumbCurrent">Home</span>
       </div>
       <div class="topbar-actions">
-        <span class="version-chip">v2.0.0</span>
+        <span class="version-chip">v2.0.1-dev</span>
         <button class="icon-btn" id="themeToggle" title="Toggle theme">
           <svg id="themeIcon" viewBox="0 0 20 20" fill="currentColor"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>
         </button>
@@ -553,6 +553,7 @@ const NAV = [
       { id: 'GETTING_STARTED', label: 'Getting Started',    icon: rocket_icon() },
       { id: 'INSTALLATION',    label: 'Installation',       icon: download_icon() },
       { id: 'QUICK_START',     label: 'Quick Start',        icon: flash_icon() },
+      { id: 'SETUP_WIZARD',    label: 'Setup Wizard',       icon: flash_icon() },
       { id: 'WHATS_NEW',       label: "What's New",         icon: '🎉' },
     ]
   },
@@ -658,6 +659,95 @@ function launch_icon()   { return svgIcon('<path fill-rule="evenodd" d="M11.3 1.
 // ── Inline Content ───────────────────────────────────────────────────────────
 // Pages listed here render inline HTML instead of fetching an external .md file.
 const CONTENT = {
+  SETUP_WIZARD: `<div class="md-body">
+<h1>Setup Wizard</h1>
+<p>The <strong>setup wizard</strong> is a one-command interactive onboarding flow that configures DevTrack from scratch — no manual <code>.env</code> editing required. It walks through LLM provider selection, credential entry, workspace selection, project management platform, and shell integration, then writes a complete <code>.env</code> and registers it so every subsequent <code>devtrack</code> invocation auto-loads it.</p>
+
+<div class="home-badge" style="margin-bottom:24px;background:var(--callout-tip);border-color:var(--callout-tip-border);color:#166534;">New in v2.0.1-dev — features/loadEnvs</div>
+
+<h2>Running the Wizard</h2>
+<pre><code class="language-bash">devtrack setup</code></pre>
+<p>The wizard auto-detects the project root by walking up from the binary location looking for the <code>backend/</code> directory. No flags or environment variables are needed to run it.</p>
+<p>If a <code>.env</code> already exists, the wizard asks before overwriting — the existing file is preserved unless you explicitly confirm.</p>
+
+<h2>Wizard Steps</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Step</th><th>What happens</th></tr></thead>
+<tbody>
+<tr><td><strong>1. Prerequisites</strong></td><td>Checks <code>backend/</code> directory, <code>uv</code>, and Python 3.9+ are present. Prints a clear error for each missing item.</td></tr>
+<tr><td><strong>2. Workspace</strong></td><td>Prompts for the git repository to monitor. Defaults to the project root. Warns if the path is not a git repository.</td></tr>
+<tr><td><strong>3. LLM provider</strong></td><td>Offers Ollama (local, default), OpenAI, Anthropic, Groq, or Skip. Prompts for host/model or API key depending on choice.</td></tr>
+<tr><td><strong>4. Identity</strong></td><td>Optional email address — used to filter your own comments in integrations and to identify you in reports.</td></tr>
+<tr><td><strong>5. PM platform</strong></td><td>GitHub Issues, Azure DevOps, Jira, or None. Prompts for the relevant tokens/credentials.</td></tr>
+<tr><td><strong>6. Data directories</strong></td><td>Creates all required subdirectories under <code>Data/</code> (<code>db/</code>, <code>logs/</code>, <code>pids/</code>, <code>configs/</code>, <code>learning/</code>, <code>reports/</code>, <code>tls/</code>).</td></tr>
+<tr><td><strong>7. Write .env</strong></td><td>Generates a complete <code>.env</code> at <code>PROJECT_ROOT/.env</code> with all required variables, sensible defaults, and your answers. Written with <code>chmod 0600</code>.</td></tr>
+<tr><td><strong>8. Register .env</strong></td><td>Writes the <code>.env</code> path to <code>~/.devtrack/devtrack.conf</code> — a one-line pointer file. All future <code>devtrack</code> commands pick this up automatically via <code>AutoLoadEnv()</code>.</td></tr>
+<tr><td><strong>9. Shell integration</strong></td><td>Prints the line to add to <code>~/.zshrc</code> / <code>~/.bashrc</code> for bare <code>git commit</code> AI enhancement (<code>eval "$(devtrack shell-init)"</code>). Notes that no manual <code>source .env</code> is needed.</td></tr>
+<tr><td><strong>10. Autostart</strong></td><td>Prompts to install OS-native autostart via <code>devtrack autostart-install</code>.</td></tr>
+</tbody>
+</table></div>
+
+<h2>After Setup</h2>
+<pre><code class="language-bash"># 1. Install Python dependencies
+cd /path/to/automation_tools
+uv sync
+
+# 2. Start DevTrack — env auto-loaded, no sourcing needed
+devtrack start
+
+# 3. Check it's running
+devtrack status
+devtrack logs</code></pre>
+
+<blockquote><p><strong>No more <code>source .env</code>:</strong> Once <code>devtrack setup</code> completes, every <code>devtrack</code> command auto-loads the registered <code>.env</code> file. Shell exports, CI variables, and secrets managers always take precedence over file values — the file is only applied for keys not already in the environment.</p></blockquote>
+
+<h2>Re-running Setup</h2>
+<p>Run <code>devtrack setup</code> again at any time to reconfigure. The wizard asks before overwriting the existing <code>.env</code>. Answering <strong>n</strong> leaves everything unchanged.</p>
+<pre><code class="language-bash">devtrack setup   # re-run wizard (asks before overwriting)</code></pre>
+
+<h2>AutoLoadEnv — Automatic .env Resolution</h2>
+<p>The Go daemon calls <code>AutoLoadEnv()</code> at the very start of <code>main()</code>, before any command processing. It resolves and loads the <code>.env</code> file using the following priority order:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Priority</th><th>Source</th><th>Use case</th></tr></thead>
+<tbody>
+<tr><td><strong>1</strong></td><td><code>DEVTRACK_ENV_FILE</code> env var</td><td>Explicit override — CI, Docker, 1Password wrapper scripts</td></tr>
+<tr><td><strong>2</strong></td><td><code>~/.devtrack/devtrack.conf</code></td><td>Path registered by <code>devtrack setup</code> — normal developer use</td></tr>
+<tr><td><strong>3</strong></td><td><code>.env</code> next to the binary</td><td>Release tarball / portable installs where the binary lives with the project</td></tr>
+</tbody>
+</table></div>
+
+<h3>Key Behaviours</h3>
+<ul>
+<li><strong>Existing env vars are never overridden</strong> — shell exports, CI variables, and secret managers always win over the file.</li>
+<li><strong>Silent on missing file</strong> — if no <code>.env</code> is found via any path, <code>AutoLoadEnv()</code> returns silently. The daemon continues and will surface missing-variable errors as before.</li>
+<li><strong>Quote stripping and inline comments</strong> — supports <code>KEY="quoted value"</code>, <code>KEY='single quoted'</code>, and inline <code># comments</code> on unquoted values.</li>
+<li><strong>Variable expansion not supported</strong> — generated <code>.env</code> files use absolute paths to avoid this requirement.</li>
+</ul>
+
+<h3>devtrack.conf Format</h3>
+<p>The registration file at <code>~/.devtrack/devtrack.conf</code> is a single line containing the absolute path to the active <code>.env</code> file:</p>
+<pre><code>/home/alice/projects/automation_tools/.env</code></pre>
+<p>Written with <code>chmod 0600</code>. Managed exclusively by <code>devtrack setup</code> and <code>RegisterEnvFile()</code> in <code>devtrack-bin/loadenv.go</code>.</p>
+
+<h2>CI / Docker / Automated Environments</h2>
+<p>In non-interactive environments, skip the wizard entirely and use the explicit override:</p>
+<pre><code class="language-bash"># CI: set DEVTRACK_ENV_FILE to point to a pre-baked .env
+export DEVTRACK_ENV_FILE=/run/secrets/devtrack.env
+devtrack start
+
+# Docker: pass env vars directly — AutoLoadEnv no-ops when all vars are already set
+docker run --env-file .env devtrack start</code></pre>
+
+<h2>Implementation Files</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td><code>devtrack-bin/setup.go</code></td><td><code>RunSetup()</code> wizard, <code>SetupConfig</code> struct, <code>generateEnvContent()</code> template, <code>detectProjectRoot()</code>, prerequisite checks, shell and autostart instructions</td></tr>
+<tr><td><code>devtrack-bin/loadenv.go</code></td><td><code>AutoLoadEnv()</code>, <code>resolveEnvFilePath()</code>, <code>loadDotEnv()</code> parser, <code>RegisterEnvFile()</code></td></tr>
+</tbody>
+</table></div>
+</div>`,
+
   SERVER_TUI: `<div class="md-body">
 <h1>Server TUI</h1>
 <p>The Server TUI is a terminal-based process monitor for the DevTrack Python backend. It gives you a live, keyboard-driven view of all server processes and their resource usage — no separate monitoring tool required.</p>
@@ -749,6 +839,14 @@ ADMIN_EMBED=true devtrack start   # or set in .env</code></pre>
 <tr><td><code>ADMIN_SECRET_KEY</code></td><td>—</td><td>Secret used to sign JWT session cookies — required, no default</td></tr>
 <tr><td><code>ADMIN_SESSION_HOURS</code></td><td><code>8</code></td><td>Session lifetime in hours before re-login is required</td></tr>
 <tr><td><code>ADMIN_EMBED</code></td><td><code>false</code></td><td>Mount admin console on webhook server (single-process mode)</td></tr>
+<tr><td><code>SCRYPT_N</code></td><td><code>16384</code></td><td>scrypt CPU/memory cost factor for password hashing</td></tr>
+<tr><td><code>SCRYPT_R</code></td><td><code>8</code></td><td>scrypt block size parameter</td></tr>
+<tr><td><code>SCRYPT_P</code></td><td><code>1</code></td><td>scrypt parallelisation factor</td></tr>
+<tr><td><code>SCRYPT_DKLEN</code></td><td><code>32</code></td><td>scrypt derived key length (bytes)</td></tr>
+<tr><td><code>STATS_REFRESH_INTERVAL_SECONDS</code></td><td><code>30</code></td><td>Auto-refresh interval for the trigger-stats HTMX panel on the dashboard</td></tr>
+<tr><td><code>PROCESS_REFRESH_INTERVAL_SECONDS</code></td><td><code>15</code></td><td>Auto-refresh interval for the process table on the dashboard</td></tr>
+<tr><td><code>AUDIT_LOG_LIMIT</code></td><td><code>200</code></td><td>Maximum audit log entries returned by <code>GET /admin/audit</code></td></tr>
+<tr><td><code>LICENSE_CONTACT_EMAIL</code></td><td><code>license@devtrack.dev</code></td><td>Enterprise contact email shown on the license page</td></tr>
 </tbody>
 </table></div>
 
@@ -1331,6 +1429,51 @@ curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
 
   WHATS_NEW: `<div class="md-body">
 <h1>What's New</h1>
+<div class="home-badge" style="margin-bottom:24px;background:var(--callout-note);border-color:var(--callout-note-border);color:#1e40af;">v2.0.1-dev — unreleased — features/loadEnvs</div>
+
+<h2>v2.0.1-dev — Setup Wizard, Auto Env Load &amp; Config Hardening</h2>
+<p>Three improvements shipped on the <code>features/loadEnvs</code> branch (PR #79 targeting main): a first-run interactive setup wizard, automatic <code>.env</code> resolution at daemon startup, and complete elimination of all remaining hardcoded values from the Admin Console.</p>
+
+<div class="feature-list" style="margin-bottom:32px;">
+  <div class="feature-item"><div class="feature-dot">1</div><div><h4>devtrack setup — interactive first-run wizard</h4><p>New <code>devtrack setup</code> command (<code>devtrack-bin/setup.go</code>) walks through the entire initial configuration in a guided terminal flow: prerequisite check (backend/, uv, Python), git workspace selection, LLM provider and credentials, user email, project management platform (GitHub / Azure DevOps / Jira / None), and shell integration / autostart instructions. On completion it writes a complete <code>.env</code> at the project root and registers its path in <code>~/.devtrack/devtrack.conf</code>. See the <a href="#SETUP_WIZARD" onclick="navigate('SETUP_WIZARD');return false;">Setup Wizard</a> page.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">2</div><div><h4>AutoLoadEnv — automatic .env resolution at startup</h4><p>New <code>AutoLoadEnv()</code> function (<code>devtrack-bin/loadenv.go</code>) is called at the very start of <code>main()</code>. It resolves the correct <code>.env</code> file using a three-step priority order: (1) <code>DEVTRACK_ENV_FILE</code> env var for CI/Docker overrides, (2) <code>~/.devtrack/devtrack.conf</code> — the path written by <code>devtrack setup</code>, (3) <code>.env</code> next to the binary for portable installs. Existing env vars are <strong>never overridden</strong> — shell exports, CI variables, and secret managers always win. The result: developers no longer need to manually <code>source .env</code> before running <code>devtrack</code> commands. See the <a href="#SETUP_WIZARD" onclick="navigate('SETUP_WIZARD');return false;">Setup Wizard</a> page.</p></div></div>
+  <div class="feature-item"><div class="feature-dot">3</div><div><h4>Admin config hardening — all hardcoded values eliminated (TASK-016/017/018)</h4><p>Three commits systematically eliminated every remaining hardcoded constant from the Admin Console: <strong>TASK-016</strong> extracted the scrypt parameters (<code>SCRYPT_N</code>, <code>SCRYPT_R</code>, <code>SCRYPT_P</code>, <code>SCRYPT_DKLEN</code>) and the session cookie <code>max_age</code> (<code>ADMIN_SESSION_HOURS</code>) from <code>backend/admin/auth.py</code>; <strong>TASK-017</strong> extracted the stats refresh interval (<code>STATS_REFRESH_INTERVAL_SECONDS</code>) and process refresh interval (<code>PROCESS_REFRESH_INTERVAL_SECONDS</code>) from dashboard routes and the webhook server; <strong>TASK-018</strong> extracted the audit log query limit (<code>AUDIT_LOG_LIMIT</code>) and the license contact email (<code>LICENSE_CONTACT_EMAIL</code>) from routes and templates. All 22 variables across the codebase are now required env vars with no silent defaults.</p></div></div>
+</div>
+
+<h2>New CLI Commands (v2.0.1-dev)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Command</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>devtrack setup</code></td><td>Interactive first-run wizard — generates <code>.env</code>, creates <code>Data/</code> directories, registers env file path, guides through shell integration and autostart</td></tr>
+</tbody>
+</table></div>
+
+<h2>New .env Variables (v2.0.1-dev)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>DEVTRACK_ENV_FILE</code></td><td>—</td><td>Explicit path to the <code>.env</code> file — highest priority in <code>AutoLoadEnv()</code>. Use for CI, Docker, or secret manager wrappers.</td></tr>
+<tr><td><code>SCRYPT_N</code></td><td><code>16384</code></td><td>scrypt CPU/memory cost factor for password hashing in the Admin Console</td></tr>
+<tr><td><code>SCRYPT_R</code></td><td><code>8</code></td><td>scrypt block size parameter</td></tr>
+<tr><td><code>SCRYPT_P</code></td><td><code>1</code></td><td>scrypt parallelisation factor</td></tr>
+<tr><td><code>SCRYPT_DKLEN</code></td><td><code>32</code></td><td>scrypt derived key length (bytes)</td></tr>
+<tr><td><code>STATS_REFRESH_INTERVAL_SECONDS</code></td><td><code>30</code></td><td>How often the admin dashboard trigger-stats HTMX panel auto-refreshes</td></tr>
+<tr><td><code>PROCESS_REFRESH_INTERVAL_SECONDS</code></td><td><code>15</code></td><td>How often the admin process table auto-refreshes</td></tr>
+<tr><td><code>AUDIT_LOG_LIMIT</code></td><td><code>200</code></td><td>Maximum number of audit log entries returned by <code>GET /admin/audit</code></td></tr>
+<tr><td><code>LICENSE_CONTACT_EMAIL</code></td><td><code>license@devtrack.dev</code></td><td>Email shown on the Admin Console license page for enterprise enquiries</td></tr>
+</tbody>
+</table></div>
+
+<h2>New Source Files (v2.0.1-dev)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>devtrack-bin/loadenv.go</code></td><td><code>AutoLoadEnv()</code>, <code>resolveEnvFilePath()</code>, <code>loadDotEnv()</code> parser, <code>RegisterEnvFile()</code> — automatic <code>.env</code> discovery and loading at daemon startup</td></tr>
+<tr><td><code>devtrack-bin/setup.go</code></td><td><code>RunSetup()</code> interactive onboarding wizard, <code>generateEnvContent()</code> template covering all config sections, prerequisite checks, directory creation</td></tr>
+</tbody>
+</table></div>
+
+<hr>
 <div class="home-badge" style="margin-bottom:24px;background:var(--callout-warn);border-color:var(--callout-warn-border);color:#92400e;">v2.0.0 — released</div>
 
 <h2>v2.0.0 — CS-3 Admin GUI MVP</h2>
@@ -1630,6 +1773,15 @@ curl -s https://api.github.com/repos/sraj0501/automation_tools/releases \
 </tbody>
 </table></div>
 
+<h2>In v2.0.1-dev (features/loadEnvs — PR #79)</h2>
+<ul>
+<li><code>devtrack setup</code> interactive first-run wizard — generates <code>.env</code>, creates <code>Data/</code> dirs, registers env file ✅</li>
+<li><code>AutoLoadEnv()</code> — automatic <code>.env</code> resolution at startup (no more manual <code>source .env</code>) ✅</li>
+<li>TASK-016: scrypt params and session max_age extracted to env vars ✅</li>
+<li>TASK-017: stats/process refresh intervals extracted to env vars ✅</li>
+<li>TASK-018: audit log limit and license contact email extracted to env vars ✅</li>
+</ul>
+
 <h2>In v2.0.0</h2>
 <ul>
 <li>CS-3 Admin GUI MVP — user role update, soft disable/enable, license status page ✅ (TASK-011 → TASK-015)</li>
@@ -1786,7 +1938,7 @@ SENTIMENT_ANALYSIS_WINDOW_MINUTES=120</code></pre>
 <div class="table-wrap"><table>
 <thead><tr><th>Feature</th><th>Key variables</th></tr></thead>
 <tbody>
-<tr><td>Admin Console</td><td><code>ADMIN_PORT=8090</code>, <code>ADMIN_USERNAME</code>, <code>ADMIN_PASSWORD</code>, <code>ADMIN_SECRET_KEY</code></td></tr>
+<tr><td>Admin Console</td><td><code>ADMIN_PORT=8090</code>, <code>ADMIN_USERNAME</code>, <code>ADMIN_PASSWORD</code>, <code>ADMIN_SECRET_KEY</code>, <code>SCRYPT_N/R/P/DKLEN</code>, <code>STATS_REFRESH_INTERVAL_SECONDS</code>, <code>PROCESS_REFRESH_INTERVAL_SECONDS</code>, <code>AUDIT_LOG_LIMIT</code>, <code>LICENSE_CONTACT_EMAIL</code></td></tr>
 <tr><td>Ticket Alerter</td><td><code>ALERT_ENABLED</code>, <code>ALERT_POLL_INTERVAL_SECS</code>, <code>ALERT_GITHUB/AZURE/JIRA_ENABLED</code></td></tr>
 <tr><td>Vacation Mode</td><td><code>VACATION_CONFIDENCE_THRESHOLD=0.7</code>, <code>VACATION_AUTO_SUBMIT=true</code></td></tr>
 <tr><td>Work Sessions</td><td><code>EOD_REPORT_HOUR=18</code>, <code>EOD_REPORT_EMAIL</code>, <code>WORK_SESSION_AUTO_STOP_MINUTES</code></td></tr>
@@ -2395,7 +2547,7 @@ function renderHome() {
   const content = document.getElementById('content');
   content.innerHTML = `
     <div class="home-hero">
-      <div class="home-badge">Local-First · v2.0.0</div>
+      <div class="home-badge">Local-First · v2.0.0 · v2.0.1-dev</div>
       <h1 class="home-title">Developer automation<br>that handles the <span>overhead</span>.</h1>
       <p class="home-sub">DevTrack monitors your Git activity, prompts for work updates, routes them through AI, and keeps your project management systems in sync — all running locally on your machine.</p>
     </div>
@@ -2403,9 +2555,10 @@ function renderHome() {
     <div class="home-grid">
       ${[
         // ── Get Started ────────────────────────────────────────────────────────
-        { id:'WHATS_NEW',        icon:'🎉', title:"What's New",         desc:'v2.0.0: CS-3 Admin GUI MVP — user role update, soft disable/enable, license status page, trigger stats HTMX panel (30s auto-refresh), password reset, ADMIN_EMBED single-process mode, 31 new HTTP-level admin route tests (492 total). v1.6-dev (merged): no-direct-push-to-main in AI agents; CLAUDE.md + README synced to CS-1 reality. v1.5-dev: config refactor; 433 tests.' },
+        { id:'WHATS_NEW',        icon:'🎉', title:"What's New",         desc:'v2.0.1 (unreleased): <code>devtrack setup</code> first-run wizard, auto env-load from <code>~/.devtrack/devtrack.conf</code>, all hardcoded admin values eliminated (scrypt params, session max_age, audit limit, license email). v2.0.0: CS-3 Admin GUI MVP — 492 tests total.' },
         { id:'GETTING_STARTED',  icon:'🚀', title:'Getting Started',    desc:'New to DevTrack? Start here — concepts, setup, and first run.' },
         { id:'QUICK_START',      icon:'⚡', title:'Quick Start',        desc:'Get running in 5 minutes with the minimal setup guide.' },
+        { id:'SETUP_WIZARD',     icon:'🧙', title:'Setup Wizard',       desc:'<code>devtrack setup</code> — interactive first-run wizard. Walks through LLM provider, credentials, workspace, and PM platform; generates a complete <code>.env</code>; auto-registers it at <code>~/.devtrack/devtrack.conf</code> so no manual sourcing is ever needed again.' },
         // ── Reference ─────────────────────────────────────────────────────────
         { id:'CLI_REFERENCE',    icon:'⌨️', title:'CLI Reference',      desc:'All devtrack commands with flags and examples.' },
         { id:'CONFIGURATION',    icon:'🔧', title:'Configuration',      desc:'All .env variables with defaults, required vars, timeout settings, server modes, TLS, LLM providers, and feature flags.' },
@@ -2450,23 +2603,21 @@ function renderHome() {
 
     <div class="quick-start-box">
       <h3>5-Minute Setup</h3>
-      <p style="margin:0 0 .75rem;font-size:.9rem;opacity:.8;">Option 1 — Download binary + set up Python backend (recommended)</p>
+      <p style="margin:0 0 .75rem;font-size:.9rem;opacity:.8;">Option 1 — Download binary + interactive wizard (recommended)</p>
       <pre><code class="language-bash"># macOS / Linux — download the lean ~5 MB Go binary (no Python included)
 curl -L https://github.com/sraj0501/automation_tools/releases/latest/download/devtrack_$(uname -s)_$(uname -m).tar.gz | tar xz
 sudo mv devtrack /usr/local/bin/
 
-# Print setup instructions for the Python backend (managed or external mode)
-devtrack install
+# Run the interactive setup wizard — generates .env, creates Data/ dirs, no manual sourcing needed
+devtrack setup
 
-# Follow the printed instructions, then:
-cp .env_sample .env
-nano .env            # set PROJECT_ROOT, DEVTRACK_WORKSPACE, DATA_DIR
+# Install Python dependencies
+uv sync
 
-devtrack start       # spawns Python backend automatically (managed mode)
+devtrack start       # env auto-loaded from ~/.devtrack/devtrack.conf (no source .env needed)
 devtrack status
 
 # Optional: type 'git commit' instead of 'devtrack git commit'
-# devtrack start auto-enables git interception for all workspaces — no extra step needed
 echo 'eval "$(devtrack shell-init)"' >> ~/.zshrc && source ~/.zshrc</code></pre>
       <p style="margin:.75rem 0 .25rem;font-size:.9rem;opacity:.8;">Option 2 — Docker (Python backend in a container)</p>
       <pre><code class="language-bash">git clone https://github.com/sraj0501/automation_tools.git

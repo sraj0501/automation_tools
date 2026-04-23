@@ -6,7 +6,8 @@
 
 *Watches your Git activity. Prompts at the right moments. Routes work updates through AI. Keeps Azure DevOps, GitHub, and GitLab in sync — all on your machine.*
 
-[![GitHub Release](https://img.shields.io/github/v/release/sraj0501/automation_tools?label=release)](https://github.com/sraj0501/automation_tools/releases/latest)
+[![GitHub Release](https://img.shields.io/github/v/release/sraj0501/automation_tools?label=release&color=blue)](https://github.com/sraj0501/automation_tools/releases/latest)
+[![Version](https://img.shields.io/badge/version-v2.0.0-blue)](https://github.com/sraj0501/automation_tools/releases/tag/v2.0.0)
 [![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-blue)](https://github.com/sraj0501/automation_tools/releases/latest)
 [![License](https://img.shields.io/badge/license-Community-green)](TERMS.md)
 
@@ -37,12 +38,15 @@ sudo mv devtrack /usr/local/bin/
 git clone https://github.com/sraj0501/automation_tools.git
 cd automation_tools
 uv sync
-cp .env_sample .env
-nano .env          # set your API keys and PROJECT_ROOT
+
+# Interactive setup wizard — recommended for new users
+devtrack setup    # walks through LLM provider, credentials, workspace; generates .env
 
 devtrack start
 devtrack status
 ```
+
+> `devtrack setup` generates `.env` and writes `~/.devtrack/devtrack.conf` so the daemon can find it automatically. If you prefer manual setup, copy `.env_sample` to `.env` and fill in the values instead.
 
 > Full walkthrough: [Installation Guide](docs/INSTALLATION.md) · [Quick Start](docs/QUICK_START.md)
 
@@ -207,6 +211,32 @@ devtrack autostart-uninstall  # remove auto-start
 
 All current `.env` variables are baked into the service file at install time so the daemon starts with the correct environment even in a login session without a shell profile. Re-run `autostart-install` after changing `.env`.
 
+### Interactive setup wizard (`devtrack setup`)
+
+New in v2.0.0. Walks through every required setting interactively and writes the result for you:
+
+```bash
+devtrack setup
+```
+
+What it does:
+- Prompts for LLM provider (Ollama / OpenAI / Anthropic / Groq) and credentials
+- Sets workspace path, PM platform, and other required values
+- Generates `.env` in the repo root
+- Writes `~/.devtrack/devtrack.conf` pointing at the generated file
+
+After `devtrack setup` completes, run `devtrack start` — no manual `source .env` needed.
+
+### Automatic `.env` loading
+
+The daemon automatically finds and loads `.env` at startup (v2.0.0+). Resolution order:
+
+1. `DEVTRACK_ENV_FILE` environment variable (explicit path)
+2. Path recorded in `~/.devtrack/devtrack.conf` (written by `devtrack setup`)
+3. `.env` file next to the `devtrack` binary
+
+You no longer need to manually `source .env` before `devtrack start` for most setups. The env-first rule still applies for `devtrack autostart-install` — run it after `devtrack setup` so the service bakes the correct variables.
+
 ### Post-commit hooks for all workspaces
 
 ```bash
@@ -347,6 +377,7 @@ docker compose up -d   # starts Python backend + MongoDB, Redis, PostgreSQL
 | I want to… | Go to |
 |-----------|-------|
 | Install DevTrack | [Installation Guide](docs/INSTALLATION.md) |
+| Set up interactively (new users) | [`devtrack setup`](#interactive-setup-wizard-devtrack-setup) |
 | Run it for the first time | [Quick Start](docs/QUICK_START.md) |
 | See all CLI commands | [CLI Reference](docs/CLI_REFERENCE.md) |
 | Configure `.env` | [Configuration Reference](docs/CONFIGURATION.md) |
