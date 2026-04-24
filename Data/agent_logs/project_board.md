@@ -34,6 +34,7 @@ _Next task ID: TASK-025_
 
 **Engineer status**: 4/4 criteria done — last commit: 4de127b "refactor(config): make GetEmailReporterPath, GetLearningDailyScriptPath, GetPythonBridgePath return error instead of os.Exit (TASK-024)" — 2026-04-24
 **Blockers**: none
+**PR**: https://github.com/sraj0501/automation_tools/pull/82
 
 **COMPLETE** — ready for PM review — 2026-04-24
 
