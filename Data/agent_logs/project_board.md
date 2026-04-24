@@ -26,7 +26,7 @@ _Next task ID: TASK-025_
 **Branch**: features/standalone-cli-mode
 **Depends on**: TASK-021 (complete)
 
-**Engineer status**: not started
+**Engineer status**: started — add ServerModeLightweight constant, update GetServerMode()/IsExternalServer(), add IsLightweightMode() helper, add log line in daemon.go Start()
 **Blockers**: none
 
 ---
