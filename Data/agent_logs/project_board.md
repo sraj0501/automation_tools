@@ -25,7 +25,7 @@ _Next task ID: TASK-025_
 **Phase**: CS-standalone
 **Depends on**: TASK-023 (complete)
 
-**Engineer status**: not started
+**Engineer status**: started — change 3 functions to return (string, error), update callers in cli.go (3 sites) and learning.go (NewLearningCommands)
 **Blockers**: none
 
 ---

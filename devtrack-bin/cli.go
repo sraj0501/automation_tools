@@ -942,7 +942,10 @@ func (cli *CLI) handlePreviewReport() error {
 	fmt.Println("📊 Generating daily report preview...")
 	fmt.Println()
 
-	scriptPath := GetEmailReporterPath()
+	scriptPath, err := GetEmailReporterPath()
+	if err != nil {
+		return fmt.Errorf("cannot generate report: %w", err)
+	}
 	config, _ := LoadEnvConfig()
 	projectRoot := ""
 	if config != nil {
@@ -991,7 +994,10 @@ func (cli *CLI) handleSendReport() error {
 	fmt.Printf("📧 Sending report to %s...\n", email)
 	fmt.Println()
 
-	scriptPath := GetEmailReporterPath()
+	scriptPath, err := GetEmailReporterPath()
+	if err != nil {
+		return fmt.Errorf("cannot send report: %w", err)
+	}
 	config, _ := LoadEnvConfig()
 	projectRoot := ""
 	if config != nil {
@@ -1034,7 +1040,10 @@ func (cli *CLI) handleSaveReport() error {
 	fmt.Println("💾 Saving report to file...")
 	fmt.Println()
 
-	scriptPath := GetEmailReporterPath()
+	scriptPath, err := GetEmailReporterPath()
+	if err != nil {
+		return fmt.Errorf("cannot save report: %w", err)
+	}
 	config, _ := LoadEnvConfig()
 	projectRoot := ""
 	if config != nil {
