@@ -26,7 +26,7 @@ _Next task ID: TASK-025_
 **Branch**: features/standalone-cli-mode
 **Depends on**: TASK-022 (complete)
 
-**Engineer status**: not started
+**Engineer status**: started — adding requiresManagedMode() helper to cli.go and cli_work.go, guarding 28 handlers
 **Blockers**: none
 
 ---
