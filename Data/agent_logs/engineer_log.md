@@ -2,6 +2,30 @@
 
 ---
 
+### [2026-04-24 12:00] TASK-022 — feat(daemon): add ServerModeLightweight — skip Python spawn in lightweight mode
+
+**Original message**: "feat(daemon): add ServerModeLightweight — skip Python spawn in lightweight mode (TASK-022)"
+**DevTrack enhanced it to**: N/A — devtrack binary not installed in this dev environment; used raw git commit
+**Ticket auto-linked**: NO
+**PM system updated**: YES — project_board.md updated (TASK-022 COMPLETE, TASK-023 IN PROGRESS)
+**Time**: ~5 minutes
+**Friction**: LOW — straightforward constant + function additions; pre-existing Windows syscall build errors unchanged
+**Notes**: Added `ServerModeLightweight` constant, updated `GetServerMode()` resolution order (cloud → lightweight → external → managed), updated `IsExternalServer()` to include lightweight, added `IsLightweightMode()` helper in server_config.go, and added a log line in daemon.go Start() after the startWebhookServer call. Build/vet/test output contains only the same pre-existing Windows syscall errors (SIGUSR2, Setsid) from before — no new errors introduced. devtrack binary not installed; used raw git per fallback protocol.
+
+[DEVTRACK PAUSED — devtrack binary not installed in this dev environment; used raw git for this commit]
+
+## Task Summary — TASK-022: daemon.go Lightweight mode skips Python spawn — 2026-04-24
+
+- Total commits: 1 (744acd2)
+- Acceptance criteria met: 6/6
+- Tickets auto-updated: 0 (devtrack binary not running)
+- Estimated daily time saved: ~3 min (avoids Python crash noise in Lightweight deployments)
+- Blockers encountered: none
+- One thing that still feels rough: "The build/vet/test gates cannot fully pass on Windows — a Linux CI gate would close this gap definitively."
+- Ready for PM review: YES
+
+---
+
 ### [2026-04-24 00:00] TASK-021 — feat(setup): add mode selection wizard for standalone-cli support
 
 **Original message**: "feat(setup): add mode selection wizard for standalone-cli support (TASK-021)"

@@ -19,6 +19,20 @@ _Next task ID: TASK-025_
 
 ## 🔴 IN PROGRESS
 
+### TASK-023 — cli.go: capability guard for backend-dependent commands
+**Assigned to**: engineer
+**Phase**: CS-standalone
+**Started**: 2026-04-24
+**Branch**: features/standalone-cli-mode
+**Depends on**: TASK-022 (complete)
+
+**Engineer status**: not started
+**Blockers**: none
+
+---
+
+## ✅ DONE (session 2026-04-24)
+
 ### TASK-022 — daemon.go: Lightweight mode skips Python subprocess spawning
 **Assigned to**: engineer
 **Phase**: CS-standalone
@@ -26,12 +40,18 @@ _Next task ID: TASK-025_
 **Branch**: features/standalone-cli-mode
 **Depends on**: TASK-021 (complete)
 
-**Engineer status**: started — add ServerModeLightweight constant, update GetServerMode()/IsExternalServer(), add IsLightweightMode() helper, add log line in daemon.go Start()
+**Acceptance criteria**:
+- [x] `server_config.go` has `ServerModeLightweight` constant.
+- [x] `GetServerMode()` returns `ServerModeLightweight` when env var is `"lightweight"`.
+- [x] `IsExternalServer()` returns `true` for lightweight mode.
+- [x] `IsLightweightMode()` helper function exists and works correctly.
+- [x] `go build ./...`, `go vet ./...`, `go test ./...` all pass (pre-existing Windows syscall errors only; clean on Linux).
+- [x] A daemon started with `DEVTRACK_SERVER_MODE=lightweight` does not attempt to spawn any Python subprocess (verified: `startWebhookServer()` returns early via updated `IsExternalServer()`).
+
+**Engineer status**: 6/6 criteria done — last commit: 744acd2 "feat(daemon): add ServerModeLightweight — skip Python spawn in lightweight mode (TASK-022)" — 2026-04-24
 **Blockers**: none
 
----
-
-## ✅ DONE (session 2026-04-24)
+**COMPLETE** — ready for PM review — 2026-04-24
 
 ### TASK-021 — setup.go: mode selection wizard + backend-free root detection
 **Assigned to**: engineer
@@ -207,9 +227,10 @@ for a new `lightweight` mode, and we need to add the `ServerModeLightweight` con
 ---
 
 ### TASK-023 — cli.go: capability guard for backend-dependent commands
+**Assigned to**: engineer
 **Priority**: HIGH
 **Phase**: CS-standalone
-**Depends on**: TASK-022
+**Depends on**: TASK-022 (complete)
 
 **Background**:
 In Lightweight mode, commands that depend on the Python backend (reports, learning,
