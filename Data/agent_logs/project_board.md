@@ -19,6 +19,20 @@ _Next task ID: TASK-025_
 
 ## 🔴 IN PROGRESS
 
+### TASK-022 — daemon.go: Lightweight mode skips Python subprocess spawning
+**Assigned to**: engineer
+**Phase**: CS-standalone
+**Started**: 2026-04-24
+**Branch**: features/standalone-cli-mode
+**Depends on**: TASK-021 (complete)
+
+**Engineer status**: not started
+**Blockers**: none
+
+---
+
+## ✅ DONE (session 2026-04-24)
+
 ### TASK-021 — setup.go: mode selection wizard + backend-free root detection
 **Assigned to**: engineer
 **Phase**: CS-standalone
@@ -107,19 +121,21 @@ called, then conditionally skip the `backend/` check in Lightweight and External
    those remain the same for all modes (user may still configure them for future use).
 
 **Acceptance criteria**:
-- [ ] Running `devtrack setup` presents the 3-option mode menu as the first prompt.
-- [ ] Choosing [2] or [3] does NOT call `detectProjectRoot()` and does NOT fail if
+- [x] Running `devtrack setup` presents the 3-option mode menu as the first prompt.
+- [x] Choosing [2] or [3] does NOT call `detectProjectRoot()` and does NOT fail if
       `backend/` is absent from the filesystem.
-- [ ] `.env` written by a Lightweight setup contains `DEVTRACK_SERVER_MODE=lightweight`.
-- [ ] `.env` written by an External setup contains `DEVTRACK_SERVER_MODE=external`.
-- [ ] `.env` written by a Managed setup contains `DEVTRACK_SERVER_MODE=managed` (unchanged).
-- [ ] `checkPythonBackend()` is skipped in Lightweight/External modes.
-- [ ] `go build ./...` succeeds with no new errors.
-- [ ] `go vet ./...` passes.
-- [ ] `go test ./...` passes (no new test failures).
+- [x] `.env` written by a Lightweight setup contains `DEVTRACK_SERVER_MODE=lightweight`.
+- [x] `.env` written by an External setup contains `DEVTRACK_SERVER_MODE=external`.
+- [x] `.env` written by a Managed setup contains `DEVTRACK_SERVER_MODE=managed` (unchanged).
+- [x] `checkPythonBackend()` is skipped in Lightweight/External modes.
+- [x] `go build ./...` succeeds with no new errors (pre-existing Windows syscall errors; clean on Linux).
+- [x] `go vet ./...` passes (same caveat as above).
+- [x] `go test ./...` passes (same caveat as above).
 
-**Engineer status**: started — adding DevTrackMode type + constants, Mode field to SetupConfig, mode-selection prompt at top of RunSetup, conditional projectRoot detection, Python backend guard, env content mode var, and mode-conditional completion text
+**Engineer status**: 8/8 criteria done — last commit: fd208f6 "feat(setup): add mode selection wizard for standalone-cli support (TASK-021)" — 2026-04-24
 **Blockers**: none
+
+**COMPLETE** — ready for PM review — 2026-04-24 00:00
 
 ---
 
