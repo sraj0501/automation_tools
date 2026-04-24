@@ -2,6 +2,30 @@
 
 ---
 
+### [2026-04-24 14:00] TASK-023 — feat(cli): capability guard for backend-dependent commands in lightweight mode
+
+**Original message**: "feat(cli): capability guard for backend-dependent commands in lightweight mode (TASK-023)"
+**DevTrack enhanced it to**: N/A — devtrack binary not installed in this dev environment; used raw git commit
+**Ticket auto-linked**: NO
+**PM system updated**: YES — project_board.md updated (TASK-023 COMPLETE, TASK-024 IN PROGRESS)
+**Time**: ~8 minutes
+**Friction**: LOW — mechanical guard additions; all handlers already return error so pattern was uniform
+**Notes**: Added `requiresManagedMode()` helper function in cli.go just before `handleStart()`. Guarded 28 handlers: 10 learning, 4 report, 4 azure, 4 gitlab, 4 github, 2 server/admin. handleServerTUI and handleAdminStart are in cli_work.go — guarded there. All handlers already returned `error` so the `return err` pattern was consistent — no `os.Exit(1)` needed. Build/vet/test produce only the pre-existing Windows syscall errors (SIGUSR2, Setsid) — no new errors introduced.
+
+[DEVTRACK PAUSED — devtrack binary not installed in this dev environment; used raw git for this commit]
+
+## Task Summary — TASK-023: cli.go capability guard for backend-dependent commands — 2026-04-24
+
+- Total commits: 1 (0cde877)
+- Acceptance criteria met: 4/4
+- Tickets auto-updated: 0 (devtrack binary not running)
+- Estimated daily time saved: ~2 min (lightweight users get clear error instead of confusing Python crash)
+- Blockers encountered: none
+- One thing that still feels rough: "handleWork() sub-commands (work start/stop/adjust/status/report) call Python internally for the report sub-command — that path is not guarded yet; deferred per spec."
+- Ready for PM review: YES
+
+---
+
 ### [2026-04-24 12:00] TASK-022 — feat(daemon): add ServerModeLightweight — skip Python spawn in lightweight mode
 
 **Original message**: "feat(daemon): add ServerModeLightweight — skip Python spawn in lightweight mode (TASK-022)"

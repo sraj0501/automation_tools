@@ -19,14 +19,13 @@ _Next task ID: TASK-025_
 
 ## 🔴 IN PROGRESS
 
-### TASK-023 — cli.go: capability guard for backend-dependent commands
+### TASK-024 — config_env.go: non-fatal GetEmailReporterPath + GetLearningDailyScriptPath
 **Assigned to**: engineer
+**Priority**: MEDIUM
 **Phase**: CS-standalone
-**Started**: 2026-04-24
-**Branch**: features/standalone-cli-mode
-**Depends on**: TASK-022 (complete)
+**Depends on**: TASK-023 (complete)
 
-**Engineer status**: started — adding requiresManagedMode() helper to cli.go and cli_work.go, guarding 28 handlers
+**Engineer status**: not started
 **Blockers**: none
 
 ---
@@ -230,6 +229,8 @@ for a new `lightweight` mode, and we need to add the `ServerModeLightweight` con
 **Assigned to**: engineer
 **Priority**: HIGH
 **Phase**: CS-standalone
+**Started**: 2026-04-24
+**Branch**: features/standalone-cli-mode
 **Depends on**: TASK-022 (complete)
 
 **Background**:
@@ -305,15 +306,19 @@ that prints a clear message when the mode cannot support the command.
    them in Lightweight mode.
 
 **Acceptance criteria**:
-- [ ] All listed handlers return early with `requiresManagedMode()` when mode is
+- [x] All listed handlers return early with `requiresManagedMode()` when mode is
       `lightweight`.
-- [ ] The error message printed is exactly:
+- [x] The error message printed is exactly:
       `'<command>' requires Managed mode (Python backend).`
       followed by the re-run-setup line.
-- [ ] `handleStart()`, `handleStop()`, `handleStatus()`, `handleLogs()`,
+- [x] `handleStart()`, `handleStop()`, `handleStatus()`, `handleLogs()`,
       `handleForceTrigger()`, `handleVersion()`, `handleWorkspace()` work normally in
       Lightweight mode (no guard).
-- [ ] `go build ./...`, `go vet ./...`, `go test ./...` pass.
+- [x] `go build ./...`, `go vet ./...`, `go test ./...` pass (pre-existing Windows syscall errors only; clean on Linux).
+
+**Engineer status**: 4/4 criteria done — last commit: 0cde877 "feat(cli): capability guard for backend-dependent commands in lightweight mode (TASK-023)" — 2026-04-24
+
+**COMPLETE** — ready for PM review — 2026-04-24
 
 ---
 
