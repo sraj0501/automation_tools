@@ -17,20 +17,27 @@ _Next task ID: TASK-025_
 
 ---
 
-## 🔴 IN PROGRESS
+## ✅ DONE (session 2026-04-24)
 
 ### TASK-024 — config_env.go: non-fatal GetEmailReporterPath + GetLearningDailyScriptPath
 **Assigned to**: engineer
 **Priority**: MEDIUM
 **Phase**: CS-standalone
+**Branch**: features/standalone-cli-mode
 **Depends on**: TASK-023 (complete)
 
-**Engineer status**: started — change 3 functions to return (string, error), update callers in cli.go (3 sites) and learning.go (NewLearningCommands)
+**Acceptance criteria**:
+- [x] `GetEmailReporterPath()`, `GetLearningDailyScriptPath()`, `GetPythonBridgePath()` all return `(string, error)` instead of calling `os.Exit`.
+- [x] All callers updated to handle the returned error.
+- [x] `go build ./...`, `go vet ./...`, `go test ./...` pass (pre-existing Windows syscall errors only; clean on Linux).
+- [x] No `os.Exit` calls remain in any of the three functions.
+
+**Engineer status**: 4/4 criteria done — last commit: 4de127b "refactor(config): make GetEmailReporterPath, GetLearningDailyScriptPath, GetPythonBridgePath return error instead of os.Exit (TASK-024)" — 2026-04-24
 **Blockers**: none
 
----
+**COMPLETE** — ready for PM review — 2026-04-24
 
-## ✅ DONE (session 2026-04-24)
+---
 
 ### TASK-022 — daemon.go: Lightweight mode skips Python subprocess spawning
 **Assigned to**: engineer

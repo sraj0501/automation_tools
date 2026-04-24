@@ -2,6 +2,30 @@
 
 ---
 
+### [2026-04-24 15:30] TASK-024 — refactor(config): make GetEmailReporterPath, GetLearningDailyScriptPath, GetPythonBridgePath return error instead of os.Exit
+
+**Original message**: "refactor(config): make GetEmailReporterPath, GetLearningDailyScriptPath, GetPythonBridgePath return error instead of os.Exit (TASK-024)"
+**DevTrack enhanced it to**: N/A — devtrack binary not installed in this dev environment; used raw git commit
+**Ticket auto-linked**: NO
+**PM system updated**: YES — project_board.md updated (TASK-024 COMPLETE)
+**Time**: ~10 minutes
+**Friction**: LOW — signature change + caller updates are mechanical; compiler guided every site
+**Notes**: Three functions in config_env.go changed from `string` to `(string, error)`. Callers: 3 sites in cli.go (handlePreviewReport, handleSendReport, handleSaveReport) each now propagate the error. learning.go NewLearningCommands stores the (path, err) pair; runDailyScript checks the error before exec. GetPythonBridgePath had zero external callers so only its own definition was updated. fileExists helper was already defined in config_env.go — no new helper needed. Build/vet produce only the pre-existing Windows syscall errors (SIGUSR2, Setsid) — no new errors. PR opened for features/standalone-cli-mode → main covering all 4 tasks.
+
+[DEVTRACK PAUSED — devtrack binary not installed in this dev environment; used raw git for this commit]
+
+## Task Summary — TASK-024: config_env.go non-fatal path functions — 2026-04-24
+
+- Total commits: 1 (4de127b)
+- Acceptance criteria met: 4/4
+- Tickets auto-updated: 0 (devtrack binary not running)
+- Estimated daily time saved: ~1 min (prevents confusing os.Exit in unexpected Lightweight-mode calls)
+- Blockers encountered: none
+- One thing that still feels rough: "GetPythonBridgePath is now dead code — no caller exists. Could be removed in a follow-up cleanup."
+- Ready for PM review: YES
+
+---
+
 ### [2026-04-24 14:00] TASK-023 — feat(cli): capability guard for backend-dependent commands in lightweight mode
 
 **Original message**: "feat(cli): capability guard for backend-dependent commands in lightweight mode (TASK-023)"
